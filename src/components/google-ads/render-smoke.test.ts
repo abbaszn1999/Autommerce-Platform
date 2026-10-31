@@ -16,7 +16,7 @@ const originalUseSyncExternalStore = React.useSyncExternalStore;
 (React as { useSyncExternalStore: typeof React.useSyncExternalStore }).useSyncExternalStore = (subscribe, getSnapshot) =>
   originalUseSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-const VIEWS: GaView[] = ["overview", "campaigns", "adGroups", "ads", "assets", "keywords", "negatives", "searchTerms", "audiences", "locations", "schedule", "devices", "recommendations", "conversions", "library", "settings", "pending", "history", "products", "productGroups", "reports", "rules", "keywordPlanner", "experiments", "planner", "content", "demographics", "links", "accountSettings", "documents", "profile", "connections"];
+const VIEWS: GaView[] = ["overview", "campaigns", "adGroups", "ads", "assets", "keywords", "negatives", "searchTerms", "audiences", "locations", "schedule", "devices", "recommendations", "conversions", "library", "settings", "pending", "history", "products", "productGroups", "reports", "rules", "keywordPlanner", "experiments", "planner", "content", "demographics", "links", "accountSettings", "documents", "profile", "connections", "languages", "brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown"];
 
 /** The HTML of one landmark (the sidebar or the page), so assertions ignore the chat panel and top bar. */
 const part = (html: string, tag: string) => html.slice(html.indexOf("<" + tag), html.indexOf("</" + tag + ">"));
@@ -281,6 +281,43 @@ describe("render smoke", () => {
     const rules = render("rules");
     expect(rules).not.toContain("New rule");
     expect(rules).toContain("Let the agent set it up");
+  });
+
+  it("Performance Max campaign sidebar: asset groups, insights, search & exclusions, locations & languages", () => {
+    connect();
+    const sidebar = (campaignId: string, view: GaView = "adGroups") => {
+      useGoogleAds.setState({ scope: { campaignId }, view });
+      return part(renderToString(createElement(GoogleAdsShell)), "nav");
+    };
+    const pmax = sidebar("c_pmax");
+    for (const label of ["Asset groups", "Assets", ">Products<", "Insights", "Search &amp; exclusions", "Locations &amp; languages", "Campaign settings", "Recommendations", "Reports"]) {
+      expect(pmax, label).toContain(label);
+    }
+    // Not used by Performance Max: keywords, ads, an audiences page, placements page, devices.
+    for (const label of [">Keywords<", ">Ads<", ">Audiences<", "Placements &amp; content", ">Devices<", "Locations &amp; schedule", "Product groups"]) {
+      expect(pmax, label).not.toContain(label);
+    }
+
+    // Tabs of each Performance Max item.
+    const tabsOf = (view: GaView) => {
+      useGoogleAds.setState({ scope: { campaignId: "c_pmax" }, view });
+      return part(renderToString(createElement(GoogleAdsShell)), "main");
+    };
+    for (const t of ["Channels", "Search categories", "Asset combinations", "Where ads showed"]) expect(tabsOf("channels"), t).toContain(t);
+    for (const t of ["Search terms", "Negative keywords", "Brand exclusions"]) expect(tabsOf("brandExclusions"), t).toContain(t);
+    const loc = tabsOf("languages");
+    for (const t of ["Locations", "Languages", "Ad schedule"]) expect(loc, t).toContain(t);
+    expect(loc).not.toContain(">Devices<");
+    // No bid adjustment column for Performance Max locations.
+    expect(tabsOf("locations")).not.toContain("Bid adj.");
+    expect(tabsOf("assetCombinations")).toContain("Top combination");
+
+    // The other campaign types keep their own sidebar (Search has keywords, no Insights).
+    const search = sidebar("c_running", "keywords");
+    expect(search).toContain(">Keywords<");
+    expect(search).toContain("Locations &amp; schedule");
+    expect(search).not.toContain("Insights");
+    expect(search).not.toContain(">Products<");
   });
 
   it("documents are two folders: Reports (with the ready templates) and Plans", () => {

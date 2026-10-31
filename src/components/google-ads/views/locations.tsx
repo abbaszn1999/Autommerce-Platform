@@ -25,7 +25,7 @@ export function LocationsView() {
   const campaigns = data.campaigns.filter((c) => c.status !== "REMOVED");
   const metrics = useMemo(() => new Map(campaigns.map((c) => [c.id, derive(campaignBase(data, c.id, range))])), [campaigns, data, range]);
 
-  if (campaign) return <LocationTargets campaign={campaign} />;
+  if (campaign) return <CampaignLocations campaign={campaign} />;
 
   const columns: GaColumn<Campaign>[] = [
     { id: "name", header: "Campaign", label: "Campaign", sticky: true, sortValue: (c) => c.name, render: (c) => <span className="font-semibold">{c.name}</span> },
@@ -59,12 +59,14 @@ export function LocationsView() {
   );
 }
 
-function LocationTargets({ campaign }: { campaign: Campaign }) {
+function CampaignLocations({ campaign }: { campaign: Campaign }) {
+  // Performance Max has no bid adjustments: Google's bidding decides by itself.
+  const noBids = campaign.type === "PERFORMANCE_MAX";
   const columns: GaColumn<LocationTarget>[] = [
     { id: "name", header: "Location", sticky: true, render: (l) => <span className="font-semibold">{l.name}</span> },
     { id: "kind", header: "Type", render: (l) => <span className="text-muted-foreground">{l.kind}</span> },
     { id: "status", header: "Status", render: (l) => <Pill tone={l.excluded ? "bad" : "good"}>{l.excluded ? "Excluded" : "Targeted"}</Pill> },
-    { id: "bid", header: "Bid adj.", align: "right", render: (l) => (l.excluded ? <span className="text-muted-foreground">—</span> : <span className="font-semibold">{adj(l.bidModifier)}</span>) },
+    ...(noBids ? [] : [{ id: "bid", header: "Bid adj.", align: "right" as const, render: (l: LocationTarget) => (l.excluded ? <span className="text-muted-foreground">—</span> : <span className="font-semibold">{adj(l.bidModifier)}</span>) }]),
   ];
   return (
     <div className="space-y-4">
@@ -93,7 +95,7 @@ export function ScheduleView() {
         header: "Bid adjustments",
         label: "Bid adjustments",
         render: (c) => {
-          const adjusted = c.schedule.filter((s) => s.bidModifier);
+          const adjusted = c.type === "PERFORMANCE_MAX" ? [] : c.schedule.filter((s) => s.bidModifier);
           return adjusted.length ? <span className="text-muted-foreground">{adjusted.map((s) => `${pct(s.bidModifier!)} ${slotText(s)}`).join(" · ")}</span> : <span className="text-muted-foreground">None</span>;
         },
       },
@@ -149,7 +151,8 @@ export function DevicesView() {
 function SchedulePanel({ campaign }: { campaign: Campaign }) {
   const allDay = campaign.schedule.length === 0;
   const active = (day: AdScheduleSlot["day"], h: number) => allDay || campaign.schedule.some((s) => s.day === day && h >= s.startHour && h < s.endHour);
-  const modifierFor = (day: AdScheduleSlot["day"], h: number) => campaign.schedule.find((s) => s.day === day && h >= s.startHour && h < s.endHour)?.bidModifier;
+  const bids = campaign.type !== "PERFORMANCE_MAX";
+  const modifierFor = (day: AdScheduleSlot["day"], h: number) => (bids ? campaign.schedule.find((s) => s.day === day && h >= s.startHour && h < s.endHour)?.bidModifier : undefined);
 
   return (
     <Card className="p-4">
@@ -159,7 +162,7 @@ function SchedulePanel({ campaign }: { campaign: Campaign }) {
       </div>
       <div className="mb-3 flex flex-wrap items-center gap-4 text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-[#400095]/40 dark:bg-violet-500/40" /> Ads run</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-[#400095] dark:bg-violet-500" /> Ads run with a bid adjustment</span>
+        {bids && <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-[#400095] dark:bg-violet-500" /> Ads run with a bid adjustment</span>}
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-muted" /> Ads off</span>
       </div>
       <div className="overflow-x-auto">
@@ -204,5 +207,35 @@ function DevicesPanel({ campaign }: { campaign: Campaign }) {
         ))}
       </div>
     </Card>
+  );
+}
+
+/** Languages: which languages the campaign targets. Ads show to people whose Google language matches. */
+export function LanguagesView() {
+  const { data, campaign } = useGa();
+  const setScope = useGoogleAds((s) => s.setScope);
+  if (campaign) {
+    return (
+      <div className="space-y-4">
+        <ViewHeader title="Languages" subtitle={`Languages ${campaign.name} targets. To change them, ask the agent.`} />
+        <Card className="p-4">
+          <p className="mb-2 text-sm font-bold">Targeted languages</p>
+          <div className="flex flex-wrap gap-1.5">
+            {campaign.languages.length ? campaign.languages.map((l) => <Pill key={l} tone="brand">{l}</Pill>) : <span className="text-xs text-muted-foreground">All languages</span>}
+          </div>
+          <p className="mt-3 text-[11px] text-muted-foreground">Ads show to people whose Google language setting matches, or who use a matching language in their searches and browsing.</p>
+        </Card>
+      </div>
+    );
+  }
+  const columns: GaColumn<Campaign>[] = [
+    { id: "name", header: "Campaign", label: "Campaign", sticky: true, sortValue: (c) => c.name, render: (c) => <span className="font-semibold">{c.name}</span> },
+    { id: "languages", header: "Languages", label: "Languages", render: (c) => <span className="flex flex-wrap gap-1">{c.languages.map((l) => <Pill key={l}>{l}</Pill>)}</span> },
+  ];
+  return (
+    <div>
+      <ViewHeader title="Languages" subtitle="Languages each campaign targets. Click a campaign to open it. To change them, ask the agent." />
+      <GaTable rows={data.campaigns.filter((c) => c.status !== "REMOVED")} columns={columns} rowKey={(c) => c.id} onRowClick={(c) => setScope({ campaignId: c.id }, "languages")} />
+    </div>
   );
 }

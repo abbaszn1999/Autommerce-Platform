@@ -161,15 +161,22 @@ type GaStore = {
 
 const ACTOR = "You";
 
+const PMAX_ONLY: GaView[] = ["brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown", "languages"];
+
 /** Views that make no sense at a scope fall back to the closest one that does. */
 function viewForScope(view: GaView, scope: GaScope, isPmax: boolean): GaView {
   const accountOnly: GaView[] = ["campaigns", "conversions", "library", "products", "rules", "keywordPlanner", "experiments", "links", "accountSettings", "documents", "profile", "connections"];
   if (scope.adGroupId && (accountOnly.includes(view) || view === "adGroups" || view === "recommendations" || view === "locations" || view === "settings" || view === "planner" || view === "productGroups" || view === "content" || view === "demographics"))
     return "keywords";
-  if (scope.campaignId && accountOnly.includes(view)) return "adGroups";
+  // Feed-based Performance Max keeps Products inside the campaign.
+  if (scope.campaignId && accountOnly.includes(view) && !(isPmax && view === "products")) return "adGroups";
   if (!scope.campaignId && view === "productGroups") return "products";
   if (!scope.campaignId && view === "settings") return "campaigns";
-  if (isPmax && (view === "ads" || view === "keywords")) return "adGroups";
+  // Performance Max has no ads, keywords, audience page, demographics, placements page or device bids.
+  if (isPmax && (view === "ads" || view === "keywords" || view === "audiences" || view === "demographics" || view === "content")) return "adGroups";
+  if (isPmax && view === "devices") return "locations";
+  // Pages that only exist inside a Performance Max campaign.
+  if (!isPmax && PMAX_ONLY.includes(view)) return scope.campaignId ? "adGroups" : "overview";
   return view;
 }
 

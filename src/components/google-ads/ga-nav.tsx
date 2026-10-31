@@ -18,16 +18,18 @@ import {
   Lightbulb,
   MapPin,
   Plug,
+  Search,
   Settings2,
   ShoppingBag,
   Target,
+  Telescope,
   Users,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAccountState, useGoogleAds } from "@/lib/google-ads/store";
 import type { GaView } from "@/lib/google-ads/types";
-import { TAB_GROUPS, navCtx, visibleTabs } from "./nav-model";
+import { TAB_GROUPS, groupActive, navCtx, visibleTabs } from "./nav-model";
 
 type NavItem = { view: GaView; label: string; icon: LucideIcon; badge?: string | number; hidden?: boolean; /** Pages that count as this item being open (tabbed items). */ views?: GaView[] };
 
@@ -52,7 +54,7 @@ export function GaNav() {
   const tabItem = (id: string, icon: LucideIcon, hidden = false): NavItem => {
     const g = TAB_GROUPS.find((x) => x.id === id)!;
     const tabs = visibleTabs(g, ctx);
-    return { view: tabs[0]?.view ?? g.tabs[0]!.view, views: g.tabs.map((t) => t.view), label: g.label, icon, hidden: hidden || !tabs.length };
+    return { view: tabs[0]?.view ?? g.tabs[0]!.view, views: g.tabs.map((t) => t.view), label: g.label, icon, hidden: hidden || !groupActive(g, ctx) || !tabs.length };
   };
 
   // The dashboard is view-only: the agent does the work, so there are no
@@ -74,16 +76,23 @@ export function GaNav() {
         { view: "ads", label: "Ads", icon: FileText, hidden: isPmax || isShopping },
         { view: "experiments", label: "Experiments", icon: FlaskConical, hidden: inCampaign },
         { view: "assets", label: "Assets", icon: ImageIcon },
-        { view: "products", label: "Products", icon: ShoppingBag, hidden: inCampaign },
+        // Feed-based Performance Max shows which products it spends on; other campaign types keep Products at account level.
+        { view: "products", label: "Products", icon: ShoppingBag, hidden: !!scope.adGroupId || (inCampaign && !(isPmax && !!data.account.merchantCenterId)) },
       ],
+    },
+    {
+      title: "Insights",
+      items: [tabItem("insights", Telescope)],
     },
     {
       title: "Targeting & queries",
       items: [
         tabItem("keywords", KeyRound),
+        tabItem("searches", Search),
         tabItem("audiences", Users),
         { view: "content", label: "Placements & content", icon: Globe, hidden: (!!scopedCampaign && !isVisual) || !!scope.adGroupId },
         tabItem("locations", MapPin, !!scope.adGroupId),
+        tabItem("locationsPmax", MapPin, !!scope.adGroupId),
       ],
     },
     {

@@ -23,7 +23,7 @@ const STATUS: Record<Product["status"], { label: string; tone: "good" | "warn" |
 };
 
 export function ProductsView() {
-  const { data, range, currency } = useGa();
+  const { data, range, currency, campaign } = useGa();
   const setView = useGoogleAds((s) => s.setView);
   const merchantConnected = useGoogleAds((s) => !!s.merchant.merchantId);
   const [filter, setFilter] = useState<"ALL" | "ISSUES" | "OUT" | "TOP">("ALL");
@@ -141,7 +141,7 @@ export function ProductsView() {
     <div className="space-y-4">
       <ViewHeader
         title="Products"
-        subtitle={`Merchant Center ${data.account.merchantCenterId} · performance across Shopping and Performance Max`}
+        subtitle={campaign ? `Merchant Center ${data.account.merchantCenterId} · feed products ${campaign.name} can serve. Figures cover Shopping and Performance Max.` : `Merchant Center ${data.account.merchantCenterId} · performance across Shopping and Performance Max`}
         actions={
           <>
             <SearchBox value={query} onChange={setQuery} placeholder="Find a product or ID" />

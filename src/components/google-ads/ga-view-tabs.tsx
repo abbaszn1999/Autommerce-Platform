@@ -10,9 +10,11 @@ export function GaViewTabs() {
   const view = useGoogleAds((s) => s.view);
   const scope = useGoogleAds((s) => s.scope);
   const setView = useGoogleAds((s) => s.setView);
-  const group = tabGroupOf(view);
-  if (!acc || !group) return null;
-  const tabs = visibleTabs(group, navCtx(acc.data.campaigns, scope));
+  if (!acc) return null;
+  const ctx = navCtx(acc.data.campaigns, scope);
+  const group = tabGroupOf(view, ctx);
+  if (!group) return null;
+  const tabs = visibleTabs(group, ctx);
   if (tabs.length < 2) return null;
   return (
     <div role="tablist" aria-label={group.label} className="-mt-1 mb-4 flex gap-1 border-b border-border/60">

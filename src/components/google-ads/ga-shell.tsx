@@ -19,7 +19,8 @@ import { HistoryView, PendingView } from "./views/changes";
 import { ConversionsView } from "./views/conversions";
 import { KeywordsView, NegativesView } from "./views/keywords";
 import { LibraryView } from "./views/library";
-import { DevicesView, LocationsView, ScheduleView } from "./views/locations";
+import { DevicesView, LanguagesView, LocationsView, ScheduleView } from "./views/locations";
+import { AssetCombinationsView, BrandExclusionsView, ChannelsView, PlacementsShownView, SearchCategoriesView } from "./views/pmax-insights";
 import { GaViewTabs } from "./ga-view-tabs";
 import { OverviewView } from "./views/overview";
 import { RecommendationsView } from "./views/recommendations";
@@ -72,6 +73,12 @@ const VIEWS: Record<GaView, () => React.ReactNode> = {
   documents: DocumentsView,
   profile: ProfileView,
   connections: ConnectionsView,
+  languages: LanguagesView,
+  brandExclusions: BrandExclusionsView,
+  channels: ChannelsView,
+  searchCategories: SearchCategoriesView,
+  assetCombinations: AssetCombinationsView,
+  placementsShown: PlacementsShownView,
 };
 
 // Like the Store Agent: the agent panel is always there and is resized by dragging the divider.

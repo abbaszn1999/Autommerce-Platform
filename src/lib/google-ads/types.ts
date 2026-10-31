@@ -805,7 +805,14 @@ export type GaView =
   | "accountSettings"
   | "documents"
   | "profile"
-  | "connections";
+  | "connections"
+  // Performance Max campaign pages
+  | "languages"
+  | "brandExclusions"
+  | "channels"
+  | "searchCategories"
+  | "assetCombinations"
+  | "placementsShown";
 
 /** A Merchant Center account the signed-in Google user can reach (own connection, separate from Google Ads). */
 export type MerchantAccount = {

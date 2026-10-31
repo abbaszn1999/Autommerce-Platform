@@ -193,6 +193,12 @@ export function buildDemoExtras(today: string): Extras {
     ct("ct8", "c_demandgen", "YOUTUBE_CHANNEL", "Arab Fitness Hub", 2.1, 1.1),
     ct("ct9", "c_demandgen", "TOPIC", "Sports & Fitness > Fitness", 3, 0.9),
     ct("ct10", "c_demandgen", "CONTENT_KEYWORD", "marathon training", 1.2, 1.2),
+    // Performance Max picks its own placements; this is the "where ads showed" report.
+    ct("ct11", "c_pmax", "PLACEMENT", "youtube.com", 4, 0.8),
+    ct("ct12", "c_pmax", "PLACEMENT", "runnersworld.com", 2.2, 1.5),
+    ct("ct13", "c_pmax", "PLACEMENT", "mobileapp::com.casual.match3", 3, 0.04),
+    ct("ct14", "c_pmax", "PLACEMENT", "gmail.com", 1.4, 0.7),
+    ct("ct15", "c_pmax", "PLACEMENT", "sportsnews-gulf.example", 1.8, 1.1),
   ];
 
   const dm = (id: string, campaignId: string, kind: DemographicTarget["kind"], value: string, extra: Partial<DemographicTarget> = {}): DemographicTarget => ({ id, campaignId, kind, value, excluded: false, ...extra });
