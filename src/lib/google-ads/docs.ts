@@ -5,18 +5,26 @@
 import { gid } from "./mutations";
 import type { MetricKey, MutateOp } from "./types";
 
+/** The two folders on the Documents page: what the agent plans to do, and what it reports on. */
+export type DocFolder = "REPORTS" | "PLANS";
+
+export const DOC_FOLDERS: Record<DocFolder, { label: string; emoji: string; blurb: string }> = {
+  REPORTS: { label: "Reports", emoji: "📊", blurb: "Reports, audits and research the agent wrote, plus ready templates to start from" },
+  PLANS: { label: "Plans", emoji: "🗺️", blurb: "Campaign, budget, ad copy and experiment plans the agent built for you" },
+};
+
 export type DocType = "PLAN" | "REPORT" | "AUDIT" | "BUDGET" | "KEYWORDS" | "ADCOPY" | "FEED" | "EXPERIMENT" | "COMPETITORS";
 
-export const DOC_TYPES: Record<DocType, { label: string; emoji: string; blurb: string; prompt: string }> = {
-  PLAN: { label: "Campaign plan", emoji: "📋", blurb: "Goal, budget split, structure, messaging, timeline and steps", prompt: "Make me a Ramadan campaign plan" },
-  REPORT: { label: "Performance report", emoji: "📈", blurb: "Key numbers, trends, winners and losers, recommendations", prompt: "Write my monthly performance report" },
-  AUDIT: { label: "Account audit", emoji: "🔍", blurb: "Health score, issues by impact and the fix for each", prompt: "Write a full audit report of my account" },
-  BUDGET: { label: "Budget plan", emoji: "💰", blurb: "How to split a budget across campaigns, with forecasts", prompt: "Plan how to spend $12,000 next month" },
-  KEYWORDS: { label: "Keyword research", emoji: "🔑", blurb: "Keyword groups, volumes, costs and a structure", prompt: "Research keywords for trail running shoes" },
-  ADCOPY: { label: "Ad copy", emoji: "✍️", blurb: "Headlines and descriptions by audience, ready to test", prompt: "Write ad copy for our leggings" },
-  FEED: { label: "Product feed review", emoji: "🛍️", blurb: "Products with issues, why, and catalog fixes", prompt: "Review my product feed" },
-  EXPERIMENT: { label: "Experiment plan", emoji: "🧪", blurb: "Hypothesis, split, duration and success criteria", prompt: "Plan an experiment for Target ROAS on Shopping" },
-  COMPETITORS: { label: "Competitor analysis", emoji: "🏁", blurb: "Who you compete with, their messages, your openings", prompt: "Analyse my competitors" },
+export const DOC_TYPES: Record<DocType, { folder: DocFolder; label: string; emoji: string; blurb: string; prompt: string }> = {
+  PLAN: { folder: "PLANS", label: "Campaign plan", emoji: "📋", blurb: "Goal, budget split, structure, messaging, timeline and steps", prompt: "Make me a Ramadan campaign plan" },
+  REPORT: { folder: "REPORTS", label: "Performance report", emoji: "📈", blurb: "Key numbers, trends, winners and losers, recommendations", prompt: "Write my monthly performance report" },
+  AUDIT: { folder: "REPORTS", label: "Account audit", emoji: "🔍", blurb: "Health score, issues by impact and the fix for each", prompt: "Write a full audit report of my account" },
+  BUDGET: { folder: "PLANS", label: "Budget plan", emoji: "💰", blurb: "How to split a budget across campaigns, with forecasts", prompt: "Plan how to spend $12,000 next month" },
+  KEYWORDS: { folder: "REPORTS", label: "Keyword research", emoji: "🔑", blurb: "Keyword groups, volumes, costs and a structure", prompt: "Research keywords for trail running shoes" },
+  ADCOPY: { folder: "PLANS", label: "Ad copy", emoji: "✍️", blurb: "Headlines and descriptions by audience, ready to test", prompt: "Write ad copy for our leggings" },
+  FEED: { folder: "REPORTS", label: "Product feed review", emoji: "🛍️", blurb: "Products with issues, why, and catalog fixes", prompt: "Review my product feed" },
+  EXPERIMENT: { folder: "PLANS", label: "Experiment plan", emoji: "🧪", blurb: "Hypothesis, split, duration and success criteria", prompt: "Plan an experiment for Target ROAS on Shopping" },
+  COMPETITORS: { folder: "REPORTS", label: "Competitor analysis", emoji: "🏁", blurb: "Who you compete with, their messages, your openings", prompt: "Analyse my competitors" },
 };
 
 export type ValueFormat = "money" | "number" | "percent" | "ratio" | "text";

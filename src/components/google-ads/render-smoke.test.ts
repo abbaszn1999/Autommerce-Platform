@@ -7,6 +7,7 @@ import { DEFAULT_PROFILE, emptyProfile, profileCompleteness } from "@/lib/google
 import type { CampaignType, GaView } from "@/lib/google-ads/types";
 import { GoogleAdsShell } from "./ga-shell";
 import { GaDialogs } from "./ga-dialogs";
+import { FolderView } from "./views/documents";
 import { GaCampaignEditor } from "./ga-campaign-editor";
 import { emptyBundle } from "@/lib/google-ads/mutations";
 
@@ -144,11 +145,11 @@ describe("render smoke", () => {
     // No Pending button in the top bar either: approvals happen in the chat.
     expect(page).not.toContain('title="Pending changes"');
     const html = part(page, "nav");
-    for (const label of ["Recommendations", "Reports", "Campaigns", "Ad groups", "Ads", "Experiments", "Assets", "Keywords", "Audiences", "Placements &amp; content", "Locations &amp; schedule", "Shared library", "Conversions", "Linked accounts", "Connections", "Account settings", "Documents", "Business profile", "Rules &amp; alerts"]) {
+    for (const label of ["Recommendations", "Reports", "Campaigns", "Ad groups", "Ads", "Experiments", "Assets", "Keywords", "Audiences", "Placements &amp; content", "Locations &amp; schedule", "Shared library", "Conversions", "Linked accounts", "Connections", "Account settings", "Documents", "Business profile", "Rules &amp; alerts", ">Products<"]) {
       expect(html, label).toContain(label);
     }
     // Moved into tabs, or left to the agent and the chat.
-    for (const label of ["Negative keywords", "Demographics", "Keyword Planner", "Performance Planner", "Pending changes", "Change history", ">Products<"]) {
+    for (const label of ["Negative keywords", "Demographics", "Keyword Planner", "Performance Planner", "Pending changes", "Change history"]) {
       expect(html, label).not.toContain(label);
     }
   });
@@ -280,6 +281,36 @@ describe("render smoke", () => {
     const rules = render("rules");
     expect(rules).not.toContain("New rule");
     expect(rules).toContain("Let the agent set it up");
+  });
+
+  it("documents are two folders: Reports (with the ready templates) and Plans", () => {
+    connect();
+    useGoogleAds.setState({ scope: {}, view: "documents" });
+    const root = part(renderToString(createElement(GoogleAdsShell)), "main");
+    expect(root).toContain("Reports");
+    expect(root).toContain("Plans");
+    expect(root).not.toContain("Ready templates");
+    expect(root).not.toContain("Ask the agent to write");
+
+    const reports = renderToString(createElement(FolderView, { folder: "REPORTS", onBack: () => {} }));
+    expect(reports).toContain("Ready templates");
+    for (const t of ["Performance report", "Account audit", "Campaign plan"]) expect(reports, t).toContain(t);
+    const plans = renderToString(createElement(FolderView, { folder: "PLANS", onBack: () => {} }));
+    expect(plans).not.toContain("Ready templates");
+    expect(plans).toContain("Your plans");
+  });
+
+  it("brings the Merchant Center Products page back, view-only", () => {
+    connect();
+    useGoogleAds.setState({ scope: {}, view: "products" });
+    const page = renderToString(createElement(GoogleAdsShell));
+    expect(part(page, "nav")).toContain(">Products<");
+    const main = part(page, "main");
+    expect(main).toContain("Merchant Center");
+    expect(main).not.toMatch(/>\s*Fix from catalog\s*</);
+    expect(main).not.toContain("Exclude from");
+    expect(main).not.toContain('role="checkbox"');
+    expect(main).toMatch(/Ask agent/);
   });
 
   it("business profile is a read-only knowledge base the agent fills", () => {

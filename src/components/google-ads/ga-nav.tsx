@@ -19,6 +19,7 @@ import {
   MapPin,
   Plug,
   Settings2,
+  ShoppingBag,
   Target,
   Users,
   type LucideIcon,
@@ -73,6 +74,7 @@ export function GaNav() {
         { view: "ads", label: "Ads", icon: FileText, hidden: isPmax || isShopping },
         { view: "experiments", label: "Experiments", icon: FlaskConical, hidden: inCampaign },
         { view: "assets", label: "Assets", icon: ImageIcon },
+        { view: "products", label: "Products", icon: ShoppingBag, hidden: inCampaign },
       ],
     },
     {

@@ -1,10 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Ban, Bot, CheckCircle2, ChevronRight, Clock, PackageX, ShoppingBag, Split, Trash2, Wand2, XCircle } from "lucide-react";
-import { toast } from "sonner";
+import { AlertTriangle, Ban, Bot, CheckCircle2, ChevronRight, Clock, ShoppingBag, Split, Trash2, Wand2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { catalogFix, groupMetrics, productMetrics, productsInGroup } from "@/lib/google-ads/analytics";
+import { groupMetrics, productMetrics, productsInGroup } from "@/lib/google-ads/analytics";
 import { money } from "@/lib/google-ads/metrics";
 import { gid } from "@/lib/google-ads/mutations";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
@@ -25,12 +24,10 @@ const STATUS: Record<Product["status"], { label: string; tone: "good" | "warn" |
 
 export function ProductsView() {
   const { data, range, currency } = useGa();
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
   const setView = useGoogleAds((s) => s.setView);
   const merchantConnected = useGoogleAds((s) => !!s.merchant.merchantId);
   const [filter, setFilter] = useState<"ALL" | "ISSUES" | "OUT" | "TOP">("ALL");
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
   const metrics = useMemo(() => productMetrics(data, range), [data, range]);
 
@@ -64,27 +61,6 @@ export function ProductsView() {
     .filter((p) => (filter === "ISSUES" ? p.issues.length > 0 : filter === "OUT" ? p.availability !== "IN_STOCK" : filter === "TOP" ? topIds.has(p.id) : true));
   const fixable = data.products.filter((p) => p.issues.some((i) => i.fixable));
   const open = data.products.find((p) => p.id === openId);
-
-  const fix = (ids: string[]) => {
-    if (!merchantConnected) {
-      toast.error("Connect Merchant Center to send fixes to your feed", { action: { label: "Open Connections", onClick: () => setView("connections") } });
-      return;
-    }
-    const items = data.products.filter((p) => ids.includes(p.id) && p.issues.some((i) => i.fixable)).map(catalogFix);
-    if (!items.length) return toast.info("Nothing the catalog can fix in this selection");
-    const res = applyDirect(`Fix ${items.length} product${items.length > 1 ? "s" : ""} from catalog`, [{ kind: "collection.upsert", collection: "products", items }]);
-    if (res.ok) toast.success(`Sent ${items.length} corrected product${items.length > 1 ? "s" : ""} to Merchant Center`);
-    setSelected(new Set());
-  };
-
-  const exclude = (ids: string[]) => {
-    const shopping = data.campaigns.find((c) => c.type === "SHOPPING" && c.status !== "REMOVED");
-    const root = data.listingGroups.find((g) => g.campaignId === shopping?.id && !g.parentId);
-    if (!root) return toast.error("No Shopping product groups to exclude from");
-    const nodes: ListingGroup[] = ids.map((id) => ({ id: gid("lg"), campaignId: root.campaignId, parentId: root.id, dimension: "ITEM_ID", value: id, excluded: true }));
-    applyDirect(`Exclude ${ids.length} product${ids.length > 1 ? "s" : ""} from Shopping`, [{ kind: "collection.upsert", collection: "listingGroups", items: nodes }]);
-    setSelected(new Set());
-  };
 
   const columns: GaColumn<Product>[] = [
     {
@@ -196,12 +172,12 @@ export function ProductsView() {
           <Wand2 className="h-5 w-5 text-[#400095] dark:text-violet-400" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold">{fixable.length} products can be fixed from your catalog</p>
-            <p className="text-xs text-muted-foreground">Missing GTINs, long titles and price mismatches are corrected with Catalog Intelligence data and resubmitted to Merchant Center.</p>
+            <p className="text-xs text-muted-foreground">Missing GTINs, long titles and price mismatches. The agent corrects them with Catalog Intelligence data and resubmits them to Merchant Center.</p>
             {!merchantConnected && <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">Merchant Center isn&apos;t connected, so fixes can&apos;t be sent yet.</p>}
           </div>
           {merchantConnected ? (
-            <button type="button" onClick={() => fix(fixable.map((p) => p.id))} className="rounded-lg bg-[#400095] px-3 py-2 text-xs font-semibold text-white hover:bg-[#33007a] dark:bg-violet-600">
-              Fix {fixable.length} products
+            <button type="button" onClick={() => runAgentTurn("Fix my Merchant Center product issues")} className="inline-flex items-center gap-1.5 rounded-lg bg-[#400095] px-3 py-2 text-xs font-semibold text-white hover:bg-[#33007a] dark:bg-violet-600">
+              <Bot className="h-3.5 w-3.5" /> Ask agent to fix {fixable.length} products
             </button>
           ) : (
             <button type="button" onClick={() => setView("connections")} className="rounded-lg bg-[#400095] px-3 py-2 text-xs font-semibold text-white hover:bg-[#33007a] dark:bg-violet-600">
@@ -244,10 +220,9 @@ export function ProductsView() {
                 <p className="mt-2 text-xs text-emerald-600">No issues. This product is serving.</p>
               )}
             </div>
-            <div className="flex flex-col gap-1.5">
-              {open.issues.some((i) => i.fixable) && <BulkButton onClick={() => fix([open.id])}><Wand2 className="h-3 w-3" /> Fix from catalog</BulkButton>}
-              <BulkButton onClick={() => exclude([open.id])}><Ban className="h-3 w-3" /> Exclude from ads</BulkButton>
-            </div>
+            {open.issues.some((i) => i.fixable) && (
+              <BulkButton onClick={() => runAgentTurn(`Fix the Merchant Center issues on ${open.title}`)}><Bot className="h-3 w-3" /> Ask agent to fix</BulkButton>
+            )}
           </div>
         </Card>
       )}
@@ -256,17 +231,8 @@ export function ProductsView() {
         columns={columns}
         rowKey={(p) => p.id}
         exportName="products"
-        selectable
-        selected={selected}
-        onSelectedChange={setSelected}
         defaultSort={{ id: "conversionsValue", dir: "desc" }}
         rowClassName={(p) => cn(p.status === "DISAPPROVED" && "bg-red-500/[0.03]")}
-        bulkActions={(ids) => (
-          <>
-            <BulkButton onClick={() => fix(ids)}><Wand2 className="h-3 w-3" /> Fix from catalog</BulkButton>
-            <BulkButton tone="danger" onClick={() => exclude(ids)}><PackageX className="h-3 w-3" /> Exclude from Shopping</BulkButton>
-          </>
-        )}
       />
     </div>
   );
