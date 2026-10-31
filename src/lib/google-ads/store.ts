@@ -162,15 +162,15 @@ type GaStore = {
 const ACTOR = "You";
 
 const PMAX_ONLY: GaView[] = ["brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown"];
-const SEARCH_ONLY: GaView[] = ["landingPages", "impressionShare"];
+const SEARCH_ONLY: GaView[] = ["landingPages"];
 
 /** Views that make no sense at a scope fall back to the closest one that does. */
-function viewForScope(view: GaView, scope: GaScope, isPmax: boolean, isSearch = false): GaView {
+function viewForScope(view: GaView, scope: GaScope, isPmax: boolean, isSearch = false, isShopping = false, isDisplay = false): GaView {
   const accountOnly: GaView[] = ["campaigns", "conversions", "library", "products", "rules", "keywordPlanner", "experiments", "links", "accountSettings", "documents", "profile", "connections"];
   if (scope.adGroupId && (accountOnly.includes(view) || view === "adGroups" || view === "recommendations" || view === "locations" || view === "settings" || view === "planner" || view === "productGroups" || view === "content" || view === "demographics"))
     return "keywords";
   // Feed-based Performance Max keeps Products inside the campaign.
-  if (scope.campaignId && accountOnly.includes(view) && !(isPmax && view === "products")) return "adGroups";
+  if (scope.campaignId && accountOnly.includes(view) && !((isPmax || isShopping) && view === "products")) return "adGroups";
   if (!scope.campaignId && view === "productGroups") return "products";
   if (!scope.campaignId && view === "settings") return "campaigns";
   // Performance Max has no ads, keywords, audience page, demographics, placements page or device bids.
@@ -180,6 +180,12 @@ function viewForScope(view: GaView, scope: GaScope, isPmax: boolean, isSearch = 
   if (!isPmax && PMAX_ONLY.includes(view)) return scope.campaignId ? "adGroups" : "overview";
   // Pages that only exist inside a Search campaign.
   if (!isSearch && SEARCH_ONLY.includes(view)) return scope.campaignId ? "adGroups" : "overview";
+  // Impression share is a Search and Shopping report; price competitiveness is Shopping only; Display has its own exclusions page.
+  if (!isSearch && !isShopping && view === "impressionShare") return scope.campaignId ? "adGroups" : "overview";
+  if (!isShopping && view === "priceCompetitiveness") return scope.campaignId ? "adGroups" : "overview";
+  if (!isDisplay && view === "contentExclusions") return scope.campaignId ? "adGroups" : "overview";
+  // Shopping ads come from the feed: no assets.
+  if (isShopping && view === "assets") return "adGroups";
   return view;
 }
 
@@ -309,7 +315,7 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
     set((s) => {
       const data = current(s)?.data;
       const type = data?.campaigns.find((c) => c.id === scope.campaignId)?.type;
-      return { scope, view: viewForScope(view ?? s.view, scope, type === "PERFORMANCE_MAX", type === "SEARCH") };
+      return { scope, view: viewForScope(view ?? s.view, scope, type === "PERFORMANCE_MAX", type === "SEARCH", type === "SHOPPING", type === "DISPLAY") };
     }),
 
   setRange: (preset) => set({ range: rangeFor(preset) }),

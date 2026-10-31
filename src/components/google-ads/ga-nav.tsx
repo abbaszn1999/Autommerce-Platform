@@ -76,10 +76,11 @@ export function GaNav() {
         { view: "productGroups", label: "Product groups", icon: Split, hidden: !isShopping || !!scope.adGroupId },
         { view: "ads", label: "Ads", icon: FileText, hidden: isPmax || isShopping },
         { view: "experiments", label: "Experiments", icon: FlaskConical, hidden: inCampaign },
-        { view: "assets", label: "Assets", icon: ImageIcon },
+        // Shopping ads are built from the feed, so there are no assets to manage.
+        { view: "assets", label: "Assets", icon: ImageIcon, hidden: isShopping },
         { view: "landingPages", label: "Landing pages", icon: PanelsTopLeft, hidden: scopedCampaign?.type !== "SEARCH" || !!scope.adGroupId },
-        // Feed-based Performance Max shows which products it spends on; other campaign types keep Products at account level.
-        { view: "products", label: "Products", icon: ShoppingBag, hidden: !!scope.adGroupId || (inCampaign && !(isPmax && !!data.account.merchantCenterId)) },
+        // Shopping and feed-based Performance Max show the products they spend on; other campaign types keep Products at account level.
+        { view: "products", label: "Products", icon: ShoppingBag, hidden: !!scope.adGroupId || (inCampaign && !(isShopping || (isPmax && !!data.account.merchantCenterId))) },
       ],
     },
     {
@@ -92,7 +93,8 @@ export function GaNav() {
         tabItem("keywords", KeyRound),
         tabItem("searches", Search),
         tabItem("audiences", Users),
-        { view: "content", label: "Placements & content", icon: Globe, hidden: (!!scopedCampaign && !isVisual) || !!scope.adGroupId },
+        { view: "content", label: "Placements & content", icon: Globe, hidden: (!!scopedCampaign && !isVisual) || scopedCampaign?.type === "DISPLAY" || !!scope.adGroupId },
+        tabItem("contentDisplay", Globe),
         tabItem("locations", MapPin, !!scope.adGroupId),
       ],
     },

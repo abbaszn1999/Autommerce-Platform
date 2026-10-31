@@ -112,6 +112,24 @@ export type ServingIssue =
   | "ENDED"
   | "NOT_ELIGIBLE";
 
+export type ShoppingSettings = {
+  /** Which campaign wins when several advertise the same product. */
+  priority: "LOW" | "MEDIUM" | "HIGH";
+  /** Limits the campaign to part of the feed, e.g. "Brand = Stride". */
+  inventoryFilter?: string;
+  feedLabel: string;
+  countryOfSale: string;
+  localInventory: boolean;
+};
+
+export type DisplaySettings = {
+  optimizedTargeting: boolean;
+  frequencyCap?: { impressions: number; per: "DAY" | "WEEK" | "MONTH" };
+  autoCreatedAssets: boolean;
+  /** Content this campaign never shows next to (on top of the account-level list). */
+  contentExclusions: string[];
+};
+
 export type Campaign = {
   id: string;
   name: string;
@@ -136,6 +154,10 @@ export type Campaign = {
   merchantFeed?: boolean;
   /** PMax: let Google send traffic to other pages on the site. */
   finalUrlExpansion?: boolean;
+  /** Shopping-only settings. */
+  shopping?: ShoppingSettings;
+  /** Display-only settings. */
+  display?: DisplaySettings;
   labels: string[];
   createdAt: string;
 };
@@ -815,7 +837,10 @@ export type GaView =
   | "placementsShown"
   // Search campaign pages
   | "landingPages"
-  | "impressionShare";
+  | "impressionShare"
+  // Shopping and Display campaign pages
+  | "priceCompetitiveness"
+  | "contentExclusions";
 
 /** A Merchant Center account the signed-in Google user can reach (own connection, separate from Google Ads). */
 export type MerchantAccount = {

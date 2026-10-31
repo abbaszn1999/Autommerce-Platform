@@ -14,6 +14,7 @@ import { BulkButton, GaTable, type GaColumn } from "../ga-table";
 import { Card, EmptyState, ImageTile, Pill, Segmented, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
 import { SearchBox } from "./campaigns";
+import { campaignProducts } from "./search-insights";
 
 const STATUS: Record<Product["status"], { label: string; tone: "good" | "warn" | "bad" | "info"; icon: typeof CheckCircle2 }> = {
   APPROVED: { label: "Approved", tone: "good", icon: CheckCircle2 },
@@ -29,6 +30,8 @@ export function ProductsView() {
   const [filter, setFilter] = useState<"ALL" | "ISSUES" | "OUT" | "TOP">("ALL");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  // A Shopping campaign shows only what its product groups include; feed-based Performance Max and the account show the whole feed.
+  const products = useMemo(() => (campaign?.type === "SHOPPING" ? campaignProducts(data, campaign.id) : data.products), [data, campaign]);
   const metrics = useMemo(() => productMetrics(data, range), [data, range]);
 
   if (!data.account.merchantCenterId) {
@@ -50,17 +53,17 @@ export function ProductsView() {
   }
 
   const counts = {
-    APPROVED: data.products.filter((p) => p.status === "APPROVED").length,
-    LIMITED: data.products.filter((p) => p.status === "LIMITED").length,
-    DISAPPROVED: data.products.filter((p) => p.status === "DISAPPROVED").length,
-    PENDING: data.products.filter((p) => p.status === "PENDING").length,
+    APPROVED: products.filter((p) => p.status === "APPROVED").length,
+    LIMITED: products.filter((p) => p.status === "LIMITED").length,
+    DISAPPROVED: products.filter((p) => p.status === "DISAPPROVED").length,
+    PENDING: products.filter((p) => p.status === "PENDING").length,
   };
-  const topIds = new Set([...data.products].sort((a, b) => metrics.get(b.id)!.conversionsValue - metrics.get(a.id)!.conversionsValue).slice(0, 5).map((p) => p.id));
-  const rows = data.products
+  const topIds = new Set([...products].sort((a, b) => metrics.get(b.id)!.conversionsValue - metrics.get(a.id)!.conversionsValue).slice(0, 5).map((p) => p.id));
+  const rows = products
     .filter((p) => p.title.toLowerCase().includes(query.toLowerCase()) || p.id.includes(query.toLowerCase()))
     .filter((p) => (filter === "ISSUES" ? p.issues.length > 0 : filter === "OUT" ? p.availability !== "IN_STOCK" : filter === "TOP" ? topIds.has(p.id) : true));
-  const fixable = data.products.filter((p) => p.issues.some((i) => i.fixable));
-  const open = data.products.find((p) => p.id === openId);
+  const fixable = products.filter((p) => p.issues.some((i) => i.fixable));
+  const open = products.find((p) => p.id === openId);
 
   const columns: GaColumn<Product>[] = [
     {
@@ -141,7 +144,7 @@ export function ProductsView() {
     <div className="space-y-4">
       <ViewHeader
         title="Products"
-        subtitle={campaign ? `Merchant Center ${data.account.merchantCenterId} · feed products ${campaign.name} can serve. Figures cover Shopping and Performance Max.` : `Merchant Center ${data.account.merchantCenterId} · performance across Shopping and Performance Max`}
+        subtitle={campaign ? (campaign.type === "SHOPPING" ? `Merchant Center ${data.account.merchantCenterId} · products in ${campaign.name}'s product groups` : `Merchant Center ${data.account.merchantCenterId} · feed products ${campaign.name} can serve. Figures cover Shopping and Performance Max.`) : `Merchant Center ${data.account.merchantCenterId} · performance across Shopping and Performance Max`}
         actions={
           <>
             <SearchBox value={query} onChange={setQuery} placeholder="Find a product or ID" />
@@ -191,9 +194,9 @@ export function ProductsView() {
         onChange={setFilter}
         size="xs"
         options={[
-          { value: "ALL", label: "All products", count: data.products.length },
-          { value: "ISSUES", label: "With issues", count: data.products.filter((p) => p.issues.length).length },
-          { value: "OUT", label: "Out of stock", count: data.products.filter((p) => p.availability !== "IN_STOCK").length },
+          { value: "ALL", label: "All products", count: products.length },
+          { value: "ISSUES", label: "With issues", count: products.filter((p) => p.issues.length).length },
+          { value: "OUT", label: "Out of stock", count: products.filter((p) => p.availability !== "IN_STOCK").length },
           { value: "TOP", label: "Top sellers" },
         ]}
       />

@@ -20,7 +20,7 @@ import { ConversionsView } from "./views/conversions";
 import { KeywordsView, NegativesView } from "./views/keywords";
 import { LibraryView } from "./views/library";
 import { DevicesView, LanguagesView, LocationsView, ScheduleView } from "./views/locations";
-import { ImpressionShareView, LandingPagesView } from "./views/search-insights";
+import { ImpressionShareView, LandingPagesView, PriceCompetitivenessView } from "./views/search-insights";
 import { AssetCombinationsView, BrandExclusionsView, ChannelsView, PlacementsShownView, SearchCategoriesView } from "./views/pmax-insights";
 import { GaViewTabs } from "./ga-view-tabs";
 import { OverviewView } from "./views/overview";
@@ -33,7 +33,7 @@ import { ConnectionsView } from "./views/connections";
 import { MerchantConnectDialog } from "./ga-merchant";
 import { ReportsView } from "./views/reports";
 import { RulesView } from "./views/rules";
-import { ContentView, DemographicsView } from "./views/targeting";
+import { ContentExclusionsView, ContentView, DemographicsView } from "./views/targeting";
 import { ExperimentsView, KeywordPlannerView, PlannerView } from "./views/tools";
 import { DocumentsView } from "./views/documents";
 import { ProfileView } from "./views/profile";
@@ -82,6 +82,8 @@ const VIEWS: Record<GaView, () => React.ReactNode> = {
   placementsShown: PlacementsShownView,
   landingPages: LandingPagesView,
   impressionShare: ImpressionShareView,
+  priceCompetitiveness: PriceCompetitivenessView,
+  contentExclusions: ContentExclusionsView,
 };
 
 // Like the Store Agent: the agent panel is always there and is resized by dragging the divider.

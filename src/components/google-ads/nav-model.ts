@@ -12,6 +12,8 @@ const isVisual = (c: NavCtx) => !!c.campaignType && ["DISPLAY", "VIDEO", "DEMAND
 const isPmaxOrShopping = (c: NavCtx) => c.campaignType === "PERFORMANCE_MAX" || c.campaignType === "SHOPPING";
 export const isPmax = (c: NavCtx) => c.campaignType === "PERFORMANCE_MAX";
 export const isSearch = (c: NavCtx) => c.campaignType === "SEARCH";
+export const isShopping = (c: NavCtx) => c.campaignType === "SHOPPING";
+export const isDisplay = (c: NavCtx) => c.campaignType === "DISPLAY";
 
 export type TabDef = { view: GaView; label: string; show?: (c: NavCtx) => boolean };
 
@@ -27,8 +29,8 @@ export const TAB_GROUPS: TabGroup[] = [
   {
     id: "keywords",
     label: "Keywords",
-    // Performance Max has no keywords to target: it gets "Search & exclusions" instead.
-    show: (c) => !isPmax(c),
+    // Performance Max has no keywords to target (it gets "Search & exclusions"), and Display only has negatives, which sit under its content exclusions.
+    show: (c) => !isPmax(c) && !isDisplay(c),
     tabs: [
       { view: "keywords", label: "Search keywords", show: (c) => !isPmaxOrShopping(c) && !isVisual(c) },
       { view: "negatives", label: "Negative keywords" },
@@ -78,10 +80,25 @@ export const TAB_GROUPS: TabGroup[] = [
     ],
   },
   {
+    // Search and Shopping both report impression share; price competitiveness is a Shopping (feed) report.
     id: "insightsSearch",
     label: "Insights",
-    show: (c) => isSearch(c) && c.inCampaign,
-    tabs: [{ view: "impressionShare", label: "Impression share" }],
+    show: (c) => (isSearch(c) || isShopping(c)) && c.inCampaign,
+    tabs: [
+      { view: "impressionShare", label: "Impression share" },
+      { view: "priceCompetitiveness", label: "Price competitiveness", show: isShopping },
+    ],
+  },
+  {
+    // Display: Google's Content section, with the negative keywords folded into the exclusions.
+    id: "contentDisplay",
+    label: "Placements & content",
+    show: (c) => isDisplay(c) && c.inCampaign && !c.inAdGroup,
+    tabs: [
+      { view: "content", label: "Where ads showed" },
+      { view: "contentExclusions", label: "Exclusions" },
+      { view: "negatives", label: "Negative keywords" },
+    ],
   },
 ];
 

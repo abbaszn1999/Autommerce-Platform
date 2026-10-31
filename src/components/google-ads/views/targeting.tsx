@@ -22,9 +22,12 @@ const KIND: Record<ContentTarget["kind"], { label: string; icon: LucideIcon }> =
 const VISUAL_TYPES = new Set(["DISPLAY", "VIDEO", "DEMAND_GEN"]);
 
 /** Read-only: placements are targeted and excluded by asking the agent. */
-export function ContentView() {
+export function ContentView({ fixedTab }: { fixedTab?: "targeted" | "excluded" } = {}) {
   const { data, range, currency, campaign } = useGa();
-  const [tab, setTab] = useState<"targeted" | "excluded">("targeted");
+  const [pickedTab, setTab] = useState<"targeted" | "excluded">("targeted");
+  // Display splits "Where ads showed" and "Exclusions" into their own tabs; the other visual types switch inside the page.
+  const fixed = fixedTab ?? (campaign?.type === "DISPLAY" ? "targeted" : undefined);
+  const tab = fixed ?? pickedTab;
   const visual = data.campaigns.filter((c) => VISUAL_TYPES.has(c.type) && c.status !== "REMOVED" && (!campaign || c.id === campaign.id));
   const targets = data.contentTargets.filter((t) => visual.some((c) => c.id === t.campaignId));
   const metrics = useMemo(() => contentMetrics(data, range, data.contentTargets), [data, range]);
@@ -72,11 +75,16 @@ export function ContentView() {
           </button>
         }
       >
-        <Segmented value={tab} onChange={setTab} size="xs" options={[{ value: "targeted", label: "Where ads showed", count: targets.filter((t) => !t.excluded).length }, { value: "excluded", label: "Exclusions", count: targets.filter((t) => t.excluded).length }]} />
+        {!fixed && <Segmented value={tab} onChange={setTab} size="xs" options={[{ value: "targeted", label: "Where ads showed", count: targets.filter((t) => !t.excluded).length }, { value: "excluded", label: "Exclusions", count: targets.filter((t) => t.excluded).length }]} />}
       </ViewHeader>
       <GaTable rows={rows} columns={columns} rowKey={(t) => t.id} exportName="placements" defaultSort={tab === "targeted" ? { id: "cost", dir: "desc" } : undefined} />
     </div>
   );
+}
+
+/** Display: the exclusions tab of Placements & content (excluded sites, apps and topics; negative keywords are their own tab). */
+export function ContentExclusionsView() {
+  return <ContentView fixedTab="excluded" />;
 }
 
 // ─── Demographics ──────────────────────────────────────────────────────────

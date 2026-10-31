@@ -16,7 +16,7 @@ const originalUseSyncExternalStore = React.useSyncExternalStore;
 (React as { useSyncExternalStore: typeof React.useSyncExternalStore }).useSyncExternalStore = (subscribe, getSnapshot) =>
   originalUseSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-const VIEWS: GaView[] = ["overview", "campaigns", "adGroups", "ads", "assets", "keywords", "negatives", "searchTerms", "audiences", "locations", "schedule", "devices", "recommendations", "conversions", "library", "settings", "pending", "history", "products", "productGroups", "reports", "rules", "keywordPlanner", "experiments", "planner", "content", "demographics", "links", "accountSettings", "documents", "profile", "connections", "languages", "brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown", "landingPages", "impressionShare"];
+const VIEWS: GaView[] = ["overview", "campaigns", "adGroups", "ads", "assets", "keywords", "negatives", "searchTerms", "audiences", "locations", "schedule", "devices", "recommendations", "conversions", "library", "settings", "pending", "history", "products", "productGroups", "reports", "rules", "keywordPlanner", "experiments", "planner", "content", "demographics", "links", "accountSettings", "documents", "profile", "connections", "languages", "brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown", "landingPages", "impressionShare", "priceCompetitiveness", "contentExclusions"];
 
 /** The HTML of one landmark (the sidebar or the page), so assertions ignore the chat panel and top bar. */
 const part = (html: string, tag: string) => html.slice(html.indexOf("<" + tag), html.indexOf("</" + tag + ">"));
@@ -334,9 +334,58 @@ describe("render smoke", () => {
     expect(part(renderToString(createElement(GoogleAdsShell)), "main")).toContain("Running in an experiment");
     useGoogleAds.setState({ scope: { campaignId: "c_running" }, view: "overview" });
     expect(part(renderToString(createElement(GoogleAdsShell)), "main")).not.toContain("Running in an experiment");
-    // Landing pages and Insights are Search-only: other types do not get them.
+    // Landing pages are Search-only; Insights is Search and Shopping only.
     expect(sidebar("c_shopping")).not.toContain("Landing pages");
     expect(sidebar("c_demandgen")).not.toContain("Insights");
+  });
+
+  it("Shopping and Display campaign sidebars", () => {
+    connect();
+    const sidebar = (campaignId: string, view: GaView = "adGroups") => {
+      useGoogleAds.setState({ scope: { campaignId }, view });
+      return part(renderToString(createElement(GoogleAdsShell)), "nav");
+    };
+    const main = (campaignId: string, view: GaView) => {
+      useGoogleAds.setState({ scope: { campaignId }, view });
+      return part(renderToString(createElement(GoogleAdsShell)), "main");
+    };
+
+    // Shopping: feed-based, so Products and product groups, no assets or landing pages.
+    const shop = sidebar("c_shopping");
+    for (const label of ["Ad groups", "Product groups", ">Products<", "Insights", ">Keywords<", ">Audiences<", "Locations &amp; languages", "Campaign settings"]) {
+      expect(shop, label).toContain(label);
+    }
+    for (const label of [">Assets<", "Landing pages", ">Ads<"]) expect(shop, label).not.toContain(label);
+    const shopInsights = main("c_shopping", "priceCompetitiveness");
+    for (const t of ["Impression share", "Price competitiveness", "Your price", "Market price", "Difference"]) expect(shopInsights, t).toContain(t);
+    expect(main("c_shopping", "impressionShare")).toContain("Search impression share");
+    // Only this campaign's products, not the whole feed.
+    expect(main("c_shopping", "products")).toContain("products in");
+    // Shopping settings
+    const shopSettings = main("c_shopping", "settings");
+    for (const t of ["Shopping settings", "Campaign priority", "Inventory filter", "Feed label", "Country of sale", "Local inventory ads"]) expect(shopSettings, t).toContain(t);
+    // Price competitiveness is Shopping-only.
+    useGoogleAds.getState().setScope({ campaignId: "c_running" }, "priceCompetitiveness");
+    expect(useGoogleAds.getState().view).toBe("adGroups");
+
+    // Display: audiences, placements & content (with negative keywords inside), no Keywords or Insights.
+    const display = sidebar("c_remarketing");
+    for (const label of ["Ad groups", ">Ads<", "Assets", ">Audiences<", "Placements &amp; content", "Locations &amp; languages", "Campaign settings"]) {
+      expect(display, label).toContain(label);
+    }
+    for (const label of [">Keywords<", "Insights", ">Products<", "Product groups", "Landing pages"]) expect(display, label).not.toContain(label);
+    useGoogleAds.setState({ scope: { campaignId: "c_remarketing" }, view: "content" });
+    const shown = part(renderToString(createElement(GoogleAdsShell)), "main");
+    for (const t of ["Where ads showed", "Exclusions", "Negative keywords"]) expect(shown, t).toContain(t);
+    const audiences = main("c_remarketing", "audiences");
+    for (const t of ["Audiences", "Demographics"]) expect(audiences, t).toContain(t);
+    const displaySettings = main("c_remarketing", "settings");
+    for (const t of ["Display settings", "Optimized targeting", "Frequency cap", "Automatically created assets", "Content exclusions"]) expect(displaySettings, t).toContain(t);
+    // Exclusions are Display-only: other types fall back.
+    useGoogleAds.getState().setScope({ campaignId: "c_running" }, "contentExclusions");
+    expect(useGoogleAds.getState().view).toBe("adGroups");
+    useGoogleAds.getState().setScope({ campaignId: "c_shopping" }, "assets");
+    expect(useGoogleAds.getState().view).toBe("adGroups");
   });
 
   it("documents are two folders: Reports (with the ready templates) and Plans", () => {

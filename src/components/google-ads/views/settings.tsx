@@ -174,6 +174,29 @@ function SettingsForm({ campaign }: { campaign: Campaign }) {
             <Toggle checked={draft.euPoliticalAds} onChange={(v) => set("euPoliticalAds", v)} label="EU political ads" />
           </div>
         </Card>
+
+        {campaign.shopping && (
+          <Card className="space-y-3 p-4">
+            <p className="text-sm font-bold">Shopping settings</p>
+            <p className="text-[11px] text-muted-foreground">Set when the campaign was created. To change them, ask the agent.</p>
+            <InfoRow label="Campaign priority" hint="Which campaign wins when several advertise the same product." value={PRIORITY[campaign.shopping.priority]} />
+            <InfoRow label="Inventory filter" hint="Limits the campaign to part of the feed." value={campaign.shopping.inventoryFilter ?? "Whole feed"} />
+            <InfoRow label="Feed label" value={campaign.shopping.feedLabel} />
+            <InfoRow label="Country of sale" hint="Products sold and shipped here." value={campaign.shopping.countryOfSale} />
+            <InfoRow label="Local inventory ads" value={campaign.shopping.localInventory ? "On" : "Off"} />
+          </Card>
+        )}
+
+        {campaign.display && (
+          <Card className="space-y-3 p-4">
+            <p className="text-sm font-bold">Display settings</p>
+            <p className="text-[11px] text-muted-foreground">Set when the campaign was created. To change them, ask the agent.</p>
+            <InfoRow label="Optimized targeting" hint="Google finds more people like your audiences and converters." value={campaign.display.optimizedTargeting ? "On" : "Off"} />
+            <InfoRow label="Frequency cap" hint="Most times one person sees your ads." value={campaign.display.frequencyCap ? `${campaign.display.frequencyCap.impressions} impressions per ${campaign.display.frequencyCap.per.toLowerCase()}` : "No cap"} />
+            <InfoRow label="Automatically created assets" hint="Google generates extra headlines and images." value={campaign.display.autoCreatedAssets ? "On" : "Off"} />
+            <InfoRow label="Content exclusions" hint="Content this campaign never shows next to." value={campaign.display.contentExclusions.length ? campaign.display.contentExclusions.join(", ") : "None"} />
+          </Card>
+        )}
       </div>
 
       {dirty && (
@@ -187,6 +210,20 @@ function SettingsForm({ campaign }: { campaign: Campaign }) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+const PRIORITY = { LOW: "Low", MEDIUM: "Medium", HIGH: "High" } as const;
+
+function InfoRow({ label, hint, value }: { label: string; hint?: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex-1">
+        <p className="text-xs font-semibold">{label}</p>
+        {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+      </div>
+      <span className="max-w-56 text-right text-xs font-semibold">{value}</span>
     </div>
   );
 }

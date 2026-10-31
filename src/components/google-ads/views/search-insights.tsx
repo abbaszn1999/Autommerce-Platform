@@ -4,8 +4,9 @@ import { useMemo } from "react";
 import { Bot, Link2, Telescope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
+import { productsInGroup } from "@/lib/google-ads/analytics";
 import { EMPTY_BASE, addBase, adBase, derive, money, pct } from "@/lib/google-ads/metrics";
-import type { Metrics } from "@/lib/google-ads/types";
+import type { Metrics, Product } from "@/lib/google-ads/types";
 import { metricColumns } from "../ga-columns";
 import { GaTable, type GaColumn } from "../ga-table";
 import { Card, EmptyState, Pill, ViewHeader } from "../ga-ui";
@@ -13,11 +14,11 @@ import { useGa } from "../use-ga";
 
 const AGENT_BTN = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 px-3 text-xs font-semibold hover:bg-muted";
 
-function NeedsSearchCampaign({ title }: { title: string }) {
+function NeedsSearchCampaign({ title, kind = "Search" }: { title: string; kind?: string }) {
   return (
     <div>
       <ViewHeader title={title} />
-      <EmptyState icon={Telescope} title="Open a Search campaign" body="This page reads the campaign's own landing pages and impression share, so it lives inside a Search campaign." />
+      <EmptyState icon={Telescope} title={`Open a ${kind} campaign`} body="This page reads one campaign's own data, so it lives inside the campaign." />
     </div>
   );
 }
@@ -101,7 +102,7 @@ export function ImpressionShareView() {
     const lostBudget = lost * Math.max(0, util - 0.5) * 2;
     return { share, lost, lostBudget, lostRank: lost - lostBudget, days: withShare, budget, avgCost };
   }, [data, range, campaign]);
-  if (!campaign) return <NeedsSearchCampaign title="Impression share" />;
+  if (!campaign) return <NeedsSearchCampaign title="Impression share" kind="Search or Shopping" />;
 
   return (
     <div className="space-y-4">
@@ -145,6 +146,48 @@ export function ImpressionShareView() {
           </Card>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Price competitiveness (Shopping) ─────────────────────────────────────
+
+/** Products a Shopping campaign includes: everything its product groups don't exclude. */
+export function campaignProducts(data: ReturnType<typeof useGa>["data"], campaignId: string): Product[] {
+  const roots = data.listingGroups.filter((g) => g.campaignId === campaignId && !g.parentId && !g.excluded);
+  if (!roots.length) return data.products;
+  const ids = new Set(roots.flatMap((r) => productsInGroup(data, r.id).map((p) => p.id)));
+  return data.products.filter((p) => ids.has(p.id));
+}
+
+export function PriceCompetitivenessView() {
+  const { data, currency, campaign } = useGa();
+  if (!campaign) return <NeedsSearchCampaign title="Price competitiveness" kind="Shopping" />;
+  const rows = campaignProducts(data, campaign.id).filter((p) => p.benchmarkPrice);
+  const diff = (p: Product) => ((p.salePrice ?? p.price) - p.benchmarkPrice!) / p.benchmarkPrice!;
+
+  const columns: GaColumn<Product>[] = [
+    { id: "title", header: "Product", label: "Product", sticky: true, sortValue: (p) => p.title, render: (p) => <span><span className="block max-w-72 truncate font-semibold">{p.title}</span><span className="text-[10px] text-muted-foreground">{p.id} · {p.productType}</span></span> },
+    { id: "price", header: "Your price", label: "Your price", align: "right", sortValue: (p) => p.salePrice ?? p.price, render: (p) => money(p.salePrice ?? p.price, currency) },
+    { id: "market", header: "Market price", label: "Market price", align: "right", sortValue: (p) => p.benchmarkPrice!, render: (p) => <span className="text-muted-foreground">{money(p.benchmarkPrice!, currency)}</span> },
+    { id: "diff", header: "Difference", label: "Difference", align: "right", sortValue: diff, render: (p) => <span className={cn("font-semibold tabular-nums", diff(p) > 0.03 ? "text-red-600" : diff(p) < -0.03 ? "text-emerald-600" : "text-muted-foreground")}>{diff(p) > 0 ? "+" : ""}{(diff(p) * 100).toFixed(0)}%</span> },
+    { id: "position", header: "Position", label: "Position", render: (p) => <Pill tone={diff(p) > 0.03 ? "bad" : diff(p) < -0.03 ? "good" : "neutral"}>{diff(p) > 0.03 ? "Above market" : diff(p) < -0.03 ? "Below market" : "In line"}</Pill> },
+  ];
+
+  return (
+    <div>
+      <ViewHeader
+        title="Price competitiveness"
+        subtitle={`How the prices of ${campaign.name}'s products compare with the market average. Products priced above it tend to lose clicks to cheaper offers.`}
+        actions={<button type="button" onClick={() => runAgentTurn("Which products are priced above the market and losing clicks?")} className={AGENT_BTN}><Bot className="h-3.5 w-3.5" /> Analyse with agent</button>}
+      />
+      <GaTable
+        rows={rows}
+        columns={columns}
+        rowKey={(p) => p.id}
+        defaultSort={{ id: "diff", dir: "desc" }}
+        empty={<p className="px-4 py-6 text-center text-xs text-muted-foreground">No market price data yet. Merchant Center needs enough product views to compare.</p>}
+      />
     </div>
   );
 }
