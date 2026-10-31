@@ -63,16 +63,18 @@ export const CAMPAIGN_TYPES: Record<
   DISPLAY: {
     label: "Display",
     short: "Display",
-    blurb: "Image ads on millions of sites and apps.",
+    // Google is moving Display campaigns into Demand Gen: existing ones stay visible, new ones are Demand Gen.
+    blurb: "Image ads on sites and apps. View-only: Google is moving Display into Demand Gen.",
     where: "Google Display Network",
-    needs: "Images, logos and short copy",
+    needs: "Managed in Google Ads",
   },
   VIDEO: {
     label: "Video",
     short: "Video",
-    blurb: "Video ads on YouTube and video partners.",
+    // Google's API only reads Video campaigns (no create or edit), so existing ones show here but the agent never builds them. Use Demand Gen for YouTube video ads.
+    blurb: "Video ads on YouTube. View-only: Google's API cannot create or edit Video campaigns.",
     where: "YouTube, video partners",
-    needs: "A YouTube video",
+    needs: "Managed in Google Ads",
   },
   DEMAND_GEN: {
     label: "Demand Gen",
@@ -87,27 +89,27 @@ export const OBJECTIVES: Record<CampaignObjective, { label: string; blurb: strin
   SALES: {
     label: "Sales",
     blurb: "Drive sales online, in app, by phone or in store",
-    types: ["SEARCH", "PERFORMANCE_MAX", "SHOPPING", "DISPLAY", "VIDEO", "DEMAND_GEN"],
+    types: ["SEARCH", "PERFORMANCE_MAX", "SHOPPING", "DEMAND_GEN"],
   },
   LEADS: {
     label: "Leads",
     blurb: "Get leads and other conversions by encouraging customers to act",
-    types: ["SEARCH", "PERFORMANCE_MAX", "DISPLAY", "VIDEO", "DEMAND_GEN"],
+    types: ["SEARCH", "PERFORMANCE_MAX", "DEMAND_GEN"],
   },
   WEBSITE_TRAFFIC: {
     label: "Website traffic",
     blurb: "Get the right people to visit your website",
-    types: ["SEARCH", "PERFORMANCE_MAX", "DISPLAY", "DEMAND_GEN"],
+    types: ["SEARCH", "PERFORMANCE_MAX", "DEMAND_GEN"],
   },
   AWARENESS: {
     label: "Awareness and consideration",
     blurb: "Reach a broad audience and build interest in your products",
-    types: ["DISPLAY", "VIDEO", "DEMAND_GEN"],
+    types: ["DEMAND_GEN"],
   },
   NONE: {
     label: "Create without a goal",
     blurb: "Choose a campaign type first, without a goal recommendation",
-    types: ["SEARCH", "PERFORMANCE_MAX", "SHOPPING", "DISPLAY", "VIDEO", "DEMAND_GEN"],
+    types: ["SEARCH", "PERFORMANCE_MAX", "SHOPPING", "DEMAND_GEN"],
   },
 };
 

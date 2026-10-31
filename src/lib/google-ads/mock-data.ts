@@ -252,6 +252,7 @@ export function buildDemoAccount(today = isoDay(new Date())): AccountData {
       budgetId: "b_demandgen",
       bidding: { type: "MAXIMIZE_CONVERSIONS" },
       networks: { googleSearch: false, searchPartners: false, displayNetwork: false },
+      demandGen: { lookalikes: true },
       servingIssues: ["LEARNING"],
       objective: "AWARENESS",
       startDate: addDays(today, -9),
@@ -280,7 +281,7 @@ export function buildDemoAccount(today = isoDay(new Date())): AccountData {
     { id: "ag_shop_all", campaignId: "c_shopping", name: "All Bestsellers", status: "ENABLED", type: "SHOPPING_PRODUCT_ADS" },
     { id: "ag_rm_cart", campaignId: "c_remarketing", name: "Cart Abandoners", status: "ENABLED", type: "DISPLAY_STANDARD" },
     { id: "ag_rm_visitors", campaignId: "c_remarketing", name: "Past Visitors 30d", status: "ENABLED", type: "DISPLAY_STANDARD" },
-    { id: "ag_dg_summer", campaignId: "c_demandgen", name: "Summer Drop – Lookalikes", status: "ENABLED", type: "DEMAND_GEN" },
+    { id: "ag_dg_summer", campaignId: "c_demandgen", name: "Summer Drop – Lookalikes", status: "ENABLED", type: "DEMAND_GEN", channels: ["YOUTUBE", "DISCOVER", "GMAIL"], audienceGrouped: true },
   ];
 
   const keywords: Keyword[] = [

@@ -15,6 +15,7 @@ import type {
   AccountData,
   AgentMessage,
   CampaignBundle,
+  CampaignType,
   ChangeEvent,
   ChatThread,
   ChangeSource,
@@ -161,16 +162,39 @@ type GaStore = {
 
 const ACTOR = "You";
 
-const PMAX_ONLY: GaView[] = ["brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown"];
+const PMAX_ONLY: GaView[] = ["brandExclusions", "searchCategories", "assetCombinations", "placementsShown"];
+/** Demand Gen has no keywords, search terms or placement pages (Google handles content suitability at account level). */
+const DEMAND_GEN_NONE: GaView[] = ["keywords", "negatives", "searchTerms", "content", "contentExclusions"];
 const SEARCH_ONLY: GaView[] = ["landingPages"];
 
 /** Views that make no sense at a scope fall back to the closest one that does. */
-function viewForScope(view: GaView, scope: GaScope, isPmax: boolean, isSearch = false, isShopping = false, isDisplay = false): GaView {
+function viewForScope(view: GaView, scope: GaScope, type?: CampaignType): GaView {
+  const isPmax = type === "PERFORMANCE_MAX";
+  const isSearch = type === "SEARCH";
+  const isShopping = type === "SHOPPING";
+  const isDisplay = type === "DISPLAY";
+  const isDemandGen = type === "DEMAND_GEN";
   const accountOnly: GaView[] = ["campaigns", "conversions", "library", "products", "rules", "keywordPlanner", "experiments", "links", "accountSettings", "documents", "profile", "connections"];
-  if (scope.adGroupId && (accountOnly.includes(view) || view === "adGroups" || view === "recommendations" || view === "locations" || view === "settings" || view === "planner" || view === "productGroups" || view === "content" || view === "demographics"))
-    return "keywords";
-  // Feed-based Performance Max keeps Products inside the campaign.
-  if (scope.campaignId && accountOnly.includes(view) && !((isPmax || isShopping) && view === "products")) return "adGroups";
+  if (scope.adGroupId) {
+    // Inside an ad group only that type's own pages exist; anything else goes to its home page.
+    const home: GaView = isSearch ? "keywords" : "ads";
+    const campaignOnly: GaView[] = ["adGroups", "recommendations", "settings", "planner", "content", "contentExclusions", "landingPages", "impressionShare", "priceCompetitiveness", "channels", "searchCategories", "brandExclusions", "assetCombinations", "placementsShown", "schedule", "devices"];
+    if (campaignOnly.includes(view) || (accountOnly.includes(view) && view !== "products")) return home;
+    if (view === "productGroups" && !isShopping) return home;
+    if (view === "products" && !(isShopping || isDemandGen)) return home;
+    if (view === "assets" && isShopping) return home;
+    if (view === "keywords" && !isSearch) return isShopping ? "negatives" : home;
+    if ((view === "negatives" || view === "searchTerms") && !(isSearch || isShopping)) return home;
+    if (view === "demographics" && (isShopping || isPmax)) return home;
+    if ((view === "locations" || view === "languages") && !isDemandGen) return home;
+    return view;
+  }
+  if (!scope.adGroupId && view === "adGroupSettings") return scope.campaignId ? "adGroups" : "campaigns";
+  // Shopping, Performance Max and Demand Gen can use the product feed, so Products stays inside those campaigns.
+  if (scope.campaignId && accountOnly.includes(view) && !((isPmax || isShopping || isDemandGen) && view === "products")) return "adGroups";
+  if (scope.campaignId && !scope.adGroupId && isDemandGen && DEMAND_GEN_NONE.includes(view)) return "adGroups";
+  // Channels report: Performance Max and Demand Gen.
+  if (!isPmax && !isDemandGen && view === "channels") return scope.campaignId ? "adGroups" : "overview";
   if (!scope.campaignId && view === "productGroups") return "products";
   if (!scope.campaignId && view === "settings") return "campaigns";
   // Performance Max has no ads, keywords, audience page, demographics, placements page or device bids.
@@ -315,7 +339,7 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
     set((s) => {
       const data = current(s)?.data;
       const type = data?.campaigns.find((c) => c.id === scope.campaignId)?.type;
-      return { scope, view: viewForScope(view ?? s.view, scope, type === "PERFORMANCE_MAX", type === "SEARCH", type === "SHOPPING", type === "DISPLAY") };
+      return { scope, view: viewForScope(view ?? s.view, scope, type) };
     }),
 
   setRange: (preset) => set({ range: rangeFor(preset) }),

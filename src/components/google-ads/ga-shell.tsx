@@ -26,7 +26,7 @@ import { GaViewTabs } from "./ga-view-tabs";
 import { OverviewView } from "./views/overview";
 import { RecommendationsView } from "./views/recommendations";
 import { SearchTermsView } from "./views/search-terms";
-import { SettingsView } from "./views/settings";
+import { AdGroupSettingsView, SettingsView } from "./views/settings";
 import { AccountSettingsView, LinksView } from "./views/account";
 import { ProductGroupsView, ProductsView } from "./views/products";
 import { ConnectionsView } from "./views/connections";
@@ -84,6 +84,7 @@ const VIEWS: Record<GaView, () => React.ReactNode> = {
   impressionShare: ImpressionShareView,
   priceCompetitiveness: PriceCompetitivenessView,
   contentExclusions: ContentExclusionsView,
+  adGroupSettings: AdGroupSettingsView,
 };
 
 // Like the Store Agent: the agent panel is always there and is resized by dragging the divider.

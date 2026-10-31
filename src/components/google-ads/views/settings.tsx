@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { BIDDING, BIDDING_BY_TYPE, CAMPAIGN_TYPES, LANGUAGES, OBJECTIVES } from "@/lib/google-ads/constants";
+import { money } from "@/lib/google-ads/metrics";
 import { useGoogleAds } from "@/lib/google-ads/store";
 import type { BiddingStrategyType, Campaign, CampaignObjective, MutateOp } from "@/lib/google-ads/types";
 import { Input } from "@/components/ui/input";
@@ -197,6 +198,17 @@ function SettingsForm({ campaign }: { campaign: Campaign }) {
             <InfoRow label="Content exclusions" hint="Content this campaign never shows next to." value={campaign.display.contentExclusions.length ? campaign.display.contentExclusions.join(", ") : "None"} />
           </Card>
         )}
+
+        {campaign.type === "DEMAND_GEN" && (
+          <Card className="space-y-3 p-4">
+            <p className="text-sm font-bold">Demand Gen settings</p>
+            <p className="text-[11px] text-muted-foreground">To change them, ask the agent.</p>
+            <InfoRow label="Channels" hint="Set per ad group: where its ads may serve." value={demandGenChannels(data.adGroups.filter((g) => g.campaignId === campaign.id))} />
+            <InfoRow label="Lookalike segments" hint="Find new people similar to your customers." value={campaign.demandGen?.lookalikes ? "On" : "Off"} />
+            <InfoRow label="Product feed" hint="Promote products from Merchant Center." value={campaign.merchantFeed ? "Linked" : "Not used"} />
+            <InfoRow label="Content suitability" hint="Brand safety is set once for the whole account, not per campaign." value="Account level" />
+          </Card>
+        )}
       </div>
 
       {dirty && (
@@ -212,6 +224,42 @@ function SettingsForm({ campaign }: { campaign: Campaign }) {
       )}
     </div>
   );
+}
+
+/** Ad group level: read-only, the agent changes these. */
+export function AdGroupSettingsView() {
+  const { adGroup, campaign, currency, data } = useGa();
+  if (!adGroup || !campaign) return null;
+  const status = { ENABLED: "Enabled", PAUSED: "Paused", REMOVED: "Removed" }[adGroup.status];
+  const ads = data.ads.filter((a) => a.adGroupId === adGroup.id).length;
+  return (
+    <div>
+      <ViewHeader title="Ad group settings" subtitle={`${adGroup.name} · ${CAMPAIGN_TYPES[campaign.type].label} ad group in ${campaign.name}. To change them, ask the agent.`} />
+      <Card className="max-w-2xl space-y-3 p-4">
+        <InfoRow label="Name" value={adGroup.name} />
+        <InfoRow label="Status" value={status} />
+        <InfoRow label="Ads" value={String(ads)} />
+        {campaign.type !== "DEMAND_GEN" && (
+          <InfoRow label="Default bid" hint="Used when a keyword or product group has no bid of its own." value={adGroup.defaultCpcBid ? money(adGroup.defaultCpcBid, currency) : "Uses the campaign's bidding"} />
+        )}
+        {adGroup.targetCpa !== undefined && <InfoRow label="Target CPA" value={money(adGroup.targetCpa, currency)} />}
+        {campaign.type === "DEMAND_GEN" && (
+          <>
+            <InfoRow label="Channels" hint="Where this ad group's ads may serve." value={demandGenChannels([adGroup])} />
+            <InfoRow label="Audience segments" hint="Grouped: any of the segments can match. Otherwise each is used on its own." value={adGroup.audienceGrouped ? "Grouped" : "Separate"} />
+          </>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+const CHANNEL_LABEL = { YOUTUBE: "YouTube", DISCOVER: "Discover", GMAIL: "Gmail", DISPLAY: "Display Network", MAPS: "Maps" } as const;
+
+/** The channels the campaign's ad groups allow, or "All channels" when none are restricted. */
+function demandGenChannels(groups: { channels?: (keyof typeof CHANNEL_LABEL)[] }[]) {
+  const set = new Set(groups.flatMap((g) => g.channels ?? []));
+  return set.size ? [...set].map((c) => CHANNEL_LABEL[c]).join(", ") : "All channels";
 }
 
 const PRIORITY = { LOW: "Low", MEDIUM: "Medium", HIGH: "High" } as const;

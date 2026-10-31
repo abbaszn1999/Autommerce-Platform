@@ -3,6 +3,7 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { activeChatOf, useGoogleAds } from "@/lib/google-ads/store";
 import { planAgentTurn } from "@/lib/google-ads/agent-sim";
+import { OBJECTIVES } from "@/lib/google-ads/constants";
 import { DEFAULT_PROFILE, emptyProfile, profileCompleteness } from "@/lib/google-ads/docs";
 import type { CampaignType, GaView } from "@/lib/google-ads/types";
 import { GoogleAdsShell } from "./ga-shell";
@@ -16,7 +17,7 @@ const originalUseSyncExternalStore = React.useSyncExternalStore;
 (React as { useSyncExternalStore: typeof React.useSyncExternalStore }).useSyncExternalStore = (subscribe, getSnapshot) =>
   originalUseSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-const VIEWS: GaView[] = ["overview", "campaigns", "adGroups", "ads", "assets", "keywords", "negatives", "searchTerms", "audiences", "locations", "schedule", "devices", "recommendations", "conversions", "library", "settings", "pending", "history", "products", "productGroups", "reports", "rules", "keywordPlanner", "experiments", "planner", "content", "demographics", "links", "accountSettings", "documents", "profile", "connections", "languages", "brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown", "landingPages", "impressionShare", "priceCompetitiveness", "contentExclusions"];
+const VIEWS: GaView[] = ["overview", "campaigns", "adGroups", "ads", "assets", "keywords", "negatives", "searchTerms", "audiences", "locations", "schedule", "devices", "recommendations", "conversions", "library", "settings", "pending", "history", "products", "productGroups", "reports", "rules", "keywordPlanner", "experiments", "planner", "content", "demographics", "links", "accountSettings", "documents", "profile", "connections", "languages", "brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown", "landingPages", "impressionShare", "priceCompetitiveness", "contentExclusions", "adGroupSettings"];
 
 /** The HTML of one landmark (the sidebar or the page), so assertions ignore the chat panel and top bar. */
 const part = (html: string, tag: string) => html.slice(html.indexOf("<" + tag), html.indexOf("</" + tag + ">"));
@@ -334,9 +335,9 @@ describe("render smoke", () => {
     expect(part(renderToString(createElement(GoogleAdsShell)), "main")).toContain("Running in an experiment");
     useGoogleAds.setState({ scope: { campaignId: "c_running" }, view: "overview" });
     expect(part(renderToString(createElement(GoogleAdsShell)), "main")).not.toContain("Running in an experiment");
-    // Landing pages are Search-only; Insights is Search and Shopping only.
+    // Landing pages are Search-only; Insights is Search, Shopping, Performance Max and Demand Gen only.
     expect(sidebar("c_shopping")).not.toContain("Landing pages");
-    expect(sidebar("c_demandgen")).not.toContain("Insights");
+    expect(sidebar("c_remarketing")).not.toContain("Insights");
   });
 
   it("Shopping and Display campaign sidebars", () => {
@@ -358,7 +359,14 @@ describe("render smoke", () => {
     for (const label of [">Assets<", "Landing pages", ">Ads<"]) expect(shop, label).not.toContain(label);
     const shopInsights = main("c_shopping", "priceCompetitiveness");
     for (const t of ["Impression share", "Price competitiveness", "Your price", "Market price", "Difference"]) expect(shopInsights, t).toContain(t);
+    expect(shopInsights).toContain("Sample data");
     expect(main("c_shopping", "impressionShare")).toContain("Search impression share");
+    // Video campaigns cannot be created or edited through Google's API: no goal offers Video.
+    // Display is retired for new campaigns (Google is moving it into Demand Gen).
+    for (const o of Object.values(OBJECTIVES)) {
+      expect(o.types).not.toContain("VIDEO");
+      expect(o.types).not.toContain("DISPLAY");
+    }
     // Only this campaign's products, not the whole feed.
     expect(main("c_shopping", "products")).toContain("products in");
     // Shopping settings
@@ -385,6 +393,91 @@ describe("render smoke", () => {
     useGoogleAds.getState().setScope({ campaignId: "c_running" }, "contentExclusions");
     expect(useGoogleAds.getState().view).toBe("adGroups");
     useGoogleAds.getState().setScope({ campaignId: "c_shopping" }, "assets");
+    expect(useGoogleAds.getState().view).toBe("adGroups");
+  });
+
+  it("Demand Gen campaign sidebar", () => {
+    connect();
+    const sidebar = (view: GaView = "adGroups") => {
+      useGoogleAds.setState({ scope: { campaignId: "c_demandgen" }, view });
+      return part(renderToString(createElement(GoogleAdsShell)), "nav");
+    };
+    const main = (view: GaView) => {
+      useGoogleAds.setState({ scope: { campaignId: "c_demandgen" }, view });
+      return part(renderToString(createElement(GoogleAdsShell)), "main");
+    };
+    const dg = sidebar();
+    for (const label of ["Ad groups", ">Ads<", "Assets", "Insights", ">Audiences<", "Locations &amp; languages", "Campaign settings", "Recommendations", "Reports"]) {
+      expect(dg, label).toContain(label);
+    }
+    // No keywords, placements, landing pages or products (no feed) at Demand Gen campaign level.
+    for (const label of [">Keywords<", "Placements &amp; content", "Landing pages", ">Products<", "Product groups"]) expect(dg, label).not.toContain(label);
+    const channels = main("channels");
+    for (const t of ["YouTube Shorts", "YouTube in-feed", "Discover", "Gmail", "Share of spend"]) expect(channels, t).toContain(t);
+    const settings = main("settings");
+    for (const t of ["Demand Gen settings", "Channels", "Lookalike segments", "Product feed", "Content suitability"]) expect(settings, t).toContain(t);
+    // Pages Demand Gen does not have fall back to Ad groups.
+    for (const v of ["keywords", "negatives", "searchTerms", "content", "contentExclusions"] as GaView[]) {
+      useGoogleAds.getState().setScope({ campaignId: "c_demandgen" }, v);
+      expect(useGoogleAds.getState().view, v).toBe("adGroups");
+    }
+    // Channels belong to Performance Max and Demand Gen only.
+    useGoogleAds.getState().setScope({ campaignId: "c_running" }, "channels");
+    expect(useGoogleAds.getState().view).toBe("adGroups");
+  });
+
+  it("ad group sidebar per campaign type", () => {
+    connect();
+    const nav = (campaignId: string, adGroupId: string, view: GaView) => {
+      useGoogleAds.setState({ scope: { campaignId, adGroupId }, view });
+      return part(renderToString(createElement(GoogleAdsShell)), "nav");
+    };
+    const hiddenEverywhere = ["Recommendations", ">Ad groups<", "Campaign settings", "Landing pages", "Insights", "Experiments"];
+    // Search: ads, assets, keywords tabs, audiences + demographics, ad group settings; no locations or products.
+    const search = nav("c_running", "ag_run_men", "keywords");
+    for (const l of [">Ads<", "Assets", ">Keywords<", ">Audiences<", "Ad group settings"]) expect(search, l).toContain(l);
+    for (const l of [...hiddenEverywhere, "Locations &amp; languages", ">Products<", "Product groups"]) expect(search, l).not.toContain(l);
+    // Shopping: ads, product groups, products, keywords (negatives and search terms only), no assets.
+    const shop = nav("c_shopping", "ag_shop_all", "ads");
+    for (const l of [">Ads<", "Product groups", ">Products<", ">Keywords<", ">Audiences<", "Ad group settings"]) expect(shop, l).toContain(l);
+    for (const l of [">Assets<", "Locations &amp; languages", "Insights"]) expect(shop, l).not.toContain(l);
+    // Demand Gen: ads, assets, audiences, locations & languages, no keywords.
+    const dg = nav("c_demandgen", "ag_dg_summer", "ads");
+    for (const l of [">Ads<", "Assets", ">Audiences<", "Locations &amp; languages", "Ad group settings"]) expect(dg, l).toContain(l);
+    for (const l of [">Keywords<", "Insights", ">Products<"]) expect(dg, l).not.toContain(l);
+
+    const main = (campaignId: string, adGroupId: string, view: GaView) => {
+      useGoogleAds.setState({ scope: { campaignId, adGroupId }, view });
+      return part(renderToString(createElement(GoogleAdsShell)), "main");
+    };
+    // Tabs: Demographics inside Search and Demand Gen ad groups; Search keywords tab not in Shopping.
+    expect(main("c_running", "ag_run_men", "audiences")).toContain("Demographics");
+    expect(main("c_demandgen", "ag_dg_summer", "audiences")).toContain("Demographics");
+    expect(main("c_shopping", "ag_shop_all", "audiences")).not.toContain("Demographics");
+    const shopKeywords = main("c_shopping", "ag_shop_all", "negatives");
+    expect(shopKeywords).toContain("Negative keywords");
+    expect(shopKeywords).not.toContain("Search keywords");
+    const dgLoc = main("c_demandgen", "ag_dg_summer", "languages");
+    expect(dgLoc).toContain("Languages");
+    expect(dgLoc).not.toContain("Ad schedule");
+    // Ad group settings per type
+    expect(main("c_demandgen", "ag_dg_summer", "adGroupSettings")).toContain("Audience segments");
+    expect(main("c_running", "ag_run_men", "adGroupSettings")).toContain("Default bid");
+
+    // Pages that do not exist for the ad group's type fall back.
+    const go = (campaignId: string, adGroupId: string, v: GaView) => {
+      useGoogleAds.getState().setScope({ campaignId, adGroupId }, v);
+      return useGoogleAds.getState().view;
+    };
+    expect(go("c_demandgen", "ag_dg_summer", "keywords")).toBe("ads");
+    expect(go("c_shopping", "ag_shop_all", "keywords")).toBe("negatives");
+    expect(go("c_running", "ag_run_men", "locations")).toBe("keywords");
+    expect(go("c_running", "ag_run_men", "productGroups")).toBe("keywords");
+    expect(go("c_running", "ag_run_men", "impressionShare")).toBe("keywords");
+    expect(go("c_shopping", "ag_shop_all", "assets")).toBe("ads");
+    expect(go("c_shopping", "ag_shop_all", "productGroups")).toBe("productGroups");
+    // Ad group settings only exist inside an ad group.
+    useGoogleAds.getState().setScope({ campaignId: "c_running" }, "adGroupSettings");
     expect(useGoogleAds.getState().view).toBe("adGroups");
   });
 
@@ -602,7 +695,7 @@ describe("render smoke", () => {
 
   it("renders the campaign editor for every type", () => {
     connect();
-    const types: CampaignType[] = ["SEARCH", "PERFORMANCE_MAX", "SHOPPING", "DISPLAY", "VIDEO", "DEMAND_GEN"];
+    const types: CampaignType[] = ["SEARCH", "PERFORMANCE_MAX", "SHOPPING", "DEMAND_GEN"];
     for (const type of types) {
       const b = emptyBundle();
       b.campaign.type = type;

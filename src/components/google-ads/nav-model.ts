@@ -14,6 +14,7 @@ export const isPmax = (c: NavCtx) => c.campaignType === "PERFORMANCE_MAX";
 export const isSearch = (c: NavCtx) => c.campaignType === "SEARCH";
 export const isShopping = (c: NavCtx) => c.campaignType === "SHOPPING";
 export const isDisplay = (c: NavCtx) => c.campaignType === "DISPLAY";
+export const isDemandGen = (c: NavCtx) => c.campaignType === "DEMAND_GEN";
 
 export type TabDef = { view: GaView; label: string; show?: (c: NavCtx) => boolean };
 
@@ -29,8 +30,8 @@ export const TAB_GROUPS: TabGroup[] = [
   {
     id: "keywords",
     label: "Keywords",
-    // Performance Max has no keywords to target (it gets "Search & exclusions"), and Display only has negatives, which sit under its content exclusions.
-    show: (c) => !isPmax(c) && !isDisplay(c),
+    // Performance Max has no keywords to target (it gets "Search & exclusions"), Display only has negatives (under its content exclusions), and Demand Gen has none at campaign level.
+    show: (c) => !isPmax(c) && !isDisplay(c) && !isDemandGen(c),
     tabs: [
       { view: "keywords", label: "Search keywords", show: (c) => !isPmaxOrShopping(c) && !isVisual(c) },
       { view: "negatives", label: "Negative keywords" },
@@ -54,24 +55,27 @@ export const TAB_GROUPS: TabGroup[] = [
     show: (c) => !isPmax(c),
     tabs: [
       { view: "audiences", label: "Audiences" },
-      { view: "demographics", label: "Demographics", show: (c) => !isPmaxOrShopping(c) && !c.inAdGroup },
+      // Age and gender are set per ad group, so Demographics stays inside Search and Demand Gen ad groups.
+      { view: "demographics", label: "Demographics", show: (c) => !isPmaxOrShopping(c) },
     ],
   },
   {
     id: "locations",
     label: "Locations & languages",
+    // Set on the campaign. Only Demand Gen also exposes locations and languages on its ad groups (Google's Demand Gen docs list them as ad group criteria).
+    show: (c) => !c.inAdGroup || isDemandGen(c),
     tabs: [
       { view: "locations", label: "Locations" },
       { view: "languages", label: "Languages" },
-      { view: "schedule", label: "Ad schedule" },
+      { view: "schedule", label: "Ad schedule", show: (c) => !c.inAdGroup },
       // Performance Max has no device bid adjustments.
-      { view: "devices", label: "Devices", show: (c) => !isPmax(c) },
+      { view: "devices", label: "Devices", show: (c) => !isPmax(c) && !c.inAdGroup },
     ],
   },
   {
     id: "insights",
     label: "Insights",
-    show: (c) => isPmax(c) && c.inCampaign,
+    show: (c) => isPmax(c) && c.inCampaign && !c.inAdGroup,
     tabs: [
       { view: "channels", label: "Channels" },
       { view: "searchCategories", label: "Search categories" },
@@ -83,11 +87,18 @@ export const TAB_GROUPS: TabGroup[] = [
     // Search and Shopping both report impression share; price competitiveness is a Shopping (feed) report.
     id: "insightsSearch",
     label: "Insights",
-    show: (c) => (isSearch(c) || isShopping(c)) && c.inCampaign,
+    show: (c) => (isSearch(c) || isShopping(c)) && c.inCampaign && !c.inAdGroup,
     tabs: [
       { view: "impressionShare", label: "Impression share" },
       { view: "priceCompetitiveness", label: "Price competitiveness", show: isShopping },
     ],
+  },
+  {
+    // Demand Gen reports by surface (YouTube Shorts, in-feed, in-stream, Discover, Gmail, Display).
+    id: "insightsDemandGen",
+    label: "Insights",
+    show: (c) => isDemandGen(c) && c.inCampaign && !c.inAdGroup,
+    tabs: [{ view: "channels", label: "Channels" }],
   },
   {
     // Display: Google's Content section, with the negative keywords folded into the exclusions.

@@ -130,6 +130,14 @@ export type DisplaySettings = {
   contentExclusions: string[];
 };
 
+/** Where a Demand Gen ad group can serve (Google calls this channel controls; it is set per ad group). */
+export type DemandGenChannel = "YOUTUBE" | "DISCOVER" | "GMAIL" | "DISPLAY" | "MAPS";
+
+export type DemandGenSettings = {
+  /** Lookalike segments are used to find new people similar to your customers. */
+  lookalikes: boolean;
+};
+
 export type Campaign = {
   id: string;
   name: string;
@@ -158,6 +166,7 @@ export type Campaign = {
   shopping?: ShoppingSettings;
   /** Display-only settings. */
   display?: DisplaySettings;
+  demandGen?: DemandGenSettings;
   labels: string[];
   createdAt: string;
 };
@@ -175,6 +184,10 @@ export type AdGroup = {
   defaultCpcBid?: number;
   targetCpa?: number;
   labels?: string[];
+  /** Demand Gen only: the channels this ad group may serve on. */
+  channels?: DemandGenChannel[];
+  /** Demand Gen only: audience segments are grouped (any segment can match) instead of used one by one. */
+  audienceGrouped?: boolean;
 };
 
 // ─── Keywords ───────────────────────────────────────────────────────────────
@@ -814,6 +827,7 @@ export type GaView =
   | "settings"
   | "pending"
   | "history"
+  | "adGroupSettings"
   | "products"
   | "productGroups"
   | "reports"

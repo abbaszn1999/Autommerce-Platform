@@ -164,10 +164,15 @@ function networkParts(c: Campaign) {
       ];
     case "VIDEO":
       return [{ key: "YouTube", share: 100, efficiency: 1 }];
+    // Demand Gen reports by YouTube surface (ad_network_type + ad_sub_network_type).
     case "DEMAND_GEN":
       return [
-        { key: "YouTube", share: 55, efficiency: 0.9 },
-        { key: "Discover & Gmail", share: 45, efficiency: 1.1 },
+        { key: "YouTube Shorts", share: 30, efficiency: 0.95 },
+        { key: "YouTube in-feed", share: 14, efficiency: 0.85 },
+        { key: "YouTube in-stream", share: 11, efficiency: 0.8 },
+        { key: "Discover", share: 24, efficiency: 1.15 },
+        { key: "Gmail", share: 15, efficiency: 1.05 },
+        { key: "Display Network", share: 6, efficiency: 0.6 },
       ];
     default:
       return [{ key: "Display Network", share: 100, efficiency: 1 }];

@@ -640,11 +640,10 @@ export function parseCreate(message: string, data: AccountData): CampaignBundle 
     ? "PERFORMANCE_MAX"
     : /shopping/.test(m)
       ? "SHOPPING"
-      : /demand gen/.test(m)
+      : // Google is moving Display into Demand Gen, so a Display request becomes a Demand Gen campaign.
+        /demand gen|display/.test(m)
         ? "DEMAND_GEN"
-        : /display/.test(m)
-          ? "DISPLAY"
-          : "SEARCH";
+        : "SEARCH";
   const amountMatch = m.match(/\$\s?(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s?(?:\$|usd|dollars?)\b|(\d+)\s?(?:\/\s?day|per day|a day)/);
   const amount = amountMatch ? Number(amountMatch[1] ?? amountMatch[2] ?? amountMatch[3]) : 50;
 
@@ -721,7 +720,7 @@ export function parseCreate(message: string, data: AccountData): CampaignBundle 
         ],
       };
     });
-  } else if (type === "PERFORMANCE_MAX" || type === "DEMAND_GEN" || type === "DISPLAY") {
+  } else if (type === "PERFORMANCE_MAX" || type === "DEMAND_GEN") {
     bundle.assetGroups =
       type === "PERFORMANCE_MAX"
         ? [

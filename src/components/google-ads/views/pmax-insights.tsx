@@ -14,11 +14,11 @@ import { useGa } from "../use-ga";
 
 const AGENT_BTN = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 px-3 text-xs font-semibold hover:bg-muted";
 
-function NeedsCampaign({ title }: { title: string }) {
+function NeedsCampaign({ title, kind = "Performance Max" }: { title: string; kind?: string }) {
   return (
     <div>
       <ViewHeader title={title} />
-      <EmptyState icon={Telescope} title="Open a Performance Max campaign" body="These pages explain what Google did with a Performance Max campaign, so they live inside the campaign." />
+      <EmptyState icon={Telescope} title={`Open a ${kind} campaign`} body={`These pages explain what Google did with a ${kind} campaign, so they live inside the campaign.`} />
     </div>
   );
 }
@@ -28,7 +28,8 @@ function NeedsCampaign({ title }: { title: string }) {
 export function ChannelsView() {
   const { data, range, currency, campaign } = useGa();
   const rows = useMemo(() => (campaign ? segmentRows(data, range, "network", [campaign.id]) : []), [data, range, campaign]);
-  if (!campaign) return <NeedsCampaign title="Channels" />;
+  if (!campaign) return <NeedsCampaign title="Channels" kind="Performance Max or Demand Gen" />;
+  const demandGen = campaign.type === "DEMAND_GEN";
   const total = rows.reduce((s, r) => s + r.base.cost, 0) || 1;
 
   const columns: GaColumn<SegmentRow>[] = [
@@ -54,8 +55,8 @@ export function ChannelsView() {
     <div>
       <ViewHeader
         title="Channels"
-        subtitle={`Where ${campaign.name} spent its budget. Google decides the split; this shows what it chose.`}
-        actions={<button type="button" onClick={() => runAgentTurn("Which channels is my Performance Max campaign wasting money on?")} className={AGENT_BTN}><Bot className="h-3.5 w-3.5" /> Analyse with agent</button>}
+        subtitle={demandGen ? `Where ${campaign.name} spent its budget, by surface. You choose the allowed channels per ad group; Google decides the split.` : `Where ${campaign.name} spent its budget. Google decides the split; this shows what it chose.`}
+        actions={<button type="button" onClick={() => runAgentTurn(demandGen ? "Which Demand Gen channels are working and which are wasting money?" : "Which channels is my Performance Max campaign wasting money on?")} className={AGENT_BTN}><Bot className="h-3.5 w-3.5" /> Analyse with agent</button>}
       />
       <GaTable rows={rows} columns={columns} rowKey={(r) => r.key} defaultSort={{ id: "cost", dir: "desc" }} />
     </div>

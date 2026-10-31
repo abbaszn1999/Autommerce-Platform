@@ -137,14 +137,15 @@ export function ProductsView() {
       hideable: true,
       render: (p) => (p.availability === "IN_STOCK" ? <span className="text-muted-foreground">In stock</span> : <Pill tone="bad">{p.availability === "OUT_OF_STOCK" ? "Out of stock" : "Pre-order"}</Pill>),
     },
-    ...metricColumns<Product>((p) => metrics.get(p.id)!, currency, { keys: ["impressions", "clicks", "cost", "conversions", "conversionsValue", "roas"] }),
+    // Google only reports impressions, clicks and CTR per product for Demand Gen.
+    ...metricColumns<Product>((p) => metrics.get(p.id)!, currency, { keys: campaign?.type === "DEMAND_GEN" ? ["impressions", "clicks", "ctr"] : ["impressions", "clicks", "cost", "conversions", "conversionsValue", "roas"] }),
   ];
 
   return (
     <div className="space-y-4">
       <ViewHeader
         title="Products"
-        subtitle={campaign ? (campaign.type === "SHOPPING" ? `Merchant Center ${data.account.merchantCenterId} · products in ${campaign.name}'s product groups` : `Merchant Center ${data.account.merchantCenterId} · feed products ${campaign.name} can serve. Figures cover Shopping and Performance Max.`) : `Merchant Center ${data.account.merchantCenterId} · performance across Shopping and Performance Max`}
+        subtitle={campaign ? (campaign.type === "SHOPPING" ? `Merchant Center ${data.account.merchantCenterId} · products in ${campaign.name}'s product groups` : campaign.type === "DEMAND_GEN" ? `Merchant Center ${data.account.merchantCenterId} · feed products ${campaign.name} promotes. Google reports impressions, clicks and CTR per product for Demand Gen.` : `Merchant Center ${data.account.merchantCenterId} · feed products ${campaign.name} can serve. Figures cover Shopping and Performance Max.`) : `Merchant Center ${data.account.merchantCenterId} · performance across Shopping and Performance Max`}
         actions={
           <>
             <SearchBox value={query} onChange={setQuery} placeholder="Find a product or ID" />

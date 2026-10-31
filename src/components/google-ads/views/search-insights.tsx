@@ -178,7 +178,11 @@ export function PriceCompetitivenessView() {
     <div>
       <ViewHeader
         title="Price competitiveness"
-        subtitle={`How the prices of ${campaign.name}'s products compare with the market average. Products priced above it tend to lose clicks to cheaper offers.`}
+        subtitle={
+          <span>
+            <Pill tone="warn">Sample data</Pill> How the prices of {campaign.name}&apos;s products compare with the market average. Market prices come from Merchant Center reports, which are not connected yet.
+          </span>
+        }
         actions={<button type="button" onClick={() => runAgentTurn("Which products are priced above the market and losing clicks?")} className={AGENT_BTN}><Bot className="h-3.5 w-3.5" /> Analyse with agent</button>}
       />
       <GaTable
