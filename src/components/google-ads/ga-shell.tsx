@@ -20,6 +20,7 @@ import { ConversionsView } from "./views/conversions";
 import { KeywordsView, NegativesView } from "./views/keywords";
 import { LibraryView } from "./views/library";
 import { DevicesView, LanguagesView, LocationsView, ScheduleView } from "./views/locations";
+import { ImpressionShareView, LandingPagesView } from "./views/search-insights";
 import { AssetCombinationsView, BrandExclusionsView, ChannelsView, PlacementsShownView, SearchCategoriesView } from "./views/pmax-insights";
 import { GaViewTabs } from "./ga-view-tabs";
 import { OverviewView } from "./views/overview";
@@ -79,6 +80,8 @@ const VIEWS: Record<GaView, () => React.ReactNode> = {
   searchCategories: SearchCategoriesView,
   assetCombinations: AssetCombinationsView,
   placementsShown: PlacementsShownView,
+  landingPages: LandingPagesView,
+  impressionShare: ImpressionShareView,
 };
 
 // Like the Store Agent: the agent panel is always there and is resized by dragging the divider.

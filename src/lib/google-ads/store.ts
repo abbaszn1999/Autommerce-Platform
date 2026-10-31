@@ -161,10 +161,11 @@ type GaStore = {
 
 const ACTOR = "You";
 
-const PMAX_ONLY: GaView[] = ["brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown", "languages"];
+const PMAX_ONLY: GaView[] = ["brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown"];
+const SEARCH_ONLY: GaView[] = ["landingPages", "impressionShare"];
 
 /** Views that make no sense at a scope fall back to the closest one that does. */
-function viewForScope(view: GaView, scope: GaScope, isPmax: boolean): GaView {
+function viewForScope(view: GaView, scope: GaScope, isPmax: boolean, isSearch = false): GaView {
   const accountOnly: GaView[] = ["campaigns", "conversions", "library", "products", "rules", "keywordPlanner", "experiments", "links", "accountSettings", "documents", "profile", "connections"];
   if (scope.adGroupId && (accountOnly.includes(view) || view === "adGroups" || view === "recommendations" || view === "locations" || view === "settings" || view === "planner" || view === "productGroups" || view === "content" || view === "demographics"))
     return "keywords";
@@ -177,6 +178,8 @@ function viewForScope(view: GaView, scope: GaScope, isPmax: boolean): GaView {
   if (isPmax && view === "devices") return "locations";
   // Pages that only exist inside a Performance Max campaign.
   if (!isPmax && PMAX_ONLY.includes(view)) return scope.campaignId ? "adGroups" : "overview";
+  // Pages that only exist inside a Search campaign.
+  if (!isSearch && SEARCH_ONLY.includes(view)) return scope.campaignId ? "adGroups" : "overview";
   return view;
 }
 
@@ -305,8 +308,8 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
   setScope: (scope, view) =>
     set((s) => {
       const data = current(s)?.data;
-      const isPmax = data?.campaigns.find((c) => c.id === scope.campaignId)?.type === "PERFORMANCE_MAX";
-      return { scope, view: viewForScope(view ?? s.view, scope, isPmax) };
+      const type = data?.campaigns.find((c) => c.id === scope.campaignId)?.type;
+      return { scope, view: viewForScope(view ?? s.view, scope, type === "PERFORMANCE_MAX", type === "SEARCH") };
     }),
 
   setRange: (preset) => set({ range: rangeFor(preset) }),

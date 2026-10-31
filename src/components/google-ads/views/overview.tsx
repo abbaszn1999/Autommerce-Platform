@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Ban, Bot, FileWarning, Gauge, Plus, Sparkles, TrendingUp, Wallet, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowRight, Ban, Bot, FileWarning, FlaskConical, Gauge, Plus, Sparkles, TrendingUp, Wallet, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BIDDING, CAMPAIGN_TYPES, SERVING_ISSUES } from "@/lib/google-ads/constants";
 import {
@@ -74,6 +74,7 @@ export function OverviewView() {
         subtitle={campaign ? `${CAMPAIGN_TYPES[campaign.type].label} campaign · ${BIDDING[campaign.bidding.type].label}` : `${data.account.name} · all campaigns`}
       />
 
+      {campaign && <ExperimentNote campaignId={campaign.id} />}
       {campaign && <CampaignSummary />}
 
       <Card className="overflow-hidden">
@@ -165,6 +166,24 @@ function CampaignBars({ onOpen }: { onOpen: (id: string) => void }) {
             {m.cost ? `${m.roas.toFixed(2)}x` : "—"}
           </span>
         </button>
+      ))}
+    </div>
+  );
+}
+
+/** A campaign that is the base of a running experiment says so; the experiment itself lives under Experiments. */
+function ExperimentNote({ campaignId }: { campaignId: string }) {
+  const { data } = useGa();
+  const running = data.experiments.filter((e) => e.baseCampaignId === campaignId && e.status === "RUNNING");
+  if (!running.length) return null;
+  return (
+    <div className="space-y-1.5">
+      {running.map((e) => (
+        <p key={e.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs">
+          <FlaskConical className="h-3.5 w-3.5 text-sky-600" />
+          <span className="font-semibold">Running in an experiment:</span> {e.name}
+          <span className="text-muted-foreground">· {e.change} · {e.split}% of traffic · ends {e.endDate}</span>
+        </p>
       ))}
     </div>
   );

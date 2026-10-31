@@ -16,7 +16,7 @@ const originalUseSyncExternalStore = React.useSyncExternalStore;
 (React as { useSyncExternalStore: typeof React.useSyncExternalStore }).useSyncExternalStore = (subscribe, getSnapshot) =>
   originalUseSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-const VIEWS: GaView[] = ["overview", "campaigns", "adGroups", "ads", "assets", "keywords", "negatives", "searchTerms", "audiences", "locations", "schedule", "devices", "recommendations", "conversions", "library", "settings", "pending", "history", "products", "productGroups", "reports", "rules", "keywordPlanner", "experiments", "planner", "content", "demographics", "links", "accountSettings", "documents", "profile", "connections", "languages", "brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown"];
+const VIEWS: GaView[] = ["overview", "campaigns", "adGroups", "ads", "assets", "keywords", "negatives", "searchTerms", "audiences", "locations", "schedule", "devices", "recommendations", "conversions", "library", "settings", "pending", "history", "products", "productGroups", "reports", "rules", "keywordPlanner", "experiments", "planner", "content", "demographics", "links", "accountSettings", "documents", "profile", "connections", "languages", "brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown", "landingPages", "impressionShare"];
 
 /** The HTML of one landmark (the sidebar or the page), so assertions ignore the chat panel and top bar. */
 const part = (html: string, tag: string) => html.slice(html.indexOf("<" + tag), html.indexOf("</" + tag + ">"));
@@ -145,7 +145,7 @@ describe("render smoke", () => {
     // No Pending button in the top bar either: approvals happen in the chat.
     expect(page).not.toContain('title="Pending changes"');
     const html = part(page, "nav");
-    for (const label of ["Recommendations", "Reports", "Campaigns", "Ad groups", "Ads", "Experiments", "Assets", "Keywords", "Audiences", "Placements &amp; content", "Locations &amp; schedule", "Shared library", "Conversions", "Linked accounts", "Connections", "Account settings", "Documents", "Business profile", "Rules &amp; alerts", ">Products<"]) {
+    for (const label of ["Recommendations", "Reports", "Campaigns", "Ad groups", "Ads", "Experiments", "Assets", "Keywords", "Audiences", "Placements &amp; content", "Locations &amp; languages", "Shared library", "Conversions", "Linked accounts", "Connections", "Account settings", "Documents", "Business profile", "Rules &amp; alerts", ">Products<"]) {
       expect(html, label).toContain(label);
     }
     // Moved into tabs, or left to the agent and the chat.
@@ -315,9 +315,28 @@ describe("render smoke", () => {
     // The other campaign types keep their own sidebar (Search has keywords, no Insights).
     const search = sidebar("c_running", "keywords");
     expect(search).toContain(">Keywords<");
-    expect(search).toContain("Locations &amp; schedule");
-    expect(search).not.toContain("Insights");
+    expect(search).toContain("Locations &amp; languages");
+    expect(search).toContain("Landing pages");
+    expect(search).toContain("Insights");
     expect(search).not.toContain(">Products<");
+    // Search keeps Devices and gets Languages.
+    useGoogleAds.setState({ scope: { campaignId: "c_running" }, view: "languages" });
+    const searchTabs = part(renderToString(createElement(GoogleAdsShell)), "main");
+    for (const t of ["Locations", "Languages", "Ad schedule", "Devices"]) expect(searchTabs, t).toContain(t);
+    useGoogleAds.setState({ scope: { campaignId: "c_running" }, view: "landingPages" });
+    const pages = part(renderToString(createElement(GoogleAdsShell)), "main");
+    for (const t of ["Landing page", "Mobile speed", "Cost"]) expect(pages, t).toContain(t);
+    useGoogleAds.setState({ scope: { campaignId: "c_running" }, view: "impressionShare" });
+    const share = part(renderToString(createElement(GoogleAdsShell)), "main");
+    for (const t of ["Search impression share", "Lost to budget", "Lost to rank"]) expect(share, t).toContain(t);
+    // A campaign that is the base of a running experiment says so on its Overview; others do not.
+    useGoogleAds.setState({ scope: { campaignId: "c_shopping" }, view: "overview" });
+    expect(part(renderToString(createElement(GoogleAdsShell)), "main")).toContain("Running in an experiment");
+    useGoogleAds.setState({ scope: { campaignId: "c_running" }, view: "overview" });
+    expect(part(renderToString(createElement(GoogleAdsShell)), "main")).not.toContain("Running in an experiment");
+    // Landing pages and Insights are Search-only: other types do not get them.
+    expect(sidebar("c_shopping")).not.toContain("Landing pages");
+    expect(sidebar("c_demandgen")).not.toContain("Insights");
   });
 
   it("documents are two folders: Reports (with the ready templates) and Plans", () => {

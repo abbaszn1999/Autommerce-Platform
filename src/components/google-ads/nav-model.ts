@@ -11,6 +11,7 @@ export function navCtx(campaigns: Pick<Campaign, "id" | "type">[], scope: GaScop
 const isVisual = (c: NavCtx) => !!c.campaignType && ["DISPLAY", "VIDEO", "DEMAND_GEN"].includes(c.campaignType);
 const isPmaxOrShopping = (c: NavCtx) => c.campaignType === "PERFORMANCE_MAX" || c.campaignType === "SHOPPING";
 export const isPmax = (c: NavCtx) => c.campaignType === "PERFORMANCE_MAX";
+export const isSearch = (c: NavCtx) => c.campaignType === "SEARCH";
 
 export type TabDef = { view: GaView; label: string; show?: (c: NavCtx) => boolean };
 
@@ -56,23 +57,13 @@ export const TAB_GROUPS: TabGroup[] = [
   },
   {
     id: "locations",
-    label: "Locations & schedule",
-    show: (c) => !isPmax(c),
-    tabs: [
-      { view: "locations", label: "Locations" },
-      { view: "schedule", label: "Ad schedule" },
-      { view: "devices", label: "Devices" },
-    ],
-  },
-  {
-    // Performance Max: languages next to locations, and no device bid adjustments.
-    id: "locationsPmax",
     label: "Locations & languages",
-    show: isPmax,
     tabs: [
       { view: "locations", label: "Locations" },
       { view: "languages", label: "Languages" },
       { view: "schedule", label: "Ad schedule" },
+      // Performance Max has no device bid adjustments.
+      { view: "devices", label: "Devices", show: (c) => !isPmax(c) },
     ],
   },
   {
@@ -85,6 +76,12 @@ export const TAB_GROUPS: TabGroup[] = [
       { view: "assetCombinations", label: "Asset combinations" },
       { view: "placementsShown", label: "Where ads showed" },
     ],
+  },
+  {
+    id: "insightsSearch",
+    label: "Insights",
+    show: (c) => isSearch(c) && c.inCampaign,
+    tabs: [{ view: "impressionShare", label: "Impression share" }],
   },
 ];
 

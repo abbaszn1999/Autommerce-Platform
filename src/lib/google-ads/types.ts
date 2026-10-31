@@ -812,7 +812,10 @@ export type GaView =
   | "channels"
   | "searchCategories"
   | "assetCombinations"
-  | "placementsShown";
+  | "placementsShown"
+  // Search campaign pages
+  | "landingPages"
+  | "impressionShare";
 
 /** A Merchant Center account the signed-in Google user can reach (own connection, separate from Google Ads). */
 export type MerchantAccount = {

@@ -17,6 +17,7 @@ import {
   Library,
   Lightbulb,
   MapPin,
+  PanelsTopLeft,
   Plug,
   Search,
   Settings2,
@@ -76,13 +77,14 @@ export function GaNav() {
         { view: "ads", label: "Ads", icon: FileText, hidden: isPmax || isShopping },
         { view: "experiments", label: "Experiments", icon: FlaskConical, hidden: inCampaign },
         { view: "assets", label: "Assets", icon: ImageIcon },
+        { view: "landingPages", label: "Landing pages", icon: PanelsTopLeft, hidden: scopedCampaign?.type !== "SEARCH" || !!scope.adGroupId },
         // Feed-based Performance Max shows which products it spends on; other campaign types keep Products at account level.
         { view: "products", label: "Products", icon: ShoppingBag, hidden: !!scope.adGroupId || (inCampaign && !(isPmax && !!data.account.merchantCenterId)) },
       ],
     },
     {
       title: "Insights",
-      items: [tabItem("insights", Telescope)],
+      items: [tabItem("insights", Telescope), tabItem("insightsSearch", Telescope)],
     },
     {
       title: "Targeting & queries",
@@ -92,7 +94,6 @@ export function GaNav() {
         tabItem("audiences", Users),
         { view: "content", label: "Placements & content", icon: Globe, hidden: (!!scopedCampaign && !isVisual) || !!scope.adGroupId },
         tabItem("locations", MapPin, !!scope.adGroupId),
-        tabItem("locationsPmax", MapPin, !!scope.adGroupId),
       ],
     },
     {
