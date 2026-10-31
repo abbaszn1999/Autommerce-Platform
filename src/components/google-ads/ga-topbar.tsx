@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  History,
   Megaphone,
   Plug,
   Settings2,
@@ -38,6 +39,7 @@ export function GaTopbar() {
 
   const campaign = data.campaigns.find((c) => c.id === scope.campaignId);
   const adGroup = data.adGroups.find((g) => g.id === scope.adGroupId);
+  const assetGroup = data.assetGroups.find((g) => g.id === scope.assetGroupId);
   const unread = data.alerts.filter((a) => !a.read).length;
   return (
     <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 bg-background px-3">
@@ -82,12 +84,21 @@ export function GaTopbar() {
             <button
               type="button"
               onClick={() => setScope({ campaignId: campaign.id })}
-              className={cn("flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 hover:bg-muted", !adGroup ? "font-semibold" : "text-muted-foreground")}
+              className={cn("flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 hover:bg-muted", !adGroup && !assetGroup ? "font-semibold" : "text-muted-foreground")}
             >
               <StatusDot status={campaign.status} className="h-2 w-2 ring-0" />
               <span className="truncate">{campaign.name}</span>
               <span className="shrink-0 rounded bg-muted px-1 text-[9px] font-semibold uppercase text-muted-foreground">{CAMPAIGN_TYPES[campaign.type].short}</span>
             </button>
+          </>
+        )}
+        {assetGroup && (
+          <>
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+            <span className="flex min-w-0 items-center gap-1.5 px-1.5 font-semibold">
+              <StatusDot status={assetGroup.status} className="h-2 w-2 ring-0" />
+              <span className="truncate">{assetGroup.name}</span>
+            </span>
           </>
         )}
         {adGroup && (
@@ -118,6 +129,15 @@ export function GaTopbar() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <button
+          type="button"
+          onClick={() => { setScope({}); setView("history"); }}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 hover:bg-muted"
+          title="Change history"
+        >
+          <History className="h-3.5 w-3.5" />
+        </button>
 
         <button
           type="button"

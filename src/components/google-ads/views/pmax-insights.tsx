@@ -5,7 +5,7 @@ import { Bot, Globe, Layers, ShieldOff, Telescope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { contentMetrics, segmentRows, type SegmentRow } from "@/lib/google-ads/analytics";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
-import { EMPTY_BASE, addBase, derive, money, searchTermBase } from "@/lib/google-ads/metrics";
+import { EMPTY_BASE, addBase, assetGroupBase, campaignBase, derive, money, searchTermBase } from "@/lib/google-ads/metrics";
 import type { AssetGroup, AssetRating, ContentTarget, Metrics } from "@/lib/google-ads/types";
 import { metricColumns } from "../ga-columns";
 import { GaTable, type GaColumn } from "../ga-table";
@@ -26,8 +26,18 @@ function NeedsCampaign({ title, kind = "Performance Max" }: { title: string; kin
 // ─── Channels ───────────────────────────────────────────────────────────────
 
 export function ChannelsView() {
-  const { data, range, currency, campaign } = useGa();
-  const rows = useMemo(() => (campaign ? segmentRows(data, range, "network", [campaign.id]) : []), [data, range, campaign]);
+  const { data, range, currency, campaign, assetGroup } = useGa();
+  const rows = useMemo(() => {
+    if (!campaign) return [];
+    const all = segmentRows(data, range, "network", [campaign.id]);
+    if (!assetGroup) return all;
+    // Inside an asset group: the group's share of the campaign's spend, split the same way across channels.
+    const k = Math.min(1, assetGroupBase(data, assetGroup.id, range).cost / (campaignBase(data, campaign.id, range).cost || 1));
+    return all.map((r) => {
+      const base = { impressions: r.base.impressions * k, clicks: r.base.clicks * k, cost: r.base.cost * k, conversions: r.base.conversions * k, conversionsValue: r.base.conversionsValue * k };
+      return { ...r, base, metrics: derive(base) };
+    });
+  }, [data, range, campaign, assetGroup]);
   if (!campaign) return <NeedsCampaign title="Channels" kind="Performance Max or Demand Gen" />;
   const demandGen = campaign.type === "DEMAND_GEN";
   const total = rows.reduce((s, r) => s + r.base.cost, 0) || 1;
@@ -197,9 +207,10 @@ function GroupCombination({ group }: { group: AssetGroup }) {
 }
 
 export function AssetCombinationsView() {
-  const { data, campaign } = useGa();
+  const { data, campaign, assetGroup } = useGa();
   if (!campaign) return <NeedsCampaign title="Asset combinations" />;
-  const groups = data.assetGroups.filter((g) => g.campaignId === campaign.id && g.status !== "REMOVED");
+  // Inside an asset group only that group's best combination shows.
+  const groups = data.assetGroups.filter((g) => g.campaignId === campaign.id && g.status !== "REMOVED" && (!assetGroup || g.id === assetGroup.id));
   return (
     <div className="space-y-4">
       <ViewHeader title="Asset combinations" subtitle="Google mixes your headlines, descriptions and images into ads. This shows the mix that performs best in each asset group." />

@@ -17,6 +17,7 @@ export function useGa() {
     currency: data.account.currency,
     campaign: data.campaigns.find((c) => c.id === scope.campaignId),
     adGroup: data.adGroups.find((g) => g.id === scope.adGroupId),
+    assetGroup: data.assetGroups.find((g) => g.id === scope.assetGroupId),
   };
 }
 

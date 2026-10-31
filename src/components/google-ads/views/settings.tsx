@@ -264,7 +264,7 @@ function demandGenChannels(groups: { channels?: (keyof typeof CHANNEL_LABEL)[] }
 
 const PRIORITY = { LOW: "Low", MEDIUM: "Medium", HIGH: "High" } as const;
 
-function InfoRow({ label, hint, value }: { label: string; hint?: string; value: string }) {
+export function InfoRow({ label, hint, value }: { label: string; hint?: string; value: string }) {
   return (
     <div className="flex items-start gap-3">
       <div className="flex-1">

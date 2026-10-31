@@ -17,7 +17,7 @@ const originalUseSyncExternalStore = React.useSyncExternalStore;
 (React as { useSyncExternalStore: typeof React.useSyncExternalStore }).useSyncExternalStore = (subscribe, getSnapshot) =>
   originalUseSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-const VIEWS: GaView[] = ["overview", "campaigns", "adGroups", "ads", "assets", "keywords", "negatives", "searchTerms", "audiences", "locations", "schedule", "devices", "recommendations", "conversions", "library", "settings", "pending", "history", "products", "productGroups", "reports", "rules", "keywordPlanner", "experiments", "planner", "content", "demographics", "links", "accountSettings", "documents", "profile", "connections", "languages", "brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown", "landingPages", "impressionShare", "priceCompetitiveness", "contentExclusions", "adGroupSettings"];
+const VIEWS: GaView[] = ["overview", "campaigns", "adGroups", "ads", "assets", "keywords", "negatives", "searchTerms", "audiences", "locations", "schedule", "devices", "recommendations", "conversions", "library", "settings", "pending", "history", "products", "productGroups", "reports", "rules", "keywordPlanner", "experiments", "planner", "content", "demographics", "links", "accountSettings", "documents", "profile", "connections", "languages", "brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown", "landingPages", "impressionShare", "priceCompetitiveness", "contentExclusions", "adGroupSettings", "assetGroupAssets", "audienceSignals", "searchThemes", "assetGroupSettings"];
 
 /** The HTML of one landmark (the sidebar or the page), so assertions ignore the chat panel and top bar. */
 const part = (html: string, tag: string) => html.slice(html.indexOf("<" + tag), html.indexOf("</" + tag + ">"));
@@ -479,6 +479,53 @@ describe("render smoke", () => {
     // Ad group settings only exist inside an ad group.
     useGoogleAds.getState().setScope({ campaignId: "c_running" }, "adGroupSettings");
     expect(useGoogleAds.getState().view).toBe("adGroups");
+  });
+
+  it("Performance Max asset group level and the History header button", () => {
+    connect();
+    const nav = (view: GaView) => {
+      useGoogleAds.setState({ scope: { campaignId: "c_pmax", assetGroupId: "asg_all" }, view });
+      return part(renderToString(createElement(GoogleAdsShell)), "nav");
+    };
+    const main = (view: GaView) => {
+      useGoogleAds.setState({ scope: { campaignId: "c_pmax", assetGroupId: "asg_all" }, view });
+      return part(renderToString(createElement(GoogleAdsShell)), "main");
+    };
+    const side = nav("overview");
+    for (const l of ["Overview", "Reports", ">Assets<", "Insights", "Audience signals", "Asset group settings"]) expect(side, l).toContain(l);
+    for (const l of ["Recommendations", "Asset groups", "Search &amp; exclusions", "Locations &amp; languages", ">Audiences<", ">Keywords<", ">Ads<", "Campaign settings"]) expect(side, l).not.toContain(l);
+    // Overview describes the group itself.
+    const overview = main("overview");
+    for (const t of ["Asset coverage", "What needs attention", "Conv. value", "Good"]) expect(overview, t).toContain(t);
+    // Tabs
+    const assets = main("assetGroupAssets");
+    for (const t of ["Assets", "Top combinations", "Google&#x27;s rating", "Headline"]) expect(assets, t).toContain(t);
+    const signals = main("audienceSignals");
+    for (const t of ["Audience signals", "Search themes"]) expect(signals, t).toContain(t);
+    expect(main("searchThemes")).toContain("Search themes");
+    expect(main("channels")).toContain("Share of spend");
+    const settings = main("assetGroupSettings");
+    for (const t of ["Final URL", "Business name", "Ad strength"]) expect(settings, t).toContain(t);
+    // Top combinations shows only this group.
+    expect(main("assetCombinations")).not.toContain("Summer Sale");
+    useGoogleAds.setState({ scope: { campaignId: "c_pmax" }, view: "assetCombinations" });
+    expect(part(renderToString(createElement(GoogleAdsShell)), "main")).toContain("Summer Sale");
+    // Other pages fall back to the group assets; the group pages do not exist outside an asset group.
+    const go = (scope: { campaignId?: string; assetGroupId?: string }, v: GaView) => {
+      useGoogleAds.getState().setScope(scope, v);
+      return useGoogleAds.getState().view;
+    };
+    expect(go({ campaignId: "c_pmax", assetGroupId: "asg_all" }, "searchTerms")).toBe("assetGroupAssets");
+    expect(go({ campaignId: "c_pmax", assetGroupId: "asg_all" }, "recommendations")).toBe("assetGroupAssets");
+    expect(go({ campaignId: "c_pmax" }, "assetGroupAssets")).toBe("adGroups");
+    expect(go({}, "assetGroupSettings")).toBe("campaigns");
+    // Breadcrumb shows the asset group, and the campaign Asset groups page links into it.
+    useGoogleAds.setState({ scope: { campaignId: "c_pmax", assetGroupId: "asg_all" }, view: "overview" });
+    const header = renderToString(createElement(GoogleAdsShell));
+    expect(header).toContain("Change history");
+    useGoogleAds.setState({ scope: { campaignId: "c_pmax" }, view: "adGroups" });
+    const groups = part(renderToString(createElement(GoogleAdsShell)), "main");
+    expect(groups).toContain("text-[#400095] hover:underline");
   });
 
   it("documents are two folders: Reports (with the ready templates) and Plans", () => {

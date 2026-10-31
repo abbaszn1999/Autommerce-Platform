@@ -22,10 +22,17 @@ import type { MetricKey } from "@/lib/google-ads/types";
 import { GaChart } from "../ga-chart";
 import { ACCENT_BTN, Card, Delta, EmptyState, Pill, StatusDot, ViewHeader } from "../ga-ui";
 import { scopedCampaignIds, useGa } from "../use-ga";
+import { AssetGroupOverview } from "./asset-group";
 
 const TILE_METRICS: MetricKey[] = ["clicks", "impressions", "cost", "conversions", "conversionsValue", "roas", "cpa", "ctr"];
 
+/** Inside a Performance Max asset group the overview describes that group, not the whole campaign. */
 export function OverviewView() {
+  const { scope } = useGa();
+  return scope.assetGroupId ? <AssetGroupOverview /> : <ScopeOverview />;
+}
+
+function ScopeOverview() {
   const { data, range, currency, campaign } = useGa();
   const setScope = useGoogleAds((s) => s.setScope);
   const setView = useGoogleAds((s) => s.setView);

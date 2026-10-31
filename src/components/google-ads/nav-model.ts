@@ -1,11 +1,11 @@
 import type { Campaign, CampaignType, GaScope, GaView } from "@/lib/google-ads/types";
 
 /** Where the user is: drives which sidebar items and which tabs make sense. */
-export type NavCtx = { campaignType?: CampaignType; inCampaign: boolean; inAdGroup: boolean };
+export type NavCtx = { campaignType?: CampaignType; inCampaign: boolean; inAdGroup: boolean; inAssetGroup?: boolean };
 
 export function navCtx(campaigns: Pick<Campaign, "id" | "type">[], scope: GaScope): NavCtx {
   const campaign = campaigns.find((c) => c.id === scope.campaignId);
-  return { campaignType: campaign?.type, inCampaign: !!scope.campaignId, inAdGroup: !!scope.adGroupId };
+  return { campaignType: campaign?.type, inCampaign: !!scope.campaignId, inAdGroup: !!scope.adGroupId, inAssetGroup: !!scope.assetGroupId };
 }
 
 const isVisual = (c: NavCtx) => !!c.campaignType && ["DISPLAY", "VIDEO", "DEMAND_GEN"].includes(c.campaignType);
@@ -28,6 +28,25 @@ export type TabGroup = { id: string; label: string; tabs: TabDef[]; show?: (c: N
 
 export const TAB_GROUPS: TabGroup[] = [
   {
+    // Inside a Performance Max asset group (listed first so Top combinations belongs here, not to the campaign Insights).
+    id: "assetGroupAssets",
+    label: "Assets",
+    show: (c) => !!c.inAssetGroup,
+    tabs: [
+      { view: "assetGroupAssets", label: "Assets" },
+      { view: "assetCombinations", label: "Top combinations" },
+    ],
+  },
+  {
+    id: "audienceSignalsPmax",
+    label: "Audience signals",
+    show: (c) => !!c.inAssetGroup,
+    tabs: [
+      { view: "audienceSignals", label: "Audience signals" },
+      { view: "searchThemes", label: "Search themes" },
+    ],
+  },
+  {
     id: "keywords",
     label: "Keywords",
     // Performance Max has no keywords to target (it gets "Search & exclusions"), Display only has negatives (under its content exclusions), and Demand Gen has none at campaign level.
@@ -41,7 +60,7 @@ export const TAB_GROUPS: TabGroup[] = [
   {
     id: "searches",
     label: "Search & exclusions",
-    show: isPmax,
+    show: (c) => isPmax(c) && !c.inAssetGroup,
     tabs: [
       { view: "searchTerms", label: "Search terms" },
       { view: "negatives", label: "Negative keywords" },
@@ -63,7 +82,7 @@ export const TAB_GROUPS: TabGroup[] = [
     id: "locations",
     label: "Locations & languages",
     // Set on the campaign. Only Demand Gen also exposes locations and languages on its ad groups (Google's Demand Gen docs list them as ad group criteria).
-    show: (c) => !c.inAdGroup || isDemandGen(c),
+    show: (c) => (!c.inAdGroup && !c.inAssetGroup) || isDemandGen(c),
     tabs: [
       { view: "locations", label: "Locations" },
       { view: "languages", label: "Languages" },
@@ -78,9 +97,10 @@ export const TAB_GROUPS: TabGroup[] = [
     show: (c) => isPmax(c) && c.inCampaign && !c.inAdGroup,
     tabs: [
       { view: "channels", label: "Channels" },
-      { view: "searchCategories", label: "Search categories" },
-      { view: "assetCombinations", label: "Asset combinations" },
-      { view: "placementsShown", label: "Where ads showed" },
+      // Inside an asset group only Channels remains (Top combinations has its own tab group there).
+      { view: "searchCategories", label: "Search categories", show: (c) => !c.inAssetGroup },
+      { view: "assetCombinations", label: "Asset combinations", show: (c) => !c.inAssetGroup },
+      { view: "placementsShown", label: "Where ads showed", show: (c) => !c.inAssetGroup },
     ],
   },
   {

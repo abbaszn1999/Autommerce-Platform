@@ -828,6 +828,10 @@ export type GaView =
   | "pending"
   | "history"
   | "adGroupSettings"
+  | "assetGroupAssets"
+  | "audienceSignals"
+  | "searchThemes"
+  | "assetGroupSettings"
   | "products"
   | "productGroups"
   | "reports"
@@ -864,4 +868,5 @@ export type MerchantAccount = {
   country: string;
 };
 
-export type GaScope = { campaignId?: string; adGroupId?: string };
+/** Where the user is: all campaigns, a campaign, an ad group inside it, or (Performance Max) an asset group inside it. */
+export type GaScope = { campaignId?: string; adGroupId?: string; assetGroupId?: string };

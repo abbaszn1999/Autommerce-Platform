@@ -64,7 +64,7 @@ export function GaNav() {
     {
       items: [
         { view: "overview", label: "Overview", icon: LayoutDashboard },
-        { view: "recommendations", label: "Recommendations", icon: Lightbulb, badge: recs || undefined, hidden: !!scope.adGroupId },
+        { view: "recommendations", label: "Recommendations", icon: Lightbulb, badge: recs || undefined, hidden: !!scope.adGroupId || !!scope.assetGroupId },
         { view: "reports", label: "Reports", icon: BarChart3 },
       ],
     },
@@ -72,14 +72,15 @@ export function GaNav() {
       title: "Structure",
       items: [
         { view: "campaigns", label: "Campaigns", icon: FolderKanban, hidden: inCampaign },
-        { view: "adGroups", label: isPmax ? "Asset groups" : "Ad groups", icon: FolderKanban, hidden: !!scope.adGroupId },
+        { view: "adGroups", label: isPmax ? "Asset groups" : "Ad groups", icon: FolderKanban, hidden: !!scope.adGroupId || !!scope.assetGroupId },
         // Shopping product groups belong to the ad group, so they show in the campaign and inside its ad groups.
         { view: "productGroups", label: "Product groups", icon: Split, hidden: !isShopping },
         // A Shopping campaign has no ads page; its product ads are inside the ad group.
         { view: "ads", label: "Ads", icon: FileText, hidden: isPmax || (isShopping && !scope.adGroupId) },
         { view: "experiments", label: "Experiments", icon: FlaskConical, hidden: inCampaign },
         // Shopping ads are built from the feed, so there are no assets to manage.
-        { view: "assets", label: "Assets", icon: ImageIcon, hidden: isShopping },
+        { view: "assets", label: "Assets", icon: ImageIcon, hidden: isShopping || !!scope.assetGroupId },
+        tabItem("assetGroupAssets", ImageIcon),
         { view: "landingPages", label: "Landing pages", icon: PanelsTopLeft, hidden: scopedCampaign?.type !== "SEARCH" || !!scope.adGroupId },
         // Shopping and feed-based Performance Max show the products they spend on; other campaign types keep Products at account level.
         { view: "products", label: "Products", icon: ShoppingBag, hidden: inCampaign && !(isShopping || ((isPmax || (scopedCampaign?.type === "DEMAND_GEN" && !!scopedCampaign.merchantFeed)) && !!data.account.merchantCenterId)) },
@@ -95,6 +96,7 @@ export function GaNav() {
         tabItem("keywords", KeyRound),
         tabItem("searches", Search),
         tabItem("audiences", Users),
+        tabItem("audienceSignalsPmax", Users),
         { view: "content", label: "Placements & content", icon: Globe, hidden: (!!scopedCampaign && !isVisual) || scopedCampaign?.type === "DISPLAY" || scopedCampaign?.type === "DEMAND_GEN" || !!scope.adGroupId },
         tabItem("contentDisplay", Globe),
         tabItem("locations", MapPin),
@@ -108,7 +110,8 @@ export function GaNav() {
         { view: "links", label: "Linked accounts", icon: Link2, hidden: inCampaign },
         { view: "connections", label: "Connections", icon: Plug, hidden: inCampaign },
         { view: "accountSettings", label: "Account settings", icon: Settings2, hidden: inCampaign },
-        { view: "settings", label: "Campaign settings", icon: Settings2, hidden: !scope.campaignId || !!scope.adGroupId },
+        { view: "settings", label: "Campaign settings", icon: Settings2, hidden: !scope.campaignId || !!scope.adGroupId || !!scope.assetGroupId },
+        { view: "assetGroupSettings", label: "Asset group settings", icon: Settings2, hidden: !scope.assetGroupId },
         { view: "adGroupSettings", label: "Ad group settings", icon: Settings2, hidden: !scope.adGroupId },
       ],
     },

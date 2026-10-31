@@ -180,6 +180,7 @@ function AssetGroupsView() {
 function AssetGroupCards({ groups }: { groups: AssetGroup[] }) {
   const { data, range, currency } = useGa();
   const applyDirect = useGoogleAds((s) => s.applyDirect);
+  const setScope = useGoogleAds((s) => s.setScope);
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {groups.map((g) => {
@@ -197,7 +198,7 @@ function AssetGroupCards({ groups }: { groups: AssetGroup[] }) {
             <div className="flex items-start gap-2">
               <StatusMenu status={g.status} onChange={(s) => applyDirect(`${s === "PAUSED" ? "Pause" : s === "ENABLED" ? "Enable" : "Remove"} asset group ${g.name}`, [{ kind: "status.set", entity: "ASSET_GROUP", ids: [g.id], status: s }])} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold">{g.name}</p>
+                <button type="button" onClick={() => setScope({ campaignId: g.campaignId, assetGroupId: g.id }, "overview")} className="block max-w-full truncate text-left text-sm font-bold text-[#400095] hover:underline dark:text-violet-300">{g.name}</button>
                 <p className="truncate text-[11px] text-muted-foreground">
                   {data.campaigns.find((c) => c.id === g.campaignId)?.name} · {g.finalUrl.replace(/^https?:\/\//, "")}
                 </p>

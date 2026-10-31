@@ -174,6 +174,13 @@ function viewForScope(view: GaView, scope: GaScope, type?: CampaignType): GaView
   const isShopping = type === "SHOPPING";
   const isDisplay = type === "DISPLAY";
   const isDemandGen = type === "DEMAND_GEN";
+  const assetGroupOnly: GaView[] = ["assetGroupAssets", "audienceSignals", "searchThemes", "assetGroupSettings"];
+  if (scope.assetGroupId) {
+    // Inside a Performance Max asset group only its own pages exist; anything else opens its assets.
+    const allowed: GaView[] = ["overview", "reports", "pending", "history", "products", "channels", "assetCombinations", ...assetGroupOnly];
+    return allowed.includes(view) ? view : "assetGroupAssets";
+  }
+  if (assetGroupOnly.includes(view)) return scope.campaignId ? "adGroups" : "campaigns";
   const accountOnly: GaView[] = ["campaigns", "conversions", "library", "products", "rules", "keywordPlanner", "experiments", "links", "accountSettings", "documents", "profile", "connections"];
   if (scope.adGroupId) {
     // Inside an ad group only that type's own pages exist; anything else goes to its home page.

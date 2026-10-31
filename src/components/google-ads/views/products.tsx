@@ -24,7 +24,7 @@ const STATUS: Record<Product["status"], { label: string; tone: "good" | "warn" |
 };
 
 export function ProductsView() {
-  const { data, range, currency, campaign } = useGa();
+  const { data, range, currency, campaign, assetGroup } = useGa();
   const setView = useGoogleAds((s) => s.setView);
   const merchantConnected = useGoogleAds((s) => !!s.merchant.merchantId);
   const [filter, setFilter] = useState<"ALL" | "ISSUES" | "OUT" | "TOP">("ALL");
@@ -145,7 +145,7 @@ export function ProductsView() {
     <div className="space-y-4">
       <ViewHeader
         title="Products"
-        subtitle={campaign ? (campaign.type === "SHOPPING" ? `Merchant Center ${data.account.merchantCenterId} · products in ${campaign.name}'s product groups` : campaign.type === "DEMAND_GEN" ? `Merchant Center ${data.account.merchantCenterId} · feed products ${campaign.name} promotes. Google reports impressions, clicks and CTR per product for Demand Gen.` : `Merchant Center ${data.account.merchantCenterId} · feed products ${campaign.name} can serve. Figures cover Shopping and Performance Max.`) : `Merchant Center ${data.account.merchantCenterId} · performance across Shopping and Performance Max`}
+        subtitle={assetGroup ? `Merchant Center ${data.account.merchantCenterId} · feed products ${assetGroup.name} can serve. Product filters: ${assetGroup.listingGroups.length ? assetGroup.listingGroups.join(", ") : "none (whole feed)"}.` : campaign ? (campaign.type === "SHOPPING" ? `Merchant Center ${data.account.merchantCenterId} · products in ${campaign.name}'s product groups` : campaign.type === "DEMAND_GEN" ? `Merchant Center ${data.account.merchantCenterId} · feed products ${campaign.name} promotes. Google reports impressions, clicks and CTR per product for Demand Gen.` : `Merchant Center ${data.account.merchantCenterId} · feed products ${campaign.name} can serve. Figures cover Shopping and Performance Max.`) : `Merchant Center ${data.account.merchantCenterId} · performance across Shopping and Performance Max`}
         actions={
           <>
             <SearchBox value={query} onChange={setQuery} placeholder="Find a product or ID" />
