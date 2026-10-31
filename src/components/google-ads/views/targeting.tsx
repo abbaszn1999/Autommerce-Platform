@@ -83,6 +83,7 @@ export function ContentView() {
 
 const AGE = ["18–24", "25–34", "35–44", "45–54", "55–64", "65+", "Unknown"];
 const GENDER = ["Female", "Male", "Unknown"];
+const DEMO_GRID = "grid grid-cols-[72px_repeat(4,minmax(0,1fr))_72px] items-center gap-2";
 
 /** Read-only: exclusions and bid adjustments are changed by asking the agent. */
 export function DemographicsView() {
@@ -101,6 +102,14 @@ export function DemographicsView() {
   const block = (kind: "AGE" | "GENDER", values: string[], rows: ReturnType<typeof segmentRows>) => (
     <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
       <p className="border-b border-border/60 px-4 py-3 text-sm font-bold">{kind === "AGE" ? "Age" : "Gender"}</p>
+      <div className={cn(DEMO_GRID, "border-b border-border/40 bg-muted/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground")}>
+        <span>{kind === "AGE" ? "Age" : "Gender"}</span>
+        <span className="text-right">Cost</span>
+        <span className="text-right">Conv.</span>
+        <span className="text-right">CPA</span>
+        <span className="text-right">ROAS</span>
+        <span className="text-right">Bid adj.</span>
+      </div>
       <div className="divide-y divide-border/40">
         {values.map((v) => {
           const d = record(kind, v);
@@ -108,19 +117,20 @@ export function DemographicsView() {
           const m = rows.find((r) => r.key === v)?.metrics;
           const bid = d?.bidModifier;
           return (
-            <div key={v} className={cn("grid grid-cols-[90px_1fr_auto] items-center gap-3 px-4 py-2.5 text-xs sm:grid-cols-[90px_repeat(3,minmax(0,1fr))_auto]", excluded && "opacity-60")}>
+            <div key={v} className={cn(DEMO_GRID, "px-4 py-2.5 text-xs", excluded && "opacity-60")}>
               <span className="font-semibold">{v}</span>
               {m && !excluded ? (
                 <>
-                  <span className="text-muted-foreground">{formatMetric("cost", m.cost, currency)}</span>
-                  <span className="hidden text-muted-foreground sm:block">{formatMetric("conversions", m.conversions, currency)} conv.</span>
-                  <span className={cn("hidden font-semibold sm:block", m.roas >= 3 ? "text-emerald-600" : m.roas < 1.5 ? "text-red-600" : "")}>{m.roas.toFixed(2)}x</span>
+                  <span className="text-right text-muted-foreground">{formatMetric("cost", m.cost, currency)}</span>
+                  <span className="text-right text-muted-foreground">{formatMetric("conversions", m.conversions, currency)}</span>
+                  <span className="text-right text-muted-foreground">{m.cpa ? formatMetric("cpa", m.cpa, currency) : "—"}</span>
+                  <span className={cn("text-right font-semibold", m.roas >= 3 ? "text-emerald-600" : m.roas < 1.5 ? "text-red-600" : "")}>{m.roas.toFixed(2)}x</span>
                 </>
               ) : (
-                <span className="col-span-1 text-muted-foreground sm:col-span-3">{excluded ? "Excluded" : "—"}</span>
+                <span className="col-span-4 text-right text-muted-foreground">{excluded ? "Excluded from targeting" : "—"}</span>
               )}
-              <span className="justify-self-end text-[11px] text-muted-foreground">
-                {excluded ? <Pill tone="bad">Excluded</Pill> : bid ? <span className="font-semibold text-foreground">{bid > 0 ? "+" : ""}{Math.round(bid * 100)}% bid</span> : "No bid adj."}
+              <span className="text-right text-[11px] text-muted-foreground">
+                {excluded ? <Pill tone="bad">Excluded</Pill> : bid ? <span className="font-semibold text-foreground">{bid > 0 ? "+" : ""}{Math.round(bid * 100)}%</span> : "None"}
               </span>
             </div>
           );

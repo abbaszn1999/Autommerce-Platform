@@ -267,6 +267,15 @@ describe("render smoke", () => {
     }
     expect(render("content")).toMatch(/Find bad placements/);
     expect(render("conversions")).toMatch(/Check tracking/);
+    // Lists show column headers so the numbers are readable.
+    const demo = render("demographics");
+    for (const h of ["Cost", "Conv.", "CPA", "ROAS", "Bid adj."]) expect(demo, h).toContain(h);
+    const locs = render("locations");
+    for (const h of ["Campaign", "Targeted locations", "Excluded", "Languages"]) expect(locs, h).toContain(h);
+    const sched = render("schedule");
+    for (const h of ["Campaign", "Runs", "Bid adjustments"]) expect(sched, h).toContain(h);
+    const dev = render("devices");
+    for (const h of ["Campaign", "Mobile phones", "Computers", "Tablets"]) expect(dev, h).toContain(h);
     // Rules & alerts: rules are created by the agent, there is no manual "New rule".
     const rules = render("rules");
     expect(rules).not.toContain("New rule");
