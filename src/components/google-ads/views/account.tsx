@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { BarChart3, Link2, MonitorPlay, Search, ShieldCheck, ShoppingBag, Store, X, type LucideIcon } from "lucide-react";
-import { toast } from "sonner";
+import { BarChart3, Bot, MonitorPlay, Search, ShieldCheck, ShoppingBag, Store, X, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCustomerId } from "@/lib/google-ads/metrics";
 import { useGoogleAds } from "@/lib/google-ads/store";
+import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import type { LinkedAccount, MutateOp } from "@/lib/google-ads/types";
 import { Input } from "@/components/ui/input";
 import { Card, Pill, Toggle, ViewHeader } from "../ga-ui";
@@ -19,25 +19,12 @@ const LINKS: Record<LinkedAccount["kind"], { label: string; icon: LucideIcon; wh
   SEARCH_CONSOLE: { label: "Search Console", icon: Search, why: "See paid and organic search side by side" },
 };
 
-/** Stable placeholder id for a newly linked product (the real one comes from Google). */
-function demoExternalId(seed: string) {
-  return String(500000000 + [...seed].reduce((s, c) => (s * 31 + c.charCodeAt(0)) % 99999999, 7));
-}
-
 export function LinksView() {
   const { data } = useGa();
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
-
-  const setStatus = (l: LinkedAccount, status: LinkedAccount["status"]) => {
-    const ops: MutateOp[] = [{ kind: "collection.upsert", collection: "links", items: [{ ...l, status, externalId: status === "LINKED" ? l.externalId ?? demoExternalId(l.id) : l.externalId }] }];
-    if (l.kind === "MERCHANT_CENTER") ops.push({ kind: "account.update", patch: { merchantCenterId: status === "LINKED" ? l.externalId ?? "512889034" : undefined } });
-    const res = applyDirect(`${status === "LINKED" ? "Link" : status === "PENDING" ? "Request link to" : "Unlink"} ${LINKS[l.kind].label}`, ops);
-    if (res.ok) toast.success(status === "PENDING" ? "Link request sent. Approve it in the other product." : "Saved");
-  };
 
   return (
     <div>
-      <ViewHeader title="Linked accounts" subtitle="Connect other Google products so the account and the agent can use their data." />
+      <ViewHeader title="Linked accounts" subtitle="Other Google products connected to this account, so it and the agent can use their data. To link or unlink one, ask the agent." />
       <div className="grid gap-3 lg:grid-cols-2">
         {data.links.map((l) => {
           const meta = LINKS[l.kind];
@@ -53,13 +40,9 @@ export function LinksView() {
               </div>
               <div className="flex flex-col items-end gap-2">
                 <Pill tone={l.status === "LINKED" ? "good" : l.status === "PENDING" ? "warn" : "neutral"}>{l.status === "LINKED" ? "Linked" : l.status === "PENDING" ? "Pending approval" : "Not linked"}</Pill>
-                {l.status === "LINKED" ? (
-                  <button type="button" onClick={() => setStatus(l, "NOT_LINKED")} className="text-[11px] font-medium text-red-600 hover:underline">Unlink</button>
-                ) : l.status === "PENDING" ? (
-                  <button type="button" onClick={() => setStatus(l, "LINKED")} className="text-[11px] font-semibold text-[#400095] hover:underline dark:text-violet-300">Mark approved</button>
-                ) : (
-                  <button type="button" onClick={() => setStatus(l, l.kind === "YOUTUBE" ? "PENDING" : "LINKED")} className="inline-flex items-center gap-1 rounded-lg border border-border/70 px-2.5 py-1 text-[11px] font-semibold hover:bg-muted">
-                    <Link2 className="h-3 w-3" /> Link
+                {l.status !== "LINKED" && (
+                  <button type="button" onClick={() => runAgentTurn(l.status === "PENDING" ? `Check whether my ${LINKS[l.kind].label} link request was approved` : `Link ${LINKS[l.kind].label} to this account`)} className="inline-flex items-center gap-1 rounded-lg border border-border/70 px-2.5 py-1 text-[11px] font-semibold hover:bg-muted">
+                    <Bot className="h-3 w-3" /> {l.status === "PENDING" ? "Ask agent to check" : "Ask agent to link"}
                   </button>
                 )}
               </div>

@@ -15,7 +15,6 @@ type LibraryTab = "budgets" | "strategies" | "negatives" | "placements" | "label
 export function LibraryView() {
   const [tab, setTab] = useState<LibraryTab>("budgets");
   const { data, currency } = useGa();
-  const openDialog = useGoogleAds((s) => s.openDialog);
   const setView = useGoogleAds((s) => s.setView);
   const live = data.campaigns.filter((c) => c.status !== "REMOVED");
   const totalDaily = data.budgets.filter((b) => live.some((c) => c.budgetId === b.id && c.status === "ENABLED")).reduce((s, b) => s + b.amount, 0);
@@ -33,16 +32,7 @@ export function LibraryView() {
       header: "Daily amount",
       align: "right",
       sortValue: (b) => b.amount,
-      render: (b) => {
-        const c = live.find((x) => x.budgetId === b.id);
-        return c ? (
-          <button type="button" onClick={() => openDialog({ kind: "budget", campaignId: c.id })} className="font-semibold underline decoration-dotted underline-offset-4">
-            {money(b.amount, currency)}
-          </button>
-        ) : (
-          money(b.amount, currency)
-        );
-      },
+      render: (b) => <span className="font-semibold">{money(b.amount, currency)}</span>,
       total: <span>{money(totalDaily, currency)}/day enabled</span>,
     },
     { id: "monthly", header: "Monthly (≈30.4×)", align: "right", render: (b) => <span className="text-muted-foreground">{money(b.amount * 30.4, currency)}</span> },

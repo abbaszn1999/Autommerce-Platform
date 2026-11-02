@@ -7,14 +7,14 @@ import { MATCH_TYPES } from "@/lib/google-ads/constants";
 import { derive, keywordBase, money } from "@/lib/google-ads/metrics";
 import { keywordLabel } from "@/lib/google-ads/mutations";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
-import { useGoogleAds } from "@/lib/google-ads/store";
 import type { EntityStatus, Keyword, MatchType, NegativeKeyword } from "@/lib/google-ads/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { metricColumns } from "../ga-columns";
 import { BulkButton, GaTable, type GaColumn } from "../ga-table";
-import { Card, EmptyState, Pill, Segmented, StatusMenu, ViewHeader } from "../ga-ui";
+import { Card, EmptyState, Pill, Segmented, StatusDot, ViewHeader } from "../ga-ui";
 import { scopedAdGroupIds, useGa } from "../use-ga";
 import { STATUS_FILTERS, SearchBox, filterByStatus, type StatusFilter } from "./campaigns";
+import { KeywordDetail } from "./keyword-detail";
 
 const QS_PART: Record<string, string> = { ABOVE_AVERAGE: "Above average", AVERAGE: "Average", BELOW_AVERAGE: "Below average" };
 
@@ -40,43 +40,15 @@ function QualityScore({ k }: { k: Keyword }) {
 }
 
 function CpcCell({ k, currency, fallback }: { k: Keyword; currency: string; fallback?: number }) {
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(k.cpcBid ?? fallback ?? ""));
-  if (editing) {
-    const save = () => {
-      const n = Number(value);
-      if (n > 0 && n !== k.cpcBid) applyDirect(`Max CPC for ${k.text}`, [{ kind: "keyword.update", keywordId: k.id, patch: { cpcBid: n } }]);
-      setEditing(false);
-    };
-    return (
-      <input
-        autoFocus
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={save}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") save();
-          if (e.key === "Escape") setEditing(false);
-        }}
-        onClick={(e) => e.stopPropagation()}
-        className="h-7 w-20 rounded border border-input bg-background px-2 text-right text-xs"
-      />
-    );
-  }
-  return (
-    <button type="button" onClick={() => setEditing(true)} className="underline decoration-dotted underline-offset-4 hover:text-[#400095]">
-      {k.cpcBid ? money(k.cpcBid, currency) : fallback ? money(fallback, currency) : <span className="text-muted-foreground">Auto</span>}
-    </button>
-  );
+  return <span>{k.cpcBid ? money(k.cpcBid, currency) : fallback ? money(fallback, currency) : <span className="text-muted-foreground">Auto</span>}</span>;
 }
 
 export function KeywordsView() {
   const { data, range, currency, scope, campaign, adGroup } = useGa();
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
   const [filter, setFilter] = useState<StatusFilter>("ACTIVE");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const ids = new Set(scopedAdGroupIds(data, scope));
   const rows = filterByStatus(data.keywords.filter((k) => ids.has(k.adGroupId)), filter).filter((k) => k.text.includes(query.toLowerCase()));
@@ -91,23 +63,31 @@ export function KeywordsView() {
     )
   );
 
+  // View-only dashboard: bulk actions hand the request to the agent.
+  const names = (ids: string[]) => ids.map((id) => data.keywords.find((k) => k.id === id)?.text).join(", ");
   const setStatus = (ids: string[], status: EntityStatus) => {
-    applyDirect(`${status === "ENABLED" ? "Enable" : status === "PAUSED" ? "Pause" : "Remove"} ${ids.length} keyword${ids.length > 1 ? "s" : ""}`, [{ kind: "status.set", entity: "KEYWORD", ids, status }]);
+    runAgentTurn(`${status === "ENABLED" ? "Enable" : status === "PAUSED" ? "Pause" : "Remove"} these keywords: ${names(ids)}`);
     setSelected(new Set());
   };
   const setMatch = (ids: string[], matchType: MatchType) => {
-    applyDirect(`Change match type to ${MATCH_TYPES[matchType].label.toLowerCase()}`, ids.map((id) => ({ kind: "keyword.update" as const, keywordId: id, patch: { matchType } })));
+    runAgentTurn(`Change the match type to ${MATCH_TYPES[matchType].label.toLowerCase()} for these keywords: ${names(ids)}`);
     setSelected(new Set());
   };
+  const open = data.keywords.find((k) => k.id === openId);
+  if (open) return <KeywordDetail keyword={open} onBack={() => setOpenId(null)} />;
 
   const columns: GaColumn<Keyword>[] = [
-    { id: "status", header: "", width: "w-8", render: (k) => <StatusMenu status={k.status} onChange={(s) => setStatus([k.id], s)} /> },
+    { id: "status", header: "", width: "w-8", render: (k) => <StatusDot status={k.status} /> },
     {
       id: "text",
       header: "Keyword",
       sticky: true,
       sortValue: (k) => k.text,
-      render: (k) => <span className="font-semibold">{keywordLabel(k.text, k.matchType)}</span>,
+      render: (k) => (
+        <button type="button" onClick={() => setOpenId(k.id)} className="text-left font-semibold hover:text-[#400095] hover:underline dark:hover:text-violet-300">
+          {keywordLabel(k.text, k.matchType)}
+        </button>
+      ),
       total: <span>Total: {rows.length} keywords</span>,
     },
     ...(!adGroup
@@ -129,6 +109,8 @@ export function KeywordsView() {
       render: (k) => (k.policy === "APPROVED" ? <span className="text-muted-foreground">Eligible</span> : <Pill tone={k.policy === "DISAPPROVED" ? "bad" : k.policy === "UNDER_REVIEW" ? "info" : "warn"}>{k.policy === "APPROVED_LIMITED" ? "Limited" : k.policy === "UNDER_REVIEW" ? "Under review" : "Disapproved"}</Pill>),
     },
     { id: "cpc", header: "Max. CPC", align: "right", render: (k) => <CpcCell k={k} currency={currency} fallback={data.adGroups.find((g) => g.id === k.adGroupId)?.defaultCpcBid} /> },
+    { id: "firstPage", header: "First page bid", label: "First page bid", hideable: true, align: "right", sortValue: (k) => k.firstPageBid ?? 0, render: (k) => (k.firstPageBid ? money(k.firstPageBid, currency) : <span className="text-muted-foreground">—</span>) },
+    { id: "topPage", header: "Top of page bid", label: "Top of page bid", hideable: true, align: "right", sortValue: (k) => k.topOfPageBid ?? 0, render: (k) => (k.topOfPageBid ? money(k.topOfPageBid, currency) : <span className="text-muted-foreground">—</span>) },
     { id: "qs", header: "Quality Score", align: "center", sortValue: (k) => k.qualityScore ?? 0, render: (k) => <QualityScore k={k} /> },
     ...metricColumns<Keyword>((k) => metrics.get(k.id)!, currency, { totals }),
   ];
@@ -137,7 +119,7 @@ export function KeywordsView() {
     <div>
       <ViewHeader
         title="Search keywords"
-        subtitle={adGroup ? `In ${adGroup.name}` : campaign ? `In ${campaign.name}` : "Keywords across all Search campaigns"}
+        subtitle={`${adGroup ? `In ${adGroup.name}` : campaign ? `In ${campaign.name}` : "Keywords across all Search campaigns"}. Click a keyword for its quality score, bid estimates and searches.`}
         actions={
           <>
             <SearchBox value={query} onChange={setQuery} placeholder="Find a keyword" />
@@ -231,7 +213,7 @@ export function NegativesView() {
       {rows.length ? (
         <GaTable rows={rows} columns={columns} rowKey={(n) => n.id} />
       ) : (
-        <EmptyState icon={ListX} title="No negative keywords here" body="Add them yourself or ask the agent to find searches that waste budget." />
+        <EmptyState icon={ListX} title="No negative keywords here" body="Ask the agent to find searches that waste budget and block them." />
       )}
       {!scope.campaignId && data.negativeLists.length > 0 && (
         <Card className="mt-4 p-4">

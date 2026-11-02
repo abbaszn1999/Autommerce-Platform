@@ -139,6 +139,9 @@ export const MATCH_TYPES: Record<MatchType, { label: string; syntax: (t: string)
   EXACT: { label: "Exact match", syntax: (t) => `[${t}]`, blurb: "Searches with the same meaning" },
 };
 
+/** Campaign types whose ads have final URLs, so Google reports landing pages for them (Performance Max uses asset group URLs instead). */
+export const LANDING_PAGE_TYPES: CampaignType[] = ["SEARCH", "DISPLAY", "DEMAND_GEN"];
+
 export const ASSET_TYPES: Record<AssetType, { label: string; blurb: string; levels: ("ACCOUNT" | "CAMPAIGN" | "AD_GROUP")[] }> = {
   SITELINK: { label: "Sitelink", blurb: "Extra links under your ad", levels: ["ACCOUNT", "CAMPAIGN", "AD_GROUP"] },
   CALLOUT: { label: "Callout", blurb: "Short selling points", levels: ["ACCOUNT", "CAMPAIGN", "AD_GROUP"] },

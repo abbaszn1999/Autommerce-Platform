@@ -30,6 +30,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAccountState, useGoogleAds } from "@/lib/google-ads/store";
 import type { GaView } from "@/lib/google-ads/types";
+import { LANDING_PAGE_TYPES } from "@/lib/google-ads/constants";
 import { TAB_GROUPS, groupActive, navCtx, visibleTabs } from "./nav-model";
 
 type NavItem = { view: GaView; label: string; icon: LucideIcon; badge?: string | number; hidden?: boolean; /** Pages that count as this item being open (tabbed items). */ views?: GaView[] };
@@ -81,14 +82,14 @@ export function GaNav() {
         // Shopping ads are built from the feed, so there are no assets to manage.
         { view: "assets", label: "Assets", icon: ImageIcon, hidden: isShopping || !!scope.assetGroupId },
         tabItem("assetGroupAssets", ImageIcon),
-        { view: "landingPages", label: "Landing pages", icon: PanelsTopLeft, hidden: scopedCampaign?.type !== "SEARCH" || !!scope.adGroupId },
+        { view: "landingPages", label: "Landing pages", icon: PanelsTopLeft, hidden: !scopedCampaign || !LANDING_PAGE_TYPES.includes(scopedCampaign.type) || !!scope.adGroupId },
         // Shopping and feed-based Performance Max show the products they spend on; other campaign types keep Products at account level.
         { view: "products", label: "Products", icon: ShoppingBag, hidden: inCampaign && !(isShopping || ((isPmax || (scopedCampaign?.type === "DEMAND_GEN" && !!scopedCampaign.merchantFeed)) && !!data.account.merchantCenterId)) },
       ],
     },
     {
       title: "Insights",
-      items: [tabItem("insights", Telescope), tabItem("insightsSearch", Telescope), tabItem("insightsDemandGen", Telescope)],
+      items: [tabItem("insightsAccount", Telescope), tabItem("insights", Telescope), tabItem("insightsSearch", Telescope), tabItem("insightsDemandGen", Telescope)],
     },
     {
       title: "Targeting & queries",

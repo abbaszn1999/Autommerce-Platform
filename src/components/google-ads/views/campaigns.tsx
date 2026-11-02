@@ -10,7 +10,7 @@ import { useGoogleAds } from "@/lib/google-ads/store";
 import type { Campaign, EntityStatus, Metrics } from "@/lib/google-ads/types";
 import { metricColumns } from "../ga-columns";
 import { BulkButton, GaTable, type GaColumn } from "../ga-table";
-import { Pill, Segmented, StatusMenu, ViewHeader } from "../ga-ui";
+import { Pill, Segmented, StatusDot, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
 
 export type StatusFilter = "ACTIVE" | "ENABLED" | "PAUSED" | "ALL";
@@ -45,8 +45,6 @@ export function SearchBox({ value, onChange, placeholder }: { value: string; onC
 export function CampaignsView() {
   const { data, range, currency } = useGa();
   const setScope = useGoogleAds((s) => s.setScope);
-  const openDialog = useGoogleAds((s) => s.openDialog);
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
   const [filter, setFilter] = useState<StatusFilter>("ACTIVE");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -60,9 +58,10 @@ export function CampaignsView() {
   const rows = filterByStatus(data.campaigns, filter).filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
   const totals = derive(accountBase(data, range, rows.map((r) => r.id)));
 
-  const setStatus = (ids: string[], status: EntityStatus) => {
-    const label = status === "ENABLED" ? "Enable" : status === "PAUSED" ? "Pause" : "Remove";
-    applyDirect(`${label} ${ids.length} campaign${ids.length > 1 ? "s" : ""}`, [{ kind: "status.set", entity: "CAMPAIGN", ids, status }]);
+  // The dashboard is view-only: bulk actions hand the request to the agent, which proposes the change in the chat.
+  const askStatus = (ids: string[], status: EntityStatus) => {
+    const verb = status === "ENABLED" ? "Enable" : status === "PAUSED" ? "Pause" : "Remove";
+    runAgentTurn(`${verb} these campaigns: ${ids.map((id) => data.campaigns.find((c) => c.id === id)?.name).join(", ")}`);
     setSelected(new Set());
   };
 
@@ -71,7 +70,7 @@ export function CampaignsView() {
       id: "status",
       header: "",
       width: "w-8",
-      render: (c) => <StatusMenu status={c.status} onChange={(s) => setStatus([c.id], s)} />,
+      render: (c) => <StatusDot status={c.status} />,
     },
     {
       id: "name",
@@ -92,11 +91,7 @@ export function CampaignsView() {
       sortValue: (c) => data.budgets.find((b) => b.id === c.budgetId)?.amount ?? 0,
       render: (c) => {
         const b = data.budgets.find((x) => x.id === c.budgetId);
-        return (
-          <button type="button" onClick={() => openDialog({ kind: "budget", campaignId: c.id })} className="whitespace-nowrap underline decoration-dotted underline-offset-4 hover:text-[#400095]">
-            {b ? `${money(b.amount, currency)}/day` : "—"}
-          </button>
-        );
+        return <span className="whitespace-nowrap">{b ? `${money(b.amount, currency)}/day` : "—"}</span>;
       },
     },
     {
@@ -138,7 +133,7 @@ export function CampaignsView() {
     <div>
       <ViewHeader
         title="Campaigns"
-        subtitle="Every campaign in this account. Click a name to open it."
+        subtitle="Every campaign in this account. Click a name to open it. To change anything, select campaigns and ask the agent."
         actions={
           <>
             <SearchBox value={query} onChange={setQuery} placeholder="Find a campaign" />
@@ -159,13 +154,13 @@ export function CampaignsView() {
         rowClassName={(c) => cn(c.status === "REMOVED" && "opacity-50")}
         bulkActions={(ids) => (
           <>
-            <BulkButton onClick={() => setStatus(ids, "ENABLED")}>
+            <BulkButton onClick={() => askStatus(ids, "ENABLED")}>
               <Play className="h-3 w-3" /> Enable
             </BulkButton>
-            <BulkButton onClick={() => setStatus(ids, "PAUSED")}>
+            <BulkButton onClick={() => askStatus(ids, "PAUSED")}>
               <Pause className="h-3 w-3" /> Pause
             </BulkButton>
-            <BulkButton tone="danger" onClick={() => setStatus(ids, "REMOVED")}>
+            <BulkButton tone="danger" onClick={() => askStatus(ids, "REMOVED")}>
               <Trash2 className="h-3 w-3" /> Remove
             </BulkButton>
             <BulkButton

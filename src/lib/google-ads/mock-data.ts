@@ -137,13 +137,31 @@ function campaign(c: Partial<Campaign> & Pick<Campaign, "id" | "name" | "type" |
     euPoliticalAds: false,
     servingIssues: [],
     labels: [],
+    trackingTemplate: `{lpurl}?utm_source=google&utm_medium=cpc&utm_campaign={campaignid}`,
+    adRotation: c.type === "SEARCH" ? "OPTIMIZE" : undefined,
     createdAt: "2026-05-01T09:00:00Z",
     ...c,
   };
 }
 
 function kw(id: string, adGroupId: string, text: string, matchType: MatchType, extra: Partial<Keyword> = {}): Keyword {
-  return { id, adGroupId, text, matchType, status: "ENABLED", policy: "APPROVED", ...extra };
+  // Deterministic bid estimates so the demo is stable.
+  const seed = [...text].reduce((s, c) => s + c.charCodeAt(0), 0);
+  const first = Math.round((0.35 + (seed % 70) / 100) * 100) / 100;
+  return { id, adGroupId, text, matchType, status: "ENABLED", policy: "APPROVED", firstPageBid: first, topOfPageBid: Math.round(first * 1.7 * 100) / 100, ...extra };
+}
+
+/** Gives each responsive ad's headlines and descriptions a stable Google rating, weaker ads getting more Low ratings. */
+function rateAds(list: Ad[]): Ad[] {
+  const rate = (a: Ad, tx: AdText, i: number): AdText => {
+    if (tx.rating || a.type !== "RESPONSIVE_SEARCH_AD") return tx;
+    const seed = [...tx.text].reduce((s, c) => s + c.charCodeAt(0), 0) + i;
+    const weak = a.adStrength === "POOR" || a.adStrength === "AVERAGE";
+    const pick = seed % 6;
+    const rating: AdText["rating"] = pick === 0 ? "BEST" : pick === 1 ? (weak ? "LOW" : "BEST") : pick === 2 ? "LEARNING" : pick === 3 ? (weak ? "LOW" : "GOOD") : "GOOD";
+    return { ...tx, rating };
+  };
+  return list.map((a) => ({ ...a, headlines: a.headlines.map((h, i) => rate(a, h, i)), descriptions: a.descriptions.map((d, i) => rate(a, d, i + 20)) }));
 }
 
 function neg(id: string, text: string, matchType: MatchType, level: NegativeKeyword["level"], parentId: string): NegativeKeyword {
@@ -212,6 +230,10 @@ export function buildDemoAccount(today = isoDay(new Date())): AccountData {
     }),
     campaign({
       id: "c_pmax",
+      newCustomerAcquisition: { mode: "BID_HIGHER", value: 25 },
+      urlExclusions: ["/cart", "/account", "/gift-cards"],
+      brandGuidelines: { mainColor: "#400095", accentColor: "#F76D01", font: "Inter" },
+      finalUrlSuffix: "utm_content=pmax",
       name: "PMax – All Products",
       type: "PERFORMANCE_MAX",
       budgetId: "b_pmax",
@@ -223,6 +245,7 @@ export function buildDemoAccount(today = isoDay(new Date())): AccountData {
     }),
     campaign({
       id: "c_shopping",
+      newCustomerAcquisition: { mode: "BID_HIGHER", value: 15 },
       name: "Shopping – Bestsellers",
       type: "SHOPPING",
       budgetId: "b_shopping",
@@ -781,7 +804,7 @@ export function buildDemoAccount(today = isoDay(new Date())): AccountData {
       { id: "lb_feed", name: "Feed", color: "#15803D" },
       { id: "lb_remarketing", name: "Remarketing", color: "#C40000" },
     ],
-    ads,
+    ads: rateAds(ads),
     assets,
     assetGroups,
     audiences,

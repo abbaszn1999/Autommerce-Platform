@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { AlertOctagon, AlertTriangle, Bell, Bot, CheckCheck, Info, Trash2, Zap } from "lucide-react";
+import { AlertOctagon, AlertTriangle, Bell, Bot, CheckCheck, Info, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import { useGoogleAds } from "@/lib/google-ads/store";
 import type { Alert, AutomatedRule, RuleMetric } from "@/lib/google-ads/types";
-import { Card, EmptyState, Pill, Segmented, Toggle, ViewHeader } from "../ga-ui";
+import { Card, EmptyState, Pill, Segmented, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
 
 const METRIC_LABEL: Record<RuleMetric, string> = {
@@ -48,7 +48,7 @@ export function RulesView() {
     <div>
       <ViewHeader
         title="Rules & alerts"
-        subtitle="The agent watches the account around the clock. Rules act on their own; alerts tell you what happened."
+        subtitle="The agent watches the account around the clock. Rules act on their own; alerts tell you what happened. To change a rule, ask the agent."
         actions={
           <button type="button" onClick={() => runAgentTurn("Set up monitoring and alerts for my account")} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 px-3 text-xs font-semibold hover:bg-muted">
             <Bot className="h-3.5 w-3.5" /> Let the agent set it up
@@ -130,7 +130,6 @@ export function AlertsFeed({ compact }: { compact?: boolean }) {
 
 function RulesList() {
   const { data } = useGa();
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
   const names = (ids: string[]) => (ids.length ? ids.map((id) => data.campaigns.find((c) => c.id === id)?.name ?? id).join(", ") : "all enabled campaigns");
 
   return (
@@ -149,9 +148,9 @@ function RulesList() {
               <p className="mt-0.5 text-xs text-muted-foreground">{describeRule(r, names)}</p>
               {r.lastRun && <p className="mt-1 text-[11px] text-muted-foreground">Last run {ago(r.lastRun)}: <span className="text-foreground">{r.lastResult}</span></p>}
             </div>
-            <Toggle checked={r.enabled} label="Rule enabled" onChange={(v) => applyDirect(`${v ? "Enable" : "Disable"} rule "${r.name}"`, [{ kind: "collection.upsert", collection: "rules", items: [{ ...r, enabled: v }] }])} />
-            <button type="button" onClick={() => applyDirect(`Delete rule "${r.name}"`, [{ kind: "collection.remove", collection: "rules", ids: [r.id] }])} className="rounded p-1 text-muted-foreground hover:bg-red-500/10 hover:text-red-600" aria-label="Delete rule">
-              <Trash2 className="h-4 w-4" />
+            <Pill tone={r.enabled ? "good" : "neutral"}>{r.enabled ? "On" : "Off"}</Pill>
+            <button type="button" onClick={() => runAgentTurn(`Change the rule "${r.name}" (turn it ${r.enabled ? "off" : "on"}, edit or delete it)`)} className="inline-flex items-center gap-1 rounded-md border border-border/70 px-2 py-1 text-[11px] font-semibold hover:bg-muted">
+              <Bot className="h-3 w-3" /> Ask agent
             </button>
           </div>
         </Card>

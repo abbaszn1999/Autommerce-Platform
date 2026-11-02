@@ -10,7 +10,7 @@ import { useGoogleAds } from "@/lib/google-ads/store";
 import type { AdGroup, AssetGroup, EntityStatus } from "@/lib/google-ads/types";
 import { metricColumns } from "../ga-columns";
 import { BulkButton, GaTable, type GaColumn } from "../ga-table";
-import { AdStrengthMeter, Card, ImageTile, Pill, Segmented, StatusMenu, ViewHeader } from "../ga-ui";
+import { AdStrengthMeter, Card, ImageTile, Pill, Segmented, StatusDot, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
 import { STATUS_FILTERS, SearchBox, filterByStatus, type StatusFilter } from "./campaigns";
 
@@ -57,7 +57,6 @@ export function AdGroupsView() {
 function AdGroupsTable() {
   const { data, range, currency, campaign } = useGa();
   const setScope = useGoogleAds((s) => s.setScope);
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
   const [filter, setFilter] = useState<StatusFilter>("ACTIVE");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -75,13 +74,15 @@ function AdGroupsTable() {
     )
   );
 
-  const setStatus = (ids: string[], status: EntityStatus) => {
-    applyDirect(`${status === "ENABLED" ? "Enable" : status === "PAUSED" ? "Pause" : "Remove"} ${ids.length} ad group${ids.length > 1 ? "s" : ""}`, [{ kind: "status.set", entity: "AD_GROUP", ids, status }]);
+  // View-only dashboard: bulk actions hand the request to the agent.
+  const askStatus = (ids: string[], status: EntityStatus) => {
+    const verb = status === "ENABLED" ? "Enable" : status === "PAUSED" ? "Pause" : "Remove";
+    runAgentTurn(`${verb} these ad groups: ${ids.map((id) => data.adGroups.find((g) => g.id === id)?.name).join(", ")}`);
     setSelected(new Set());
   };
 
   const columns: GaColumn<AdGroup>[] = [
-    { id: "status", header: "", width: "w-8", render: (g) => <StatusMenu status={g.status} onChange={(s) => setStatus([g.id], s)} /> },
+    { id: "status", header: "", width: "w-8", render: (g) => <StatusDot status={g.status} /> },
     {
       id: "name",
       header: "Ad group",
@@ -154,9 +155,9 @@ function AdGroupsTable() {
           defaultSort={{ id: "cost", dir: "desc" }}
           bulkActions={(ids) => (
             <>
-              <BulkButton onClick={() => setStatus(ids, "ENABLED")}><Play className="h-3 w-3" /> Enable</BulkButton>
-              <BulkButton onClick={() => setStatus(ids, "PAUSED")}><Pause className="h-3 w-3" /> Pause</BulkButton>
-              <BulkButton tone="danger" onClick={() => setStatus(ids, "REMOVED")}><Trash2 className="h-3 w-3" /> Remove</BulkButton>
+              <BulkButton onClick={() => askStatus(ids, "ENABLED")}><Play className="h-3 w-3" /> Enable</BulkButton>
+              <BulkButton onClick={() => askStatus(ids, "PAUSED")}><Pause className="h-3 w-3" /> Pause</BulkButton>
+              <BulkButton tone="danger" onClick={() => askStatus(ids, "REMOVED")}><Trash2 className="h-3 w-3" /> Remove</BulkButton>
             </>
           )}
           empty={campaign?.type === "SHOPPING" ? "Shopping ad groups appear here." : "No ad groups yet."}
@@ -179,7 +180,6 @@ function AssetGroupsView() {
 
 function AssetGroupCards({ groups }: { groups: AssetGroup[] }) {
   const { data, range, currency } = useGa();
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
   const setScope = useGoogleAds((s) => s.setScope);
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -196,7 +196,7 @@ function AssetGroupCards({ groups }: { groups: AssetGroup[] }) {
         return (
           <Card key={g.id} className="p-4">
             <div className="flex items-start gap-2">
-              <StatusMenu status={g.status} onChange={(s) => applyDirect(`${s === "PAUSED" ? "Pause" : s === "ENABLED" ? "Enable" : "Remove"} asset group ${g.name}`, [{ kind: "status.set", entity: "ASSET_GROUP", ids: [g.id], status: s }])} />
+              <StatusDot status={g.status} className="mt-1" />
               <div className="min-w-0 flex-1">
                 <button type="button" onClick={() => setScope({ campaignId: g.campaignId, assetGroupId: g.id }, "overview")} className="block max-w-full truncate text-left text-sm font-bold text-[#400095] hover:underline dark:text-violet-300">{g.name}</button>
                 <p className="truncate text-[11px] text-muted-foreground">

@@ -162,6 +162,18 @@ export type Campaign = {
   merchantFeed?: boolean;
   /** PMax: let Google send traffic to other pages on the site. */
   finalUrlExpansion?: boolean;
+  /** PMax: URL patterns Google must never send traffic to. */
+  urlExclusions?: string[];
+  /** PMax: brand colours and font Google uses when it builds ads. */
+  brandGuidelines?: { mainColor: string; accentColor: string; font: string };
+  /** Tracking template, e.g. "{lpurl}?utm_source=google". */
+  trackingTemplate?: string;
+  /** Appended to every final URL. */
+  finalUrlSuffix?: string;
+  /** Search: how Google rotates ads inside an ad group. */
+  adRotation?: "OPTIMIZE" | "ROTATE_EVENLY";
+  /** Bid more for new customers (Search, Shopping, Performance Max). */
+  newCustomerAcquisition?: { mode: "BID_HIGHER" | "ONLY_NEW"; value?: number };
   /** Shopping-only settings. */
   shopping?: ShoppingSettings;
   /** Display-only settings. */
@@ -211,6 +223,9 @@ export type Keyword = {
     landingPage: "ABOVE_AVERAGE" | "AVERAGE" | "BELOW_AVERAGE";
   };
   policy: KeywordPolicy;
+  /** Estimated bids to reach the first page and the top of the page (keyword plan idea metrics from Google). */
+  firstPageBid?: number;
+  topOfPageBid?: number;
   finalUrl?: string;
   labels?: string[];
 };
@@ -252,7 +267,10 @@ export type AdType = "RESPONSIVE_SEARCH_AD" | "RESPONSIVE_DISPLAY_AD" | "VIDEO_A
 
 export type PinPosition = "HEADLINE_1" | "HEADLINE_2" | "HEADLINE_3" | "DESCRIPTION_1" | "DESCRIPTION_2";
 
-export type AdText = { text: string; pinned?: PinPosition };
+/** Google's rating of one headline or description inside a responsive ad (ad_group_ad_asset_view.performance_label). */
+export type AdTextRating = "BEST" | "GOOD" | "LOW" | "LEARNING";
+
+export type AdText = { text: string; pinned?: PinPosition; rating?: AdTextRating };
 
 export type AdStrength = "PENDING" | "POOR" | "AVERAGE" | "GOOD" | "EXCELLENT";
 
@@ -715,7 +733,11 @@ export type ChangeEvent = {
   inverse?: MutateOp[];
   undone?: boolean;
   changeId?: string;
+  /** Which campaigns, ad groups and asset groups the change touched, so history can be filtered to one of them. */
+  touched?: ChangeTouched;
 };
+
+export type ChangeTouched = { campaignIds: string[]; adGroupIds: string[]; assetGroupIds: string[] };
 
 // ─── Account snapshot ──────────────────────────────────────────────────────
 
@@ -858,7 +880,9 @@ export type GaView =
   | "impressionShare"
   // Shopping and Display campaign pages
   | "priceCompetitiveness"
-  | "contentExclusions";
+  | "contentExclusions"
+  // Account level
+  | "trends";
 
 /** A Merchant Center account the signed-in Google user can reach (own connection, separate from Google Ads). */
 export type MerchantAccount = {

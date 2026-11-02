@@ -5,30 +5,26 @@ import { AlertTriangle, Bot, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { adBase, derive, formatMetric } from "@/lib/google-ads/metrics";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
-import { useGoogleAds } from "@/lib/google-ads/store";
 import type { Ad } from "@/lib/google-ads/types";
 import { SearchAdPreview } from "../ga-ad-preview";
-import { AdStrengthMeter, Card, EmptyState, ImageTile, PolicyPill, Segmented, StatusMenu, ViewHeader } from "../ga-ui";
+import { AdStrengthMeter, Card, EmptyState, ImageTile, PolicyPill, Segmented, StatusDot, ViewHeader } from "../ga-ui";
 import { scopedAdGroupIds, useGa } from "../use-ga";
+import { AD_TYPE_LABEL, AdDetail } from "./ad-detail";
 import { STATUS_FILTERS, filterByStatus, type StatusFilter } from "./campaigns";
-
-const AD_TYPE_LABEL: Record<Ad["type"], string> = {
-  RESPONSIVE_SEARCH_AD: "Responsive search ad",
-  RESPONSIVE_DISPLAY_AD: "Responsive display ad",
-  VIDEO_AD: "Video ad",
-  DEMAND_GEN_AD: "Demand Gen ad",
-  SHOPPING_PRODUCT_AD: "Product shopping ad",
-};
 
 export function AdsView() {
   const { data, scope, campaign, adGroup } = useGa();
   const [filter, setFilter] = useState<StatusFilter>("ACTIVE");
   const [policy, setPolicy] = useState<"ALL" | "ISSUES">("ALL");
+  const [openId, setOpenId] = useState<string | null>(null);
   const ids = new Set(scopedAdGroupIds(data, scope));
   const ads = filterByStatus(data.ads.filter((a) => ids.has(a.adGroupId)), filter).filter(
     (a) => policy === "ALL" || a.policy === "DISAPPROVED" || a.policy === "APPROVED_LIMITED" || a.adStrength === "POOR"
   );
   const issues = data.ads.filter((a) => ids.has(a.adGroupId) && a.status !== "REMOVED" && (a.policy === "DISAPPROVED" || a.policy === "APPROVED_LIMITED" || a.adStrength === "POOR")).length;
+
+  const open = data.ads.find((a) => a.id === openId);
+  if (open) return <AdDetail ad={open} onBack={() => setOpenId(null)} />;
 
   return (
     <div>
@@ -50,11 +46,11 @@ export function AdsView() {
         </div>
       </ViewHeader>
       {ads.length === 0 ? (
-        <EmptyState icon={FileText} title="No ads here" body="Create a responsive search ad, or ask the agent to write one from your catalog." />
+        <EmptyState icon={FileText} title="No ads here" body="Ask the agent to write a responsive search ad from your catalog." />
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {ads.map((ad) => (
-            <AdCard key={ad.id} ad={ad} />
+            <AdCard key={ad.id} ad={ad} onOpen={() => setOpenId(ad.id)} />
           ))}
         </div>
       )}
@@ -62,9 +58,8 @@ export function AdsView() {
   );
 }
 
-function AdCard({ ad }: { ad: Ad }) {
+function AdCard({ ad, onOpen }: { ad: Ad; onOpen: () => void }) {
   const { data, range, currency } = useGa();
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
   const group = data.adGroups.find((g) => g.id === ad.adGroupId);
   const campaign = data.campaigns.find((c) => c.id === group?.campaignId);
   const m = derive(adBase(data, ad.id, range));
@@ -74,12 +69,9 @@ function AdCard({ ad }: { ad: Ad }) {
   return (
     <Card className={cn("flex flex-col p-4", ad.status === "REMOVED" && "opacity-50")}>
       <div className="mb-3 flex items-start gap-2">
-        <StatusMenu
-          status={ad.status}
-          onChange={(s) => applyDirect(`${s === "ENABLED" ? "Enable" : s === "PAUSED" ? "Pause" : "Remove"} ad in ${group?.name}`, [{ kind: "status.set", entity: "AD", ids: [ad.id], status: s }])}
-        />
+        <StatusDot status={ad.status} className="mt-1" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-semibold">{AD_TYPE_LABEL[ad.type]}</p>
+          <button type="button" onClick={onOpen} className="block max-w-full truncate text-left text-xs font-semibold text-[#400095] hover:underline dark:text-violet-300">{AD_TYPE_LABEL[ad.type]}</button>
           <p className="truncate text-[11px] text-muted-foreground">
             {campaign?.name} › {group?.name}
           </p>

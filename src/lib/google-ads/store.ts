@@ -7,7 +7,9 @@
 import { create } from "zustand";
 import { rangeFor } from "./metrics";
 import { MANAGER_ACCOUNT, MERCHANT_ACCOUNTS, buildDemoAccount, buildEmptyAccount, buildSecondAccount, DEMO_GOOGLE_EMAIL } from "./mock-data";
-import { applyOps, describeOps, gid } from "./mutations";
+import { LANDING_PAGE_TYPES } from "./constants";
+import { freshSync, getDataSource, type SyncState } from "./data-source";
+import { applyOps, describeOps, gid, touchedBy } from "./mutations";
 import { validateOps } from "./validation";
 import { DEFAULT_PROFILE, seedMemories, type AgentDoc, type AgentMemory, type BusinessProfile } from "./docs";
 import { seedDocs } from "./agent-docs";
@@ -72,6 +74,8 @@ type AccountState = {
   activeTab: string;
   profile: BusinessProfile;
   memories: AgentMemory[];
+  /** Whether the data on screen is loading, failed to load, or was last refreshed at some time. */
+  sync: SyncState;
 };
 
 type GaStore = {
@@ -115,6 +119,8 @@ type GaStore = {
   disconnectMerchant: () => void;
 
   setView: (view: GaView) => void;
+  /** Reload the open account from the data source (shows loading, then ready or an error with Retry). */
+  refreshData: () => Promise<void>;
   setScope: (scope: GaScope, view?: GaView) => void;
   setRange: (preset: DateRangePreset) => void;
   setAutoApprove: (on: boolean) => void;
@@ -165,7 +171,6 @@ const ACTOR = "You";
 const PMAX_ONLY: GaView[] = ["brandExclusions", "searchCategories", "assetCombinations", "placementsShown"];
 /** Demand Gen has no keywords, search terms or placement pages (Google handles content suitability at account level). */
 const DEMAND_GEN_NONE: GaView[] = ["keywords", "negatives", "searchTerms", "content", "contentExclusions"];
-const SEARCH_ONLY: GaView[] = ["landingPages"];
 
 /** Views that make no sense at a scope fall back to the closest one that does. */
 function viewForScope(view: GaView, scope: GaScope, type?: CampaignType): GaView {
@@ -181,7 +186,7 @@ function viewForScope(view: GaView, scope: GaScope, type?: CampaignType): GaView
     return allowed.includes(view) ? view : "assetGroupAssets";
   }
   if (assetGroupOnly.includes(view)) return scope.campaignId ? "adGroups" : "campaigns";
-  const accountOnly: GaView[] = ["campaigns", "conversions", "library", "products", "rules", "keywordPlanner", "experiments", "links", "accountSettings", "documents", "profile", "connections"];
+  const accountOnly: GaView[] = ["campaigns", "conversions", "library", "products", "rules", "keywordPlanner", "experiments", "links", "accountSettings", "documents", "profile", "connections", "trends"];
   if (scope.adGroupId) {
     // Inside an ad group only that type's own pages exist; anything else goes to its home page.
     const home: GaView = isSearch ? "keywords" : "ads";
@@ -209,10 +214,10 @@ function viewForScope(view: GaView, scope: GaScope, type?: CampaignType): GaView
   if (isPmax && view === "devices") return "locations";
   // Pages that only exist inside a Performance Max campaign.
   if (!isPmax && PMAX_ONLY.includes(view)) return scope.campaignId ? "adGroups" : "overview";
-  // Pages that only exist inside a Search campaign.
-  if (!isSearch && SEARCH_ONLY.includes(view)) return scope.campaignId ? "adGroups" : "overview";
-  // Impression share is a Search and Shopping report; price competitiveness is Shopping only; Display has its own exclusions page.
-  if (!isSearch && !isShopping && view === "impressionShare") return scope.campaignId ? "adGroups" : "overview";
+  // Landing pages exist for campaigns whose ads have final URLs.
+  if (view === "landingPages" && !(type && LANDING_PAGE_TYPES.includes(type))) return scope.campaignId ? "adGroups" : "overview";
+  // Impression share is a Search and Shopping report (account level lists them all); price competitiveness is Shopping only; Display has its own exclusions page.
+  if (scope.campaignId && !isSearch && !isShopping && view === "impressionShare") return "adGroups";
   if (!isShopping && view === "priceCompetitiveness") return scope.campaignId ? "adGroups" : "overview";
   if (!isDisplay && view === "contentExclusions") return scope.campaignId ? "adGroups" : "overview";
   // Shopping ads come from the feed: no assets.
@@ -298,6 +303,7 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
         activeTab: "account",
         profile: { ...DEFAULT_PROFILE, businessName: data.account.name },
         memories: data.campaigns.length ? seedMemories() : [],
+        sync: freshSync(),
       };
     };
     set({
@@ -341,6 +347,23 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
   disconnectMerchant: () => set({ merchant: NO_MERCHANT }),
 
   setView: (view) => set({ view }),
+
+  refreshData: async () => {
+    const start = get();
+    const id = start.customerId;
+    const acc = current(start);
+    if (!id || !acc || acc.sync.status === "loading") return;
+    const patch = (sync: Partial<SyncState>, data?: AccountData) =>
+      set((s) => withAccount(s, (a) => ({ ...a, data: data ?? a.data, sync: { ...a.sync, ...sync } })));
+    patch({ status: "loading", error: undefined });
+    try {
+      const next = await getDataSource().fetchAccount(id, acc.data);
+      // Keep any change made while loading unless the source returned a new snapshot.
+      patch({ status: "ready", refreshedAt: new Date().toISOString(), error: undefined }, next === acc.data ? undefined : next);
+    } catch (err) {
+      patch({ status: "error", error: (err as Error).message || "Could not load this account." });
+    }
+  },
 
   setScope: (scope, view) =>
     set((s) => {
@@ -407,6 +430,7 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
         diff: change.diff,
         inverse,
         changeId,
+        touched: touchedBy(acc.data, change.ops, next),
       };
       set((s) =>
         withAccount(s, (a) => ({
@@ -457,7 +481,7 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
     try {
       const diff = describeOps(acc.data, ops);
       const { next, inverse } = applyOps(acc.data, ops);
-      const event: ChangeEvent = { id: gid("evt"), at: new Date().toISOString(), actor: ACTOR, source, title, diff, inverse };
+      const event: ChangeEvent = { id: gid("evt"), at: new Date().toISOString(), actor: ACTOR, source, title, diff, inverse, touched: touchedBy(acc.data, ops, next) };
       set((s) => withAccount(s, (a) => ({ ...a, data: next, history: [event, ...a.history] })));
       return { ok: true };
     } catch (err) {
@@ -471,7 +495,7 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
     if (!acc || !event?.inverse || event.undone) return;
     const diff = describeOps(acc.data, event.inverse);
     const { next } = applyOps(acc.data, event.inverse);
-    const undoEvent: ChangeEvent = { id: gid("evt"), at: new Date().toISOString(), actor: ACTOR, source: "USER", title: `Undo: ${event.title}`, diff };
+    const undoEvent: ChangeEvent = { id: gid("evt"), at: new Date().toISOString(), actor: ACTOR, source: "USER", title: `Undo: ${event.title}`, diff, touched: event.touched };
     set((s) =>
       withAccount(s, (a) => ({
         ...a,

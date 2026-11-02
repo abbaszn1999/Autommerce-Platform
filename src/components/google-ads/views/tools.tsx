@@ -3,15 +3,13 @@
 import { useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { CartesianGrid, Line, LineChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Beaker, Calculator, FlaskConical, Plus, Search } from "lucide-react";
-import { toast } from "sonner";
+import { Beaker, Bot, Calculator, FlaskConical, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GEO_TARGETS, LANGUAGES } from "@/lib/google-ads/constants";
 import { forecastCampaign, keywordIdeas, type KeywordIdea } from "@/lib/google-ads/analytics";
 import { money, num } from "@/lib/google-ads/metrics";
-import { gid } from "@/lib/google-ads/mutations";
-import { useGoogleAds } from "@/lib/google-ads/store";
-import type { MatchType, MutateOp } from "@/lib/google-ads/types";
+import { runAgentTurn } from "@/lib/google-ads/agent-runner";
+import type { MatchType } from "@/lib/google-ads/types";
 import { Input } from "@/components/ui/input";
 import { BulkButton, GaTable, type GaColumn } from "../ga-table";
 import { ACCENT_BTN, Card, Delta, EmptyState, Field, Pill, SelectBox, ViewHeader } from "../ga-ui";
@@ -21,7 +19,6 @@ import { useGa } from "../use-ga";
 
 export function KeywordPlannerView() {
   const { data } = useGa();
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
   const [seed, setSeed] = useState("running shoes");
   const [location, setLocation] = useState("Saudi Arabia");
   const [language, setLanguage] = useState("English");
@@ -33,12 +30,13 @@ export function KeywordPlannerView() {
   const ideas = useMemo(() => keywordIdeas(query.seed, query), [query]);
 
   const add = (texts: string[]) => {
-    if (!target) return toast.error("Create a Search ad group first");
+    // View-only dashboard: the agent adds them and shows the change in the chat for approval.
+    const group = data.adGroups.find((g) => g.id === target);
+    if (!group) return;
     const existing = new Set(data.keywords.filter((k) => k.adGroupId === target).map((k) => `${k.matchType}:${k.text}`));
-    const keywords = texts.filter((t) => !existing.has(`${match}:${t}`)).map((text) => ({ id: gid("k"), adGroupId: target, text, matchType: match, status: "ENABLED" as const, policy: "UNDER_REVIEW" as const }));
-    if (!keywords.length) return toast.info("Those keywords are already in the ad group");
-    const res = applyDirect(`Add ${keywords.length} keyword${keywords.length > 1 ? "s" : ""} from Keyword Planner`, [{ kind: "keyword.create", keywords }]);
-    if (res.ok) toast.success(`Added ${keywords.length} keywords`);
+    const fresh = texts.filter((t) => !existing.has(`${match}:${t}`));
+    if (!fresh.length) return;
+    runAgentTurn(`Add these ${match.toLowerCase()} match keywords to the ad group "${group.name}": ${fresh.join(", ")}`);
     setSelected(new Set());
   };
 
@@ -102,7 +100,7 @@ export function KeywordPlannerView() {
         selected={selected}
         onSelectedChange={setSelected}
         defaultSort={{ id: "volume", dir: "desc" }}
-        bulkActions={(ids) => <BulkButton onClick={() => add(ids)}><Plus className="h-3 w-3" /> Add {ids.length} to ad group</BulkButton>}
+        bulkActions={(ids) => <BulkButton onClick={() => add(ids)}><Bot className="h-3 w-3" /> Ask agent to add {ids.length} to ad group</BulkButton>}
       />
     </div>
   );
@@ -170,7 +168,6 @@ export function ExperimentsView() {
 
 export function PlannerView() {
   const { data, range, currency, campaign } = useGa();
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
   const { resolvedTheme } = useTheme();
   const candidates = data.campaigns.filter((c) => c.status === "ENABLED" && (!campaign || c.id === campaign.id));
   const current = (id: string) => data.budgets.find((b) => b.id === data.campaigns.find((c) => c.id === id)?.budgetId)?.amount ?? 0;
@@ -254,13 +251,11 @@ export function PlannerView() {
             type="button"
             disabled={!changed.length}
             onClick={() => {
-              const ops: MutateOp[] = changed.map((c) => ({ kind: "budget.update", budgetId: c.budgetId, amount: Math.round(planned[c.id]) }));
-              const res = applyDirect(`Apply plan: ${changed.length} budget${changed.length > 1 ? "s" : ""}`, ops);
-              if (res.ok) toast.success("Budgets updated");
+              runAgentTurn(`Apply this budget plan: ${changed.map((c) => `${c.name} from ${money(current(c.id), currency)} to ${money(Math.round(planned[c.id]), currency)} per day`).join("; ")}`);
             }}
             className={cn("mt-4 w-full rounded-lg py-2 text-xs font-semibold", ACCENT_BTN)}
           >
-            Apply plan{changed.length ? ` (${changed.length} budget${changed.length > 1 ? "s" : ""})` : ""}
+            Ask agent to apply plan{changed.length ? ` (${changed.length} budget${changed.length > 1 ? "s" : ""})` : ""}
           </button>
         </Card>
       </div>

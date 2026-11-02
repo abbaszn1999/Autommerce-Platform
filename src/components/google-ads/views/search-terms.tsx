@@ -4,10 +4,8 @@ import { useMemo, useState } from "react";
 import { Ban, Bot, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { derive, searchTermBase } from "@/lib/google-ads/metrics";
-import { gid } from "@/lib/google-ads/mutations";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
-import { useGoogleAds } from "@/lib/google-ads/store";
-import type { MutateOp, SearchTerm } from "@/lib/google-ads/types";
+import type { SearchTerm } from "@/lib/google-ads/types";
 import { metricColumns } from "../ga-columns";
 import { BulkButton, GaTable, type GaColumn } from "../ga-table";
 import { Pill, Segmented, ViewHeader } from "../ga-ui";
@@ -18,7 +16,6 @@ type Filter = "ALL" | "WASTE" | "CONVERTING";
 
 export function SearchTermsView() {
   const { data, range, currency, scope, campaign, adGroup } = useGa();
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
   const [filter, setFilter] = useState<Filter>("ALL");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -37,23 +34,18 @@ export function SearchTermsView() {
     });
   const wasteCount = scoped.filter((t) => metrics.get(t.id)!.cost > 0 && metrics.get(t.id)!.conversions < 0.5).length;
 
+  // View-only dashboard: these hand the choice to the agent, which proposes the change in the chat.
+  const pending = (ids: string[]) => data.searchTerms.filter((t) => ids.includes(t.id) && t.status === "NONE").map((t) => t.text);
   const addAsKeyword = (ids: string[]) => {
-    const terms = data.searchTerms.filter((t) => ids.includes(t.id) && t.adGroupId && t.status === "NONE");
+    const terms = pending(ids);
     if (!terms.length) return;
-    const ops: MutateOp[] = [
-      { kind: "keyword.create", keywords: terms.map((t) => ({ id: gid("k"), adGroupId: t.adGroupId, text: t.text, matchType: "EXACT" as const, status: "ENABLED" as const, policy: "UNDER_REVIEW" as const })) },
-      { kind: "searchTerm.mark", ids: terms.map((t) => t.id), status: "ADDED" },
-    ];
-    applyDirect(`Add ${terms.length} search term${terms.length > 1 ? "s" : ""} as keywords`, ops);
+    runAgentTurn(`Add these search terms as exact match keywords: ${terms.join(", ")}`);
     setSelected(new Set());
   };
   const addAsNegative = (ids: string[]) => {
-    const terms = data.searchTerms.filter((t) => ids.includes(t.id) && t.status === "NONE");
+    const terms = pending(ids);
     if (!terms.length) return;
-    applyDirect(`Exclude ${terms.length} search term${terms.length > 1 ? "s" : ""}`, [
-      { kind: "negative.create", negatives: terms.map((t) => ({ id: gid("n"), text: t.text, matchType: "EXACT" as const, level: "CAMPAIGN" as const, parentId: t.campaignId })) },
-      { kind: "searchTerm.mark", ids: terms.map((t) => t.id), status: "EXCLUDED" },
-    ]);
+    runAgentTurn(`Add these search terms as negative keywords: ${terms.join(", ")}`);
     setSelected(new Set());
   };
 
@@ -103,7 +95,7 @@ export function SearchTermsView() {
     <div>
       <ViewHeader
         title="Search terms"
-        subtitle="What people actually typed before they saw your ad. Add good ones as keywords, exclude the rest."
+        subtitle="What people actually typed before they saw your ad. Select terms and ask the agent to add good ones as keywords or block the rest."
         actions={
           <>
             <SearchBox value={query} onChange={setQuery} placeholder="Find a search term" />
@@ -136,8 +128,8 @@ export function SearchTermsView() {
         rowClassName={(t) => cn(metrics.get(t.id)!.cost > 8 && metrics.get(t.id)!.conversions < 0.5 && t.status === "NONE" && "bg-red-500/[0.03]")}
         bulkActions={(ids) => (
           <>
-            <BulkButton onClick={() => addAsKeyword(ids)}><Plus className="h-3 w-3" /> Add as keyword</BulkButton>
-            <BulkButton tone="danger" onClick={() => addAsNegative(ids)}><Ban className="h-3 w-3" /> Add as negative</BulkButton>
+            <BulkButton onClick={() => addAsKeyword(ids)}><Plus className="h-3 w-3" /> Ask agent to add as keyword</BulkButton>
+            <BulkButton tone="danger" onClick={() => addAsNegative(ids)}><Ban className="h-3 w-3" /> Ask agent to add as negative</BulkButton>
           </>
         )}
         empty="No search terms for this selection."

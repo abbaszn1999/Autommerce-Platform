@@ -10,6 +10,7 @@ import type {
   AdStrength,
   AdText,
   CampaignBundle,
+  ChangeTouched,
   CollectionKey,
   DiffRow,
   EntityStatus,
@@ -327,6 +328,99 @@ export function applyOps(data: AccountData, ops: MutateOp[]): { next: AccountDat
     inverse.unshift(...result.inverse);
   }
   return { next, inverse };
+}
+
+/** Which campaigns, ad groups and asset groups a set of ops touches (before = snapshot the ops ran on, after = the result). */
+export function touchedBy(before: AccountData, ops: MutateOp[], after: AccountData = before): ChangeTouched {
+  const campaigns = new Set<string>();
+  const adGroups = new Set<string>();
+  const assetGroups = new Set<string>();
+  const both = (id: string) => [...before.adGroups, ...after.adGroups].find((g) => g.id === id);
+  const addAdGroup = (id?: string) => {
+    if (!id) return;
+    adGroups.add(id);
+    const g = both(id);
+    if (g) campaigns.add(g.campaignId);
+  };
+  const addAssetGroup = (id?: string) => {
+    if (!id) return;
+    assetGroups.add(id);
+    const g = [...before.assetGroups, ...after.assetGroups].find((x) => x.id === id);
+    if (g) campaigns.add(g.campaignId);
+  };
+  const addLevel = (level: "ACCOUNT" | "CAMPAIGN" | "AD_GROUP" | "LIST", parentId?: string) => {
+    if (level === "CAMPAIGN" && parentId) campaigns.add(parentId);
+    if (level === "AD_GROUP") addAdGroup(parentId);
+  };
+  for (const op of ops) {
+    switch (op.kind) {
+      case "campaign.update":
+      case "campaign.remove":
+        campaigns.add(op.campaignId);
+        break;
+      case "budget.update":
+        for (const c of before.campaigns) if (c.budgetId === op.budgetId) campaigns.add(c.id);
+        break;
+      case "status.set":
+        for (const id of op.ids) {
+          if (op.entity === "CAMPAIGN") campaigns.add(id);
+          else if (op.entity === "AD_GROUP") addAdGroup(id);
+          else if (op.entity === "ASSET_GROUP") addAssetGroup(id);
+          else if (op.entity === "AD") addAdGroup(before.ads.find((a) => a.id === id)?.adGroupId);
+          else if (op.entity === "KEYWORD") addAdGroup(before.keywords.find((k) => k.id === id)?.adGroupId);
+          else {
+            const a = before.assets.find((x) => x.id === id);
+            if (a) addLevel(a.level, a.parentId);
+          }
+        }
+        break;
+      case "adGroup.create":
+        addAdGroup(op.adGroup.id);
+        campaigns.add(op.adGroup.campaignId);
+        break;
+      case "adGroup.update":
+        addAdGroup(op.adGroupId);
+        break;
+      case "keyword.create":
+        for (const k of op.keywords) addAdGroup(k.adGroupId);
+        break;
+      case "keyword.update":
+        addAdGroup(before.keywords.find((k) => k.id === op.keywordId)?.adGroupId);
+        break;
+      case "negative.create":
+        for (const n of op.negatives) addLevel(n.level, n.parentId);
+        break;
+      case "negative.remove":
+        for (const id of op.ids) {
+          const n = before.negatives.find((x) => x.id === id);
+          if (n) addLevel(n.level, n.parentId);
+        }
+        break;
+      case "ad.create":
+        for (const a of op.ads) addAdGroup(a.adGroupId);
+        break;
+      case "ad.update":
+        addAdGroup(before.ads.find((a) => a.id === op.adId)?.adGroupId);
+        break;
+      case "asset.create":
+        for (const a of op.assets) addLevel(a.level, a.parentId);
+        break;
+      case "audience.attach":
+        for (const t of op.targets) addLevel(t.level, t.parentId);
+        break;
+      case "assetGroup.update":
+        addAssetGroup(op.assetGroupId);
+        break;
+      case "collection.upsert":
+        for (const item of op.items as unknown as { campaignId?: string }[]) if (item.campaignId) campaigns.add(item.campaignId);
+        break;
+      default:
+        break;
+    }
+  }
+  // Campaigns that exist only after the ops ran were created by them.
+  if (ops.some((o) => o.kind === "campaign.create")) for (const c of after.campaigns) if (!before.campaigns.some((x) => x.id === c.id)) campaigns.add(c.id);
+  return { campaignIds: [...campaigns], adGroupIds: [...adGroups], assetGroupIds: [...assetGroups] };
 }
 
 // ─── Human-readable diffs ──────────────────────────────────────────────────

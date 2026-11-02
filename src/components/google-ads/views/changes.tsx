@@ -5,7 +5,7 @@ import { ArrowRight, Bot, Check, CheckCheck, ChevronDown, ClipboardCheck, Histor
 import { cn } from "@/lib/utils";
 import { useGoogleAds } from "@/lib/google-ads/store";
 import type { ChangeEvent, ChangeSource, DiffRow, ProposedChange } from "@/lib/google-ads/types";
-import { Card, EmptyState, Pill, ViewHeader } from "../ga-ui";
+import { Card, EmptyState, Pill, Segmented, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
 
 const SOURCE: Record<ChangeSource, { label: string; icon: typeof Bot; tone: "brand" | "neutral" | "warn" }> = {
@@ -137,15 +137,38 @@ function ChangeCard({ change }: { change: ProposedChange }) {
 }
 
 export function HistoryView() {
-  const { acc } = useGa();
+  const { acc, scope, campaign, adGroup, assetGroup } = useGa();
   const undo = useGoogleAds((s) => s.undo);
-  const events = acc.history;
+  const [all, setAll] = useState(false);
+  // Inside a campaign, ad group or asset group, history starts filtered to what was changed there.
+  const scoped = !!scope.campaignId;
+  const where = assetGroup?.name ?? adGroup?.name ?? campaign?.name ?? "";
+  const touches = (e: ChangeEvent) => {
+    const t = e.touched;
+    if (!t) return false;
+    if (scope.assetGroupId) return t.assetGroupIds.includes(scope.assetGroupId);
+    if (scope.adGroupId) return t.adGroupIds.includes(scope.adGroupId);
+    return t.campaignIds.includes(scope.campaignId!);
+  };
+  const events = scoped && !all ? acc.history.filter(touches) : acc.history;
 
   return (
     <div>
-      <ViewHeader title="Change history" subtitle="Every change made from here, by you or the agent. Undo restores the previous values." />
+      <ViewHeader title="Change history" subtitle={scoped && !all ? `Changes to ${where}. Undo restores the previous values.` : "Every change made from here, by you or the agent. Undo restores the previous values."}>
+        {scoped && (
+          <Segmented
+            value={all ? "all" : "here"}
+            onChange={(v) => setAll(v === "all")}
+            size="xs"
+            options={[
+              { value: "here", label: where, count: acc.history.filter(touches).length },
+              { value: "all", label: "All account", count: acc.history.length },
+            ]}
+          />
+        )}
+      </ViewHeader>
       {events.length === 0 ? (
-        <EmptyState icon={History} title="No changes yet" body="Changes you make or approve appear here with an undo button." />
+        <EmptyState icon={History} title="No changes yet" body={scoped && !all ? "Nothing has been changed here yet. Switch to All account to see every change." : "Changes the agent makes appear here with an undo button."} />
       ) : (
         <div className="relative space-y-3 pl-5 before:absolute before:bottom-2 before:left-[7px] before:top-2 before:w-px before:bg-border">
           {events.map((e) => (

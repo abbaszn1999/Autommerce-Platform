@@ -50,7 +50,7 @@ export function LandingPagesView() {
     }
     return [...byUrl.values()];
   }, [data, range, campaign]);
-  if (!campaign) return <NeedsSearchCampaign title="Landing pages" />;
+  if (!campaign) return <NeedsSearchCampaign title="Landing pages" kind="Search, Display or Demand Gen" />;
 
   const columns: GaColumn<PageRow>[] = [
     { id: "url", header: "Landing page", label: "Landing page", sticky: true, sortValue: (r) => r.url, render: (r) => <span className="flex items-center gap-2 font-semibold"><Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /><span className="block max-w-80 truncate">{r.url}</span></span> },
@@ -86,23 +86,52 @@ export function LandingPagesView() {
 
 // ─── Impression share ──────────────────────────────────────────────────────
 
+type ShareStats = { share: number; lost: number; lostBudget: number; lostRank: number; days: { date: string; searchImprShare?: number }[]; budget: number; avgCost: number };
+
+/** Search impression share for one campaign over the range (demo split of the loss into budget and rank). */
+function shareStats(data: ReturnType<typeof useGa>["data"], campaign: { id: string; budgetId: string }, range: { start: string; end: string }): ShareStats | null {
+  const points = (data.daily[campaign.id] ?? []).filter((p) => p.date >= range.start && p.date <= range.end);
+  const withShare = points.filter((p) => p.searchImprShare !== undefined);
+  if (!withShare.length) return null;
+  const share = withShare.reduce((s, p) => s + (p.searchImprShare ?? 0), 0) / withShare.length;
+  const lost = Math.max(0, 1 - share);
+  // Demo split: the closer the campaign gets to its daily budget, the more of the loss is budget.
+  const budget = data.budgets.find((b) => b.id === campaign.budgetId)?.amount ?? 0;
+  const avgCost = points.reduce((s, p) => s + p.cost, 0) / Math.max(1, points.length);
+  const util = budget ? Math.min(1, avgCost / budget) : 0;
+  const lostBudget = lost * Math.max(0, util - 0.5) * 2;
+  return { share, lost, lostBudget, lostRank: lost - lostBudget, days: withShare, budget, avgCost };
+}
+
+/** Account level: one row per Search or Shopping campaign. */
+function AccountImpressionShare() {
+  const { data, range } = useGa();
+  const rows = data.campaigns
+    .filter((c) => (c.type === "SEARCH" || c.type === "SHOPPING") && c.status !== "REMOVED")
+    .map((c) => ({ campaign: c, stats: shareStats(data, c, range) }))
+    .filter((r): r is { campaign: typeof r.campaign; stats: ShareStats } => !!r.stats);
+  const columns: GaColumn<(typeof rows)[number]>[] = [
+    { id: "campaign", header: "Campaign", label: "Campaign", sticky: true, sortValue: (r) => r.campaign.name, render: (r) => <span className="block max-w-64 truncate font-semibold">{r.campaign.name}</span> },
+    { id: "share", header: "Search impr. share", label: "Search impression share", align: "right", sortValue: (r) => r.stats.share, render: (r) => pct(r.stats.share, 0) },
+    { id: "budget", header: "Lost to budget", label: "Lost to budget", align: "right", sortValue: (r) => r.stats.lostBudget, render: (r) => <span className={cn(r.stats.lostBudget > 0.1 && "font-semibold text-amber-600")}>{pct(r.stats.lostBudget, 0)}</span> },
+    { id: "rank", header: "Lost to rank", label: "Lost to rank", align: "right", sortValue: (r) => r.stats.lostRank, render: (r) => <span className={cn(r.stats.lostRank > 0.15 && "font-semibold text-amber-600")}>{pct(r.stats.lostRank, 0)}</span> },
+  ];
+  return (
+    <div>
+      <ViewHeader
+        title="Impression share"
+        subtitle="How often each Search and Shopping campaign showed compared with how often it could have, and why it didn't."
+        actions={<button type="button" onClick={() => runAgentTurn("Which campaigns are losing the most impression share and why?")} className={AGENT_BTN}><Bot className="h-3.5 w-3.5" /> Analyse with agent</button>}
+      />
+      <GaTable rows={rows} columns={columns} rowKey={(r) => r.campaign.id} exportName="impression-share" defaultSort={{ id: "share", dir: "asc" }} empty="No Search or Shopping campaign has impression share yet." />
+    </div>
+  );
+}
+
 export function ImpressionShareView() {
   const { data, range, currency, campaign } = useGa();
-  const stats = useMemo(() => {
-    if (!campaign) return null;
-    const points = (data.daily[campaign.id] ?? []).filter((p) => p.date >= range.start && p.date <= range.end);
-    const withShare = points.filter((p) => p.searchImprShare !== undefined);
-    if (!withShare.length) return null;
-    const share = withShare.reduce((s, p) => s + (p.searchImprShare ?? 0), 0) / withShare.length;
-    const lost = Math.max(0, 1 - share);
-    // Demo split: the closer the campaign gets to its daily budget, the more of the loss is budget.
-    const budget = data.budgets.find((b) => b.id === campaign.budgetId)?.amount ?? 0;
-    const avgCost = points.reduce((s, p) => s + p.cost, 0) / Math.max(1, points.length);
-    const util = budget ? Math.min(1, avgCost / budget) : 0;
-    const lostBudget = lost * Math.max(0, util - 0.5) * 2;
-    return { share, lost, lostBudget, lostRank: lost - lostBudget, days: withShare, budget, avgCost };
-  }, [data, range, campaign]);
-  if (!campaign) return <NeedsSearchCampaign title="Impression share" kind="Search or Shopping" />;
+  const stats = useMemo(() => (campaign ? shareStats(data, campaign, range) : null), [data, range, campaign]);
+  if (!campaign) return <AccountImpressionShare />;
 
   return (
     <div className="space-y-4">

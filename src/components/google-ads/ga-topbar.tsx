@@ -9,6 +9,7 @@ import {
   History,
   Megaphone,
   Plug,
+  RefreshCw,
   Settings2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CAMPAIGN_TYPES, DATE_PRESETS } from "@/lib/google-ads/constants";
 import { formatCustomerId, formatRange } from "@/lib/google-ads/metrics";
+import { getDataSource } from "@/lib/google-ads/data-source";
 import { useAccountState, useGoogleAds } from "@/lib/google-ads/store";
 import type { DateRangePreset } from "@/lib/google-ads/types";
 import { StatusDot } from "./ga-ui";
@@ -32,6 +34,7 @@ export function GaTopbar() {
   const range = useGoogleAds((s) => s.range);
   const setRange = useGoogleAds((s) => s.setRange);
   const setView = useGoogleAds((s) => s.setView);
+  const refreshData = useGoogleAds((s) => s.refreshData);
   const email = useGoogleAds((s) => s.googleEmail);
   const merchantConnected = useGoogleAds((s) => !!s.merchant.merchantId);
   if (!acc) return null;
@@ -113,6 +116,17 @@ export function GaTopbar() {
       </div>
 
       <div className="ml-auto flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => void refreshData()}
+          disabled={acc.sync.status === "loading"}
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 px-2.5 text-xs hover:bg-muted disabled:opacity-60"
+          title={`${getDataSource().label}. Reload the latest numbers.`}
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5 text-muted-foreground", acc.sync.status === "loading" && "animate-spin")} />
+          <span className="hidden text-muted-foreground xl:inline">{acc.sync.status === "loading" ? "Refreshing" : `Updated ${new Date(acc.sync.refreshedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}</span>
+        </button>
+
         <DropdownMenu>
           <DropdownMenuTrigger className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 px-2.5 text-xs hover:bg-muted">
             <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
@@ -132,7 +146,7 @@ export function GaTopbar() {
 
         <button
           type="button"
-          onClick={() => { setScope({}); setView("history"); }}
+          onClick={() => setView("history")}
           className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 hover:bg-muted"
           title="Change history"
         >

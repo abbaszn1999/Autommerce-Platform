@@ -104,6 +104,16 @@ export const TAB_GROUPS: TabGroup[] = [
     ],
   },
   {
+    // Account level: how the whole account performs over time and across campaigns.
+    id: "insightsAccount",
+    label: "Insights",
+    show: (c) => !c.inCampaign,
+    tabs: [
+      { view: "impressionShare", label: "Impression share" },
+      { view: "trends", label: "Trends" },
+    ],
+  },
+  {
     // Search and Shopping both report impression share; price competitiveness is a Shopping (feed) report.
     id: "insightsSearch",
     label: "Insights",

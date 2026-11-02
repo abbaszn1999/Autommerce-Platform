@@ -1,14 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Ban, Bot, CheckCircle2, ChevronRight, Clock, ShoppingBag, Split, Trash2, Wand2, XCircle } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, ChevronRight, Clock, ShoppingBag, Split, Wand2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { groupMetrics, productMetrics, productsInGroup } from "@/lib/google-ads/analytics";
 import { money } from "@/lib/google-ads/metrics";
-import { gid } from "@/lib/google-ads/mutations";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import { useGoogleAds } from "@/lib/google-ads/store";
-import type { ListingDimension, ListingGroup, MutateOp, Product } from "@/lib/google-ads/types";
+import type { ListingDimension, ListingGroup, Product } from "@/lib/google-ads/types";
 import { metricColumns } from "../ga-columns";
 import { BulkButton, GaTable, type GaColumn } from "../ga-table";
 import { Card, EmptyState, ImageTile, Pill, Segmented, ViewHeader } from "../ga-ui";
@@ -257,8 +256,6 @@ function dimensionLabel(d: ListingDimension) {
 
 export function ProductGroupsView() {
   const { data, range, currency, campaign } = useGa();
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
-  const [subdividing, setSubdividing] = useState<string | null>(null);
   const metrics = useMemo(() => productMetrics(data, range), [data, range]);
   const nodes = data.listingGroups.filter((g) => g.campaignId === campaign?.id);
   const manual = campaign?.bidding.type === "MANUAL_CPC";
@@ -273,19 +270,6 @@ export function ProductGroupsView() {
   }
 
   const childrenOf = (id?: string) => nodes.filter((n) => n.parentId === id);
-  const descendants = (id: string): string[] => childrenOf(id).flatMap((c) => [c.id, ...descendants(c.id)]);
-
-  const subdivide = (node: ListingGroup, dimension: ListingDimension) => {
-    const meta = DIMENSIONS.find((d) => d.value === dimension)!;
-    const values = [...new Set(productsInGroup(data, node.id).map(meta.of).filter((v): v is string => !!v))].slice(0, 12);
-    const items: ListingGroup[] = [
-      ...values.map((v) => ({ id: gid("lg"), campaignId: campaign.id, parentId: node.id, dimension, value: v })),
-      { id: gid("lg"), campaignId: campaign.id, parentId: node.id, dimension: "OTHERS" as const, value: `Everything else in ${node.value}` },
-    ];
-    applyDirect(`Subdivide "${node.value}" by ${meta.label.toLowerCase()}`, [{ kind: "collection.upsert", collection: "listingGroups", items }]);
-    setSubdividing(null);
-  };
-
   const rows: { node: ListingGroup; depth: number }[] = [];
   const walk = (id: string | undefined, depth: number) => {
     for (const n of childrenOf(id)) {
@@ -322,38 +306,18 @@ export function ProductGroupsView() {
       id: "actions",
       header: "",
       align: "right",
-      render: ({ node }) => (
-        <span className="flex justify-end gap-1">
-          {!childrenOf(node.id).length && !node.excluded && node.dimension !== "ITEM_ID" && (
-            subdividing === node.id ? (
-              <select autoFocus onChange={(e) => e.target.value && subdivide(node, e.target.value as ListingDimension)} onBlur={() => setSubdividing(null)} className="h-7 rounded border border-input bg-background px-1 text-[11px]" defaultValue="">
-                <option value="">Subdivide by…</option>
-                {DIMENSIONS.map((d) => (
-                  <option key={d.value} value={d.value}>{d.label}</option>
-                ))}
-              </select>
-            ) : (
-              <BulkButton onClick={() => setSubdividing(node.id)}><Split className="h-3 w-3" /> Subdivide</BulkButton>
-            )
-          )}
-          {node.parentId && !childrenOf(node.id).length && (
-            <BulkButton onClick={() => applyDirect(`${node.excluded ? "Include" : "Exclude"} "${node.value}"`, [{ kind: "collection.upsert", collection: "listingGroups", items: [{ ...node, excluded: !node.excluded }] }])}>
-              {node.excluded ? "Include" : <><Ban className="h-3 w-3" /> Exclude</>}
-            </BulkButton>
-          )}
-          {childrenOf(node.id).length > 0 && (
-            <BulkButton tone="danger" onClick={() => applyDirect(`Remove subdivision of "${node.value}"`, [{ kind: "collection.remove", collection: "listingGroups", ids: descendants(node.id) } satisfies MutateOp])}>
-              <Trash2 className="h-3 w-3" /> Remove subdivision
-            </BulkButton>
-          )}
-        </span>
-      ),
+      render: ({ node }) =>
+        node.parentId && !childrenOf(node.id).length && node.dimension !== "ITEM_ID" ? (
+          <BulkButton onClick={() => runAgentTurn(`How should I split or bid on the product group "${node.value}" in ${campaign.name}?`)}>
+            <Bot className="h-3 w-3" /> Ask agent
+          </BulkButton>
+        ) : null,
     },
   ];
 
   return (
     <div>
-      <ViewHeader title="Product groups" subtitle="Split the campaign's products to bid differently or exclude some. Every level needs an 'Everything else' group so no product is left out." />
+      <ViewHeader title="Product groups" subtitle="How the campaign's products are split to bid differently or exclude some. To change the split, ask the agent." />
       <GaTable rows={rows} columns={columns} rowKey={(r) => r.node.id} exportName="product-groups" />
     </div>
   );

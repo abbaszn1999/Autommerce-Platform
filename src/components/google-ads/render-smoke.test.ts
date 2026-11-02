@@ -17,7 +17,7 @@ const originalUseSyncExternalStore = React.useSyncExternalStore;
 (React as { useSyncExternalStore: typeof React.useSyncExternalStore }).useSyncExternalStore = (subscribe, getSnapshot) =>
   originalUseSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-const VIEWS: GaView[] = ["overview", "campaigns", "adGroups", "ads", "assets", "keywords", "negatives", "searchTerms", "audiences", "locations", "schedule", "devices", "recommendations", "conversions", "library", "settings", "pending", "history", "products", "productGroups", "reports", "rules", "keywordPlanner", "experiments", "planner", "content", "demographics", "links", "accountSettings", "documents", "profile", "connections", "languages", "brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown", "landingPages", "impressionShare", "priceCompetitiveness", "contentExclusions", "adGroupSettings", "assetGroupAssets", "audienceSignals", "searchThemes", "assetGroupSettings"];
+const VIEWS: GaView[] = ["overview", "campaigns", "adGroups", "ads", "assets", "keywords", "negatives", "searchTerms", "audiences", "locations", "schedule", "devices", "recommendations", "conversions", "library", "settings", "pending", "history", "products", "productGroups", "reports", "rules", "keywordPlanner", "experiments", "planner", "content", "demographics", "links", "accountSettings", "documents", "profile", "connections", "languages", "brandExclusions", "channels", "searchCategories", "assetCombinations", "placementsShown", "landingPages", "impressionShare", "priceCompetitiveness", "contentExclusions", "adGroupSettings", "assetGroupAssets", "audienceSignals", "searchThemes", "assetGroupSettings", "trends"];
 
 /** The HTML of one landmark (the sidebar or the page), so assertions ignore the chat panel and top bar. */
 const part = (html: string, tag: string) => html.slice(html.indexOf("<" + tag), html.indexOf("</" + tag + ">"));
@@ -335,7 +335,7 @@ describe("render smoke", () => {
     expect(part(renderToString(createElement(GoogleAdsShell)), "main")).toContain("Running in an experiment");
     useGoogleAds.setState({ scope: { campaignId: "c_running" }, view: "overview" });
     expect(part(renderToString(createElement(GoogleAdsShell)), "main")).not.toContain("Running in an experiment");
-    // Landing pages are Search-only; Insights is Search, Shopping, Performance Max and Demand Gen only.
+    // Landing pages are for Search, Display and Demand Gen; Insights is Search, Shopping, Performance Max and Demand Gen only.
     expect(sidebar("c_shopping")).not.toContain("Landing pages");
     expect(sidebar("c_remarketing")).not.toContain("Insights");
   });
@@ -381,7 +381,8 @@ describe("render smoke", () => {
     for (const label of ["Ad groups", ">Ads<", "Assets", ">Audiences<", "Placements &amp; content", "Locations &amp; languages", "Campaign settings"]) {
       expect(display, label).toContain(label);
     }
-    for (const label of [">Keywords<", "Insights", ">Products<", "Product groups", "Landing pages"]) expect(display, label).not.toContain(label);
+    for (const label of [">Keywords<", "Insights", ">Products<", "Product groups"]) expect(display, label).not.toContain(label);
+    expect(display).toContain("Landing pages");
     useGoogleAds.setState({ scope: { campaignId: "c_remarketing" }, view: "content" });
     const shown = part(renderToString(createElement(GoogleAdsShell)), "main");
     for (const t of ["Where ads showed", "Exclusions", "Negative keywords"]) expect(shown, t).toContain(t);
@@ -411,7 +412,8 @@ describe("render smoke", () => {
       expect(dg, label).toContain(label);
     }
     // No keywords, placements, landing pages or products (no feed) at Demand Gen campaign level.
-    for (const label of [">Keywords<", "Placements &amp; content", "Landing pages", ">Products<", "Product groups"]) expect(dg, label).not.toContain(label);
+    for (const label of [">Keywords<", "Placements &amp; content", ">Products<", "Product groups"]) expect(dg, label).not.toContain(label);
+    expect(dg).toContain("Landing pages");
     const channels = main("channels");
     for (const t of ["YouTube Shorts", "YouTube in-feed", "Discover", "Gmail", "Share of spend"]) expect(channels, t).toContain(t);
     const settings = main("settings");

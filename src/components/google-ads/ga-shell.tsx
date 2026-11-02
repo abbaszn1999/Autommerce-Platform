@@ -21,6 +21,8 @@ import { KeywordsView, NegativesView } from "./views/keywords";
 import { LibraryView } from "./views/library";
 import { DevicesView, LanguagesView, LocationsView, ScheduleView } from "./views/locations";
 import { ImpressionShareView, LandingPagesView, PriceCompetitivenessView } from "./views/search-insights";
+import { TrendsView } from "./views/trends";
+import { GaSyncBanner, GaViewBoundary } from "./ga-view-boundary";
 import { AssetCombinationsView, BrandExclusionsView, ChannelsView, PlacementsShownView, SearchCategoriesView } from "./views/pmax-insights";
 import { GaViewTabs } from "./ga-view-tabs";
 import { OverviewView } from "./views/overview";
@@ -83,6 +85,7 @@ const VIEWS: Record<GaView, () => React.ReactNode> = {
   placementsShown: PlacementsShownView,
   landingPages: LandingPagesView,
   impressionShare: ImpressionShareView,
+  trends: TrendsView,
   priceCompetitiveness: PriceCompetitivenessView,
   contentExclusions: ContentExclusionsView,
   adGroupSettings: AdGroupSettingsView,
@@ -170,9 +173,12 @@ function Workspace() {
               <GaNav />
               <main className="min-w-0 flex-1 overflow-y-auto">
                 {/* Keyed so local view state (filters, selection) resets with the account or scope. */}
-                <div key={`${customerId}:${scope.campaignId ?? ""}:${scope.adGroupId ?? ""}:${view}`} className="mx-auto max-w-[1400px] px-5 py-5">
+                <div key={`${customerId}:${scope.campaignId ?? ""}:${scope.adGroupId ?? ""}:${scope.assetGroupId ?? ""}:${view}`} className="mx-auto max-w-[1400px] px-5 py-5">
+                  <GaSyncBanner />
                   <GaViewTabs />
-                  <View />
+                  <GaViewBoundary resetKey={`${customerId}:${scope.campaignId ?? ""}:${scope.adGroupId ?? ""}:${scope.assetGroupId ?? ""}:${view}`}>
+                    <View />
+                  </GaViewBoundary>
                 </div>
               </main>
             </div>

@@ -3,15 +3,12 @@
 import { useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Bot, CalendarClock, Lightbulb, Mail, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { Bot, CalendarClock, Lightbulb, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SEGMENTS, segmentRows, type SegmentRow } from "@/lib/google-ads/analytics";
-import { METRICS, addDays, derive, formatMetric } from "@/lib/google-ads/metrics";
-import { gid } from "@/lib/google-ads/mutations";
+import { METRICS, derive, formatMetric } from "@/lib/google-ads/metrics";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
-import { useGoogleAds } from "@/lib/google-ads/store";
-import type { MetricKey, ScheduledReport, SegmentKey } from "@/lib/google-ads/types";
+import type { MetricKey, SegmentKey } from "@/lib/google-ads/types";
 import { metricColumns } from "../ga-columns";
 import { GaChart } from "../ga-chart";
 import { GaTable, type GaColumn } from "../ga-table";
@@ -31,7 +28,6 @@ const SEGMENT_PROMPT: Partial<Record<SegmentKey, string>> = {
 
 export function ReportsView() {
   const { acc, data, range, currency, campaign } = useGa();
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
   const [segment, setSegment] = useState<SegmentKey>("device");
   const [metric, setMetric] = useState<MetricKey>("conversions");
   const ids = useMemo(() => scopedCampaignIds(data, campaign), [data, campaign]);
@@ -40,20 +36,8 @@ export function ReportsView() {
 
   const insight = useMemo(() => bestWorst(rows, currency), [rows, currency]);
 
-  const schedule = () => {
-    const report: ScheduledReport = {
-      id: gid("sr"),
-      name: `${SEGMENTS[segment].label} report${campaign ? ` · ${campaign.name}` : ""}`,
-      segment,
-      metrics: ["cost", "conversions", "conversionsValue", "roas"],
-      frequency: "WEEKLY",
-      recipients: ["owner@stride-demo.com"],
-      format: "PDF",
-      nextRun: addDays(new Date().toISOString().slice(0, 10), 7),
-    };
-    const res = applyDirect(`Schedule "${report.name}"`, [{ kind: "collection.upsert", collection: "scheduledReports", items: [report] }]);
-    if (res.ok) toast.success("Report scheduled weekly");
-  };
+  // View-only dashboard: scheduling is a request to the agent.
+  const schedule = () => runAgentTurn(`Email me the ${SEGMENTS[segment].label.toLowerCase()} report weekly${campaign ? ` for ${campaign.name}` : ""}`);
 
   const columns: GaColumn<SegmentRow>[] = [
     { id: "label", header: SEGMENTS[segment].label, label: SEGMENTS[segment].label, sticky: true, sortValue: (r) => (timeSeries || segment === "hour" || segment === "dayOfWeek" ? r.key : r.label), csv: (r) => r.label, render: (r) => <span className="font-semibold">{r.label}</span> },
@@ -125,7 +109,7 @@ export function ReportsView() {
 
       <div className="flex justify-end">
         <button type="button" onClick={schedule} className="inline-flex items-center gap-1.5 rounded-lg border border-border/70 px-3 py-1.5 text-xs font-semibold hover:bg-muted">
-          <CalendarClock className="h-3.5 w-3.5" /> Email this report weekly
+          <CalendarClock className="h-3.5 w-3.5" /> Ask agent to email this weekly
         </button>
       </div>
       <GaTable rows={rows} columns={columns} rowKey={(r) => r.key} exportName={`report-${segment}`} />
@@ -139,13 +123,10 @@ export function ReportsView() {
               <Pill>{r.frequency.toLowerCase()}</Pill>
               <Pill>{r.format}</Pill>
               <span className="text-muted-foreground">to {r.recipients.join(", ")} · next {r.nextRun}</span>
-              <button type="button" onClick={() => applyDirect(`Delete scheduled report "${r.name}"`, [{ kind: "collection.remove", collection: "scheduledReports", ids: [r.id] }])} className="ml-auto rounded p-1 text-muted-foreground hover:bg-red-500/10 hover:text-red-600" aria-label="Delete">
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
             </div>
           ))
         ) : (
-          <p className="text-xs text-muted-foreground">No scheduled reports.</p>
+          <p className="text-xs text-muted-foreground">No scheduled reports. Ask the agent to email one on a schedule.</p>
         )}
       </Card>
     </div>

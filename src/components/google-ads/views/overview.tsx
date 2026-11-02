@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Ban, Bot, FileWarning, FlaskConical, Gauge, Plus, Sparkles, TrendingUp, Wallet, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowRight, Ban, Bot, FileWarning, FlaskConical, Gauge, Sparkles, TrendingUp, Wallet, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BIDDING, CAMPAIGN_TYPES, SERVING_ISSUES } from "@/lib/google-ads/constants";
 import {
@@ -36,7 +36,6 @@ function ScopeOverview() {
   const { data, range, currency, campaign } = useGa();
   const setScope = useGoogleAds((s) => s.setScope);
   const setView = useGoogleAds((s) => s.setView);
-  const openEditor = useGoogleAds((s) => s.openEditor);
   const [tiles, setTiles] = useState<MetricKey[]>(["cost", "conversions", "conversionsValue", "roas"]);
   const [chart, setChart] = useState<[MetricKey, MetricKey]>(["cost", "conversions"]);
 
@@ -52,16 +51,13 @@ function ScopeOverview() {
         <EmptyState
           icon={Sparkles}
           title="Start your first campaign"
-          body="Build one step by step in the campaign editor, or describe what you sell and let the agent draft the whole campaign from your catalog."
+          body="Describe what you sell and the agent drafts the whole campaign from your catalog. You review it in the chat before anything goes live."
           action={
             <div className="flex flex-wrap justify-center gap-2">
-              <button type="button" onClick={() => openEditor()} className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold", ACCENT_BTN)}>
-                <Plus className="h-3.5 w-3.5" /> New campaign
-              </button>
               <button
                 type="button"
                 onClick={() => runAgentTurn("Create a Search campaign for running shoes in Saudi Arabia with $60/day")}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border/70 px-3 py-2 text-xs font-semibold hover:bg-muted"
+                className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold", ACCENT_BTN)}
               >
                 <Bot className="h-3.5 w-3.5" /> Ask the agent to build it
               </button>
@@ -198,7 +194,6 @@ function ExperimentNote({ campaignId }: { campaignId: string }) {
 
 function CampaignSummary() {
   const { data, campaign, currency } = useGa();
-  const openDialog = useGoogleAds((s) => s.openDialog);
   const setView = useGoogleAds((s) => s.setView);
   if (!campaign) return null;
   const budget = data.budgets.find((b) => b.id === campaign.budgetId);
@@ -212,9 +207,7 @@ function CampaignSummary() {
       </div>
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Daily budget</p>
-        <button type="button" onClick={() => openDialog({ kind: "budget", campaignId: campaign.id })} className="mt-0.5 text-sm font-semibold underline decoration-dotted underline-offset-4">
-          {budget ? money(budget.amount, currency) : "—"}
-        </button>
+        <p className="mt-0.5 text-sm font-semibold">{budget ? money(budget.amount, currency) : "—"}</p>
       </div>
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Bid strategy</p>

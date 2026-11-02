@@ -4,9 +4,8 @@ import { useState } from "react";
 import { Image as ImageIcon, Link2, Megaphone, Phone, Quote, Store, Tag, BadgePercent, List, MapPin, ClipboardList, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ASSET_TYPES } from "@/lib/google-ads/constants";
-import { useGoogleAds } from "@/lib/google-ads/store";
 import type { Asset, AssetType } from "@/lib/google-ads/types";
-import { Card, EmptyState, ImageTile, Pill, PolicyPill, Segmented, StatusMenu, ViewHeader } from "../ga-ui";
+import { Card, EmptyState, ImageTile, Pill, PolicyPill, Segmented, StatusDot, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
 
 const ICONS: Record<AssetType, LucideIcon> = {
@@ -27,7 +26,6 @@ type Filter = "ALL" | AssetType;
 
 export function AssetsView() {
   const { data, scope, campaign, adGroup } = useGa();
-  const applyDirect = useGoogleAds((s) => s.applyDirect);
   const [filter, setFilter] = useState<Filter>("ALL");
 
   const visible = data.assets.filter((a) => {
@@ -71,10 +69,7 @@ export function AssetsView() {
                 {items.map((a) => (
                   <Card key={a.id} className={cn("p-3.5", a.status === "PAUSED" && "opacity-70")}>
                     <div className="flex items-start gap-2">
-                      <StatusMenu
-                        status={a.status}
-                        onChange={(s) => applyDirect(`${s === "ENABLED" ? "Enable" : s === "PAUSED" ? "Pause" : "Remove"} ${ASSET_TYPES[a.type].label.toLowerCase()} "${a.title}"`, [{ kind: "status.set", entity: "ASSET", ids: [a.id], status: s }])}
-                      />
+                      <StatusDot status={a.status} className="mt-1" />
                       <div className="min-w-0 flex-1">
                         {(type === "IMAGE" || type === "BUSINESS_LOGO") && <ImageTile label={a.title} className="mb-2 w-20" />}
                         <p className="text-xs font-semibold">{type === "STRUCTURED_SNIPPET" ? `${a.title}: ` : ""}{type === "STRUCTURED_SNIPPET" ? a.lines?.join(", ") : a.title}</p>
