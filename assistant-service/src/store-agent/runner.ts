@@ -984,7 +984,7 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
       actorUserId: req.userId,
       runId: req.runId,
       credits,
-      details: { chatId: req.chatId, model: req.model.id, params: req.model.params, mode: req.mode, usage, usd, extraUsd, imagesGenerated, modelCalls },
+      details: { chatId: req.chatId, domain: req.domain ?? "store", model: req.model.id, params: req.model.params, mode: req.mode, usage, usd, extraUsd, imagesGenerated, modelCalls },
     }).catch((error) => ({ charged: 0, duplicate: false, error: String(error) }));
     return charge.error ?? null;
   });
