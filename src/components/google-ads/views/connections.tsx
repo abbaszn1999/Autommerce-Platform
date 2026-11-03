@@ -29,12 +29,14 @@ export function ConnectionsView() {
   const startMerchantConnect = useGoogleAds((s) => s.startMerchantConnect);
   const changeMerchantAccount = useGoogleAds((s) => s.changeMerchantAccount);
   const disconnectMerchant = useGoogleAds((s) => s.disconnectMerchant);
+  const live = useGoogleAds((s) => s.mode === "live");
 
   const mc = merchant.accounts.find((a) => a.merchantId === merchant.merchantId);
-  const link = mc ? merchantLinkState(data.account.merchantCenterId, mc.merchantId) : null;
+  const link = mc && !live ? merchantLinkState(data.account.merchantCenterId, mc.merchantId) : null;
 
+  // Live: the current connection stays until the new sign-in succeeds.
   const reconnectAds = () => {
-    disconnect();
+    if (!live) disconnect();
     startConnect();
   };
 
@@ -55,7 +57,7 @@ export function ConnectionsView() {
             <Pill tone="good">Connected</Pill>
           </div>
           <dl className="space-y-2 text-xs">
-            <Row k="Signed in as" v={email ?? "-"} />
+            {!live && <Row k="Signed in as" v={email ?? "-"} />}
             <Row k="Ad account" v={`${data.account.name} · ${formatCustomerId(data.account.customerId)}`} />
             <Row k="Access" v={<code className="rounded bg-muted px-1 text-[10px]">{ADS_SCOPE}</code>} />
           </dl>
@@ -84,9 +86,9 @@ export function ConnectionsView() {
           {mc ? (
             <>
               <dl className="space-y-2 text-xs">
-                <Row k="Signed in as" v={merchant.email ?? "-"} />
+                {!live && <Row k="Signed in as" v={merchant.email ?? "-"} />}
                 <Row k="Account" v={`${mc.name} · ${mc.merchantId}`} />
-                <Row k="Store" v={`${mc.website} · ${mc.country}`} />
+                {(mc.website || mc.country) && <Row k="Store" v={[mc.website, mc.country].filter(Boolean).join(" · ")} />}
                 <Row k="Access" v={<code className="rounded bg-muted px-1 text-[10px]">{MERCHANT_SCOPE}</code>} />
                 <Row
                   k="Linked to this ad account"

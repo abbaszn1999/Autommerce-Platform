@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useWorkspaceContext } from "@/app/(dashboard)/w/[workspaceSlug]/workspace-context";
 import { useGoogleAds } from "@/lib/google-ads/store";
 import type { GaView } from "@/lib/google-ads/types";
 import { GaCampaignEditor } from "./ga-campaign-editor";
@@ -102,11 +103,29 @@ const chatMax = () => Math.max(CHAT_MIN, Math.round(window.innerWidth * 0.6));
 
 /**
  * Google Ads agent workspace: agent chat on the left, a full Google Ads-style
- * account manager on the right. Front-end prototype on demo data.
+ * account manager on the right. `live` connects real Google accounts for this
+ * workspace; otherwise everything runs on demo data.
  */
-export function GoogleAdsShell() {
+export function GoogleAdsShell({ live = false }: { live?: boolean }) {
   const status = useGoogleAds((s) => s.status);
   const entered = useGoogleAds((s) => s.entered);
+  const workspaceId = useWorkspaceContext().workspace?.id;
+  const initLive = useGoogleAds((s) => s.initLive);
+
+  useEffect(() => {
+    if (!live || !workspaceId) return;
+    // Back from Google sign-in: read the result once, then drop it from the address bar.
+    const params = new URLSearchParams(window.location.search);
+    const notice = { result: params.get("google"), kind: params.get("kind") };
+    if (notice.result) {
+      params.delete("google");
+      params.delete("kind");
+      const rest = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
+    }
+    void initLive(workspaceId, notice);
+  }, [live, workspaceId, initLive]);
+
   // Connecting Google Ads alone stays on the connect screen until "Go to agent".
   const inWorkspace = status === "connected" && entered;
   return (

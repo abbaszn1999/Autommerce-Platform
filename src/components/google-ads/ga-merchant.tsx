@@ -116,6 +116,9 @@ function MerchantPicker() {
   const startAgain = useGoogleAds((s) => s.startMerchantConnect);
   const adsData = useAccountData();
   const adsName = adsData?.account.name;
+  // Live accounts don't load their Merchant Center link yet, so no badge rather than a wrong one.
+  const live = useGoogleAds((s) => s.mode === "live");
+  const busy = useGoogleAds((s) => s.live.busy);
 
   return (
     <Frame>
@@ -126,29 +129,30 @@ function MerchantPicker() {
           </span>
           <div>
             <h2 className="text-lg font-semibold leading-tight">Choose a Merchant Center account</h2>
-            <p className="text-xs text-muted-foreground">
-              Signed in as <span className="font-medium text-foreground">{merchant.email}</span>
-            </p>
+            {merchant.email && (
+              <p className="text-xs text-muted-foreground">
+                Signed in as <span className="font-medium text-foreground">{merchant.email}</span>
+              </p>
+            )}
           </div>
         </div>
         <div className="overflow-hidden rounded-xl border border-border/60">
           {merchant.accounts.map((a) => {
-            const link = adsData ? merchantLinkState(adsData.account.merchantCenterId, a.merchantId) : null;
+            const link = adsData && !live ? merchantLinkState(adsData.account.merchantCenterId, a.merchantId) : null;
             return (
               <button
                 key={a.merchantId}
                 type="button"
+                disabled={busy}
                 onClick={() => select(a.merchantId)}
-                className="flex w-full items-center gap-3 border-b border-border/40 px-4 py-3 text-left last:border-b-0 hover:bg-muted/40"
+                className="flex w-full items-center gap-3 border-b border-border/40 px-4 py-3 text-left last:border-b-0 hover:bg-muted/40 disabled:opacity-60"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F76D01]/10 text-[#F76D01]">
                   <ShoppingBag className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{a.name}</span>
-                  <span className="block text-[11px] text-muted-foreground">
-                    {a.merchantId} · {a.website} · {a.country}
-                  </span>
+                  <span className="block text-[11px] text-muted-foreground">{[a.merchantId, a.website, a.country].filter(Boolean).join(" · ")}</span>
                 </span>
                 {link === "LINKED" && (
                   <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Linked to {adsName}</span>

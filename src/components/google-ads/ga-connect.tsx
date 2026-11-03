@@ -44,6 +44,7 @@ const CANNOT = ["See or change billing and payment methods", "Spend beyond the b
 
 export function GaConnect() {
   const status = useGoogleAds((s) => s.status);
+  const live = useGoogleAds((s) => s.mode === "live");
   if (status === "selecting") return <AccountPicker />;
   return (
     <div className="autommerce-dashboard flex-1 overflow-auto bg-background [font-family:var(--brand-font)]">
@@ -57,7 +58,9 @@ export function GaConnect() {
                 <Megaphone className="h-4 w-4" />
               </span>
               <span className="text-[9px] font-black uppercase tracking-[0.24em] text-[#400095] dark:text-[#F76D01]">Agents · Google Ads</span>
-              <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">Preview · demo data</span>
+              <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                {live ? "Preview" : "Preview · demo data"}
+              </span>
             </div>
             <h1 className="text-3xl font-black tracking-[-0.035em] sm:text-5xl">
               Your Google Ads,
@@ -67,6 +70,7 @@ export function GaConnect() {
               Connect your account and manage everything in one place: campaigns, ad groups, keywords, ads, assets, audiences and
               conversions. Ask the agent to analyse, fix or build. It prepares the change, you approve it.
             </p>
+            <LiveNotice />
             <ConnectionTiles />
             <span className="mt-4 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <Lock className="h-3.5 w-3.5" /> Secure Google sign-in (OAuth). We never see your password.
@@ -123,7 +127,101 @@ export function GaConnect() {
         ))}
       </div>
 
-      {status === "authorizing" && <ConsentDialog />}
+      {status === "authorizing" && (live ? <CustomerIdDialog /> : <ConsentDialog />)}
+    </div>
+  );
+}
+
+/** Live mode: loading and errors from the server (a failed sign-in, missing rights, Google down). */
+function LiveNotice() {
+  const live = useGoogleAds((s) => s.live);
+  const isLive = useGoogleAds((s) => s.mode === "live");
+  const clear = useGoogleAds((s) => s.clearLiveError);
+  if (!isLive || (!live.error && !live.busy)) return null;
+  if (!live.error)
+    return (
+      <p className="mt-5 inline-flex items-center gap-2 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Talking to Google…
+      </p>
+    );
+  return (
+    <div role="alert" className="mt-5 flex max-w-lg items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-700 dark:text-red-400">
+      <span className="flex-1">{live.error}</span>
+      <button type="button" onClick={clear} className="font-semibold hover:underline">
+        Dismiss
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Live Google Ads sign-in asks for the customer ID first: it is the account (or
+ * manager account) every request is made through. Then the browser goes to Google.
+ */
+function CustomerIdDialog() {
+  const cancel = useGoogleAds((s) => s.cancelConnect);
+  const start = useGoogleAds((s) => s.startLiveConnect);
+  const busy = useGoogleAds((s) => s.live.busy);
+  const error = useGoogleAds((s) => s.live.error);
+  const [value, setValue] = useState("");
+  const digits = value.replace(/[\s-]/g, "");
+  const valid = /^\d{10}$/.test(digits);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <motion.form
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valid && !busy) void start("ads", digits);
+        }}
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-background p-6 shadow-2xl"
+      >
+        <div className="mb-4 flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#400095]/10 text-[#400095] dark:bg-violet-500/15 dark:text-violet-300">
+            <Megaphone className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-lg font-semibold leading-tight">Connect Google Ads</h2>
+            <p className="text-xs text-muted-foreground">Next you sign in with Google and allow access.</p>
+          </div>
+        </div>
+        <label htmlFor="ga-customer-id" className="text-xs font-semibold">
+          Google Ads customer ID
+        </label>
+        <input
+          id="ga-customer-id"
+          autoFocus
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="123-456-7890"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="mt-1.5 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm tabular-nums outline-none focus:border-[#400095] dark:focus:border-[#F76D01]"
+        />
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+          It&apos;s the 10-digit number at the top right of Google Ads. If you reach your accounts through a manager account (MCC), enter the manager&apos;s
+          ID. You choose the ad account after signing in.
+        </p>
+        {error && (
+          <p role="alert" className="mt-3 text-xs text-red-600">
+            {error}
+          </p>
+        )}
+        <div className="mt-6 flex justify-end gap-2">
+          <button type="button" onClick={cancel} className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!valid || busy}
+            className="inline-flex items-center gap-2 rounded-lg bg-[#4285F4] px-5 py-2 text-sm font-medium text-white hover:bg-[#3367d6] disabled:opacity-60"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <GoogleMark className="h-4 w-4 rounded-full bg-white" />} Continue with Google
+          </button>
+        </div>
+      </motion.form>
     </div>
   );
 }
@@ -334,9 +432,15 @@ function AccountPicker() {
   const email = useGoogleAds((s) => s.googleEmail);
   const chooseAccount = useGoogleAds((s) => s.chooseAccount);
   const disconnect = useGoogleAds((s) => s.disconnect);
+  const startConnect = useGoogleAds((s) => s.startConnect);
   const current = useGoogleAds((s) => s.customerId);
+  const isLive = useGoogleAds((s) => s.mode === "live");
+  const live = useGoogleAds((s) => s.live);
   const manager = accessible.find((a) => a.isManager);
-  const clients = accessible.filter((a) => !a.isManager);
+  // Live sign-ins can reach several managers; their own rows aren't pickable, their clients are.
+  const unusable = new Set(live.unusable);
+  // Accounts you can pick come first; cancelled ones sink to the bottom.
+  const clients = accessible.filter((a) => !a.isManager).sort((a, b) => Number(unusable.has(a.customerId)) - Number(unusable.has(b.customerId)));
 
   return (
     <div className="autommerce-dashboard flex flex-1 items-start justify-center overflow-auto bg-background px-4 py-12 [font-family:var(--brand-font)]">
@@ -347,9 +451,24 @@ function AccountPicker() {
           </span>
           <h1 className="text-2xl font-black tracking-tight">Choose an ad account</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Signed in as <span className="font-medium text-foreground">{email}</span>. The agent works on one account at a time; you can switch later.
+            {email && (
+              <>
+                Signed in as <span className="font-medium text-foreground">{email}</span>.{" "}
+              </>
+            )}
+            The agent works on one account at a time; you can switch later.
           </p>
         </div>
+        {isLive && live.error && (
+          <p role="alert" className="mb-3 rounded-xl border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-700 dark:text-red-400">
+            {live.error}
+          </p>
+        )}
+        {isLive && !clients.length && !live.busy && (
+          <p className="mb-3 rounded-xl border border-border/60 bg-muted/40 px-3 py-3 text-xs text-muted-foreground">
+            This Google sign-in can&apos;t reach any Google Ads account. Sign in with the Google account that has access to your ads.
+          </p>
+        )}
 
         <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
           {manager && (
@@ -365,26 +484,37 @@ function AccountPicker() {
           {clients.map((acc) => {
             const data = accounts[acc.customerId]?.data;
             const count = data?.campaigns.length ?? 0;
+            const off = unusable.has(acc.customerId);
+            const details = [formatCustomerId(acc.customerId), acc.currency, acc.timeZone].filter(Boolean).join(" · ");
             return (
               <button
                 key={acc.customerId}
                 type="button"
+                disabled={off || live.busy}
                 onClick={() => chooseAccount(acc.customerId)}
-                className={cn("flex w-full items-center gap-3 border-b border-border/40 px-4 py-4 text-left transition-colors last:border-b-0 hover:bg-muted/40", manager && "pl-9")}
+                className={cn(
+                  "flex w-full items-center gap-3 border-b border-border/40 px-4 py-4 text-left transition-colors last:border-b-0 hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent",
+                  manager && acc.managerCustomerId && "pl-9"
+                )}
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#400095]/10 text-[#400095] dark:bg-violet-500/15 dark:text-violet-300">
                   <Megaphone className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold">{acc.name}</span>
-                  <span className="block text-[11px] text-muted-foreground">
-                    {formatCustomerId(acc.customerId)} · {acc.currency} · {acc.timeZone}
-                  </span>
+                  {/* Google gives no name for accounts it won't open; the number alone is enough then. */}
+                  <span className="block truncate text-sm font-semibold">{off && acc.name === acc.customerId ? formatCustomerId(acc.customerId) : acc.name}</span>
+                  {!(off && acc.name === acc.customerId) && <span className="block text-[11px] text-muted-foreground">{details}</span>}
                 </span>
-                <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", count ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
-                  {count ? `${count} campaigns` : "No campaigns yet"}
-                </span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                {off ? (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">Not active</span>
+                ) : (
+                  !isLive && (
+                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", count ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
+                      {count ? `${count} campaigns` : "No campaigns yet"}
+                    </span>
+                  )
+                )}
+                {!off && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
               </button>
             );
           })}
@@ -395,9 +525,15 @@ function AccountPicker() {
               Back
             </button>
           )}
-          <button type="button" onClick={disconnect} className="text-xs text-muted-foreground hover:text-foreground">
+          {/* Live: a new sign-in replaces this one only once it succeeds. */}
+          <button type="button" onClick={isLive ? startConnect : disconnect} className="text-xs text-muted-foreground hover:text-foreground">
             Use a different Google account
           </button>
+          {isLive && (
+            <button type="button" onClick={disconnect} className="text-xs text-red-600 hover:underline">
+              Disconnect
+            </button>
+          )}
         </div>
       </motion.div>
     </div>

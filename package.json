@@ -18,6 +18,7 @@
     "storage:restore-drill": "node scripts/backup-workspace-storage.mjs --restore-dry-run ./backups/storage"
   },
   "dependencies": {
+    "@composio/core": "0.25.0",
     "@google/genai": "^2.13.0",
     "@renderinc/sdk": "^1.0.0",
     "@sentry/nextjs": "^10.73.0",

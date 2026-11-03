@@ -60,6 +60,7 @@ function summarize(chat: ChatThread, acc: NonNullable<ReturnType<typeof useAccou
 export function GaChat({ width }: { width: number }) {
   const acc = useAccountState();
   const agentBusy = useGoogleAds((s) => s.agentBusy);
+  const live = useGoogleAds((s) => s.mode === "live");
   const busyChatId = useGoogleAds((s) => s.busyChatId);
   const newChat = useGoogleAds((s) => s.newChat);
   const selectChat = useGoogleAds((s) => s.selectChat);
@@ -164,7 +165,7 @@ export function GaChat({ width }: { width: number }) {
         <GaComposer key={chat.id} busy={agentBusy} mode={chat.mode} onModeChange={setChatMode} onSend={send} accountName={acc.data.account.name} />
         <div className="mt-1.5 flex items-center justify-center gap-1.5 text-[10.5px] text-muted-foreground/70">
           <Megaphone className="h-3 w-3 shrink-0" />
-          <span className="truncate">Demo data, nothing reaches Google Ads · Alt+N new chat</span>
+          <span className="truncate">{live ? "Preview: changes stay here, nothing reaches Google Ads yet" : "Demo data, nothing reaches Google Ads"} · Alt+N new chat</span>
         </div>
       </div>
     </aside>

@@ -13,6 +13,7 @@ import { applyOps, describeOps, gid, touchedBy } from "./mutations";
 import { validateOps } from "./validation";
 import { DEFAULT_PROFILE, seedMemories, type AgentDoc, type AgentMemory, type BusinessProfile } from "./docs";
 import { seedDocs } from "./agent-docs";
+import { LiveApiError, liveApi, type LiveConnection, type LiveKind } from "./live-api";
 import type {
   AccountData,
   AgentMessage,
@@ -44,6 +45,22 @@ export type MerchantConnection = {
 };
 
 const NO_MERCHANT: MerchantConnection = { status: "disconnected", email: null, accounts: [], merchantId: null };
+
+/**
+ * "demo": simulated sign-in and sample accounts, all in memory.
+ * "live": real Google sign-in through /api/google-ads/connection for one workspace.
+ */
+export type ConnectionMode = "demo" | "live";
+
+export type LiveState = {
+  /** A request to the server is running (connect, list, select, disconnect). */
+  busy: boolean;
+  error: string | null;
+  /** Accounts in the picker that Google won't let us use (cancelled, not enabled). */
+  unusable: string[];
+};
+
+const LIVE_IDLE: LiveState = { busy: false, error: null, unusable: [] };
 
 export type GaDialog =
   | { kind: "adGroup"; campaignId?: string }
@@ -87,6 +104,9 @@ type GaStore = {
   /** The user pressed "Go to agent". Connecting Google Ads alone doesn't open the workspace. */
   entered: boolean;
   merchant: MerchantConnection;
+  mode: ConnectionMode;
+  workspaceId: string | null;
+  live: LiveState;
 
   view: GaView;
   scope: GaScope;
@@ -97,6 +117,14 @@ type GaStore = {
   busyChatId: string | null;
   editor: { open: boolean; draft?: CampaignBundle; changeId?: string };
   dialog: GaDialog | null;
+
+  /** Switch to real connections for a workspace and load what it has connected. */
+  initLive: (workspaceId: string, notice?: { result: string | null; kind: string | null }) => Promise<void>;
+  /** Live mode: send the browser to Google sign-in. Google Ads needs the customer ID first. */
+  startLiveConnect: (kind: LiveKind, loginCustomerId?: string) => Promise<void>;
+  clearLiveError: () => void;
+  /** Close the sign-in step without touching an existing connection. */
+  cancelConnect: () => void;
 
   startConnect: () => void;
   completeAuth: () => void;
@@ -265,7 +293,100 @@ function ensureChat(a: AccountState): AccountState {
   return { ...a, chats: [fresh, ...a.chats], openChatIds: [fresh.id], activeChatId: fresh.id };
 }
 
-export const useGoogleAds = create<GaStore>((set, get) => ({
+function freshAccountState(data: AccountData, docs: AgentDoc[] = []): AccountState {
+  const first = newThread();
+  return {
+    data,
+    changes: [],
+    history: [],
+    chats: [first],
+    openChatIds: [first.id],
+    activeChatId: first.id,
+    docs,
+    openDocIds: [],
+    activeTab: "account",
+    profile: { ...DEFAULT_PROFILE, businessName: data.account.name },
+    memories: data.campaigns.length ? seedMemories() : [],
+    sync: freshSync(),
+  };
+}
+
+type LiveAccountFields = Pick<GoogleAccount, "customerId" | "name" | "currency" | "timeZone" | "isManager" | "managerCustomerId">;
+
+function liveGoogleAccount(a: LiveAccountFields): GoogleAccount {
+  return {
+    customerId: a.customerId,
+    name: a.name,
+    currency: a.currency,
+    timeZone: a.timeZone,
+    isManager: a.isManager,
+    managerCustomerId: a.managerCustomerId,
+    optimizationScore: 0,
+    autoTagging: false,
+  };
+}
+
+/** A real account starts empty; its campaigns and reports load from Google in a later step. */
+function liveAccountData(account: GoogleAccount): AccountData {
+  return { ...buildEmptyAccount(), account, audiences: [], conversions: [] };
+}
+
+const liveMerchant = (merchantId: string, name: string, website = ""): MerchantAccount => ({ merchantId, name, website, country: "" });
+
+export const useGoogleAds = create<GaStore>((set, get) => {
+  /** Run a live request for the current workspace, showing busy and any error. */
+  const liveRun = async (fn: (workspaceId: string) => Promise<void>) => {
+    const workspaceId = get().workspaceId;
+    if (!workspaceId) return;
+    set((s) => ({ live: { ...s.live, busy: true, error: null } }));
+    try {
+      await fn(workspaceId);
+      set((s) => ({ live: { ...s.live, busy: false } }));
+    } catch (err) {
+      set((s) => ({ live: { ...s.live, busy: false, error: err instanceof LiveApiError ? err.message : "Something went wrong. Try again." } }));
+    }
+  };
+
+  const loadAdsOptions = async (workspaceId: string) => {
+    const { accounts } = await liveApi.adsAccounts(workspaceId);
+    set((s) => ({
+      status: "selecting",
+      entered: false,
+      accessible: accounts.map(liveGoogleAccount),
+      live: { ...s.live, unusable: accounts.filter((a) => !a.usable).map((a) => a.customerId) },
+    }));
+  };
+
+  const openAdsAccount = (account: GoogleAccount, entered: boolean) =>
+    set((s) => ({
+      status: "connected",
+      entered,
+      customerId: account.customerId,
+      accessible: s.accessible.some((a) => a.customerId === account.customerId) ? s.accessible : [account],
+      accounts: { ...s.accounts, [account.customerId]: s.accounts[account.customerId] ?? freshAccountState(liveAccountData(account)) },
+      view: "overview",
+      scope: {},
+      editor: { open: false },
+      dialog: null,
+    }));
+
+  const chooseLive = (customerId: string, entered: boolean) =>
+    liveRun(async (workspaceId) => {
+      const { account } = await liveApi.select(workspaceId, "ads", customerId);
+      openAdsAccount(liveGoogleAccount(account as LiveAccountFields), entered);
+    });
+
+  const loadMerchantOptions = async (workspaceId: string) => {
+    const { accounts } = await liveApi.merchantAccounts(workspaceId);
+    set((s) => ({ merchant: { ...s.merchant, status: "selecting", accounts: accounts.map((a) => liveMerchant(a.merchantId, a.name, a.website)) } }));
+  };
+
+  const connectedAccount = (c: LiveConnection): GoogleAccount | null =>
+    c.status === "connected" && c.accountId
+      ? liveGoogleAccount({ customerId: c.accountId, name: c.accountName ?? c.accountId, currency: c.currency ?? "", timeZone: c.timeZone ?? "", isManager: false })
+      : null;
+
+  return {
   status: "disconnected",
   googleEmail: null,
   accessible: [],
@@ -273,6 +394,9 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
   customerId: null,
   entered: false,
   merchant: NO_MERCHANT,
+  mode: "demo",
+  workspaceId: null,
+  live: LIVE_IDLE,
 
   view: "overview",
   scope: {},
@@ -283,68 +407,130 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
   editor: { open: false },
   dialog: null,
 
+  initLive: async (workspaceId, notice) => {
+    set({
+      mode: "live",
+      workspaceId,
+      status: "disconnected",
+      entered: false,
+      googleEmail: null,
+      accessible: [],
+      accounts: {},
+      customerId: null,
+      merchant: NO_MERCHANT,
+      live: { ...LIVE_IDLE, busy: true },
+    });
+    try {
+      const c = await liveApi.connections(workspaceId);
+      if (!c.configured) throw new LiveApiError("Google Ads isn't set up on this server yet.");
+      const ads = connectedAccount(c.ads);
+      if (ads) openAdsAccount(ads, false);
+      else if (c.ads.status === "selecting") await loadAdsOptions(workspaceId);
+      if (c.merchant.status === "connected" && c.merchant.accountId)
+        set({ merchant: { status: "connected", email: null, merchantId: c.merchant.accountId, accounts: [liveMerchant(c.merchant.accountId, c.merchant.accountName ?? c.merchant.accountId)] } });
+      else if (c.merchant.status === "selecting") await loadMerchantOptions(workspaceId);
+      const failed = notice?.result === "failed";
+      const which = notice?.kind === "merchant" ? "Merchant Center" : "Google Ads";
+      set((s) => ({ live: { ...s.live, busy: false, error: failed ? `${which} sign-in didn't finish. Try again.` : null } }));
+    } catch (err) {
+      set((s) => ({ live: { ...s.live, busy: false, error: err instanceof LiveApiError ? err.message : "Couldn't load the Google connection." } }));
+    }
+  },
+
+  startLiveConnect: async (kind, loginCustomerId) => {
+    const workspaceId = get().workspaceId;
+    if (!workspaceId) return;
+    set((s) => ({ live: { ...s.live, busy: true, error: null } }));
+    try {
+      const { redirectUrl } = await liveApi.start(workspaceId, kind, loginCustomerId);
+      // Stay busy: the page is leaving for Google.
+      window.location.assign(redirectUrl);
+    } catch (err) {
+      set((s) => ({ live: { ...s.live, busy: false, error: err instanceof LiveApiError ? err.message : "Couldn't start Google sign-in." } }));
+    }
+  },
+
+  clearLiveError: () => set((s) => ({ live: { ...s.live, error: null } })),
+
+  cancelConnect: () => set((s) => ({ status: s.customerId ? "connected" : s.accessible.length ? "selecting" : "disconnected" })),
+
   startConnect: () => set({ status: "authorizing" }),
 
   completeAuth: () => {
     const demo = buildDemoAccount();
     const second = buildSecondAccount();
     const empty = buildEmptyAccount();
-    const fresh = (data: AccountData, docs: AgentDoc[] = []): AccountState => {
-      const first = newThread();
-      return {
-        data,
-        changes: [],
-        history: [],
-        chats: [first],
-        openChatIds: [first.id],
-        activeChatId: first.id,
-        docs,
-        openDocIds: [],
-        activeTab: "account",
-        profile: { ...DEFAULT_PROFILE, businessName: data.account.name },
-        memories: data.campaigns.length ? seedMemories() : [],
-        sync: freshSync(),
-      };
-    };
     set({
       status: "selecting",
       googleEmail: DEMO_GOOGLE_EMAIL,
       accessible: [MANAGER_ACCOUNT, demo.account, second.account, empty.account],
       accounts: {
-        [demo.account.customerId]: fresh(demo, seedDocs(demo)),
-        [second.account.customerId]: fresh(second),
-        [empty.account.customerId]: fresh(empty),
+        [demo.account.customerId]: freshAccountState(demo, seedDocs(demo)),
+        [second.account.customerId]: freshAccountState(second),
+        [empty.account.customerId]: freshAccountState(empty),
       },
     });
   },
 
-  chooseAccount: (customerId) =>
-    set({ status: "connected", entered: false, customerId, view: "overview", scope: {}, editor: { open: false }, dialog: null }),
+  chooseAccount: (customerId) => {
+    if (get().mode === "live") return void chooseLive(customerId, false);
+    set({ status: "connected", entered: false, customerId, view: "overview", scope: {}, editor: { open: false }, dialog: null });
+  },
 
-  selectAccount: (customerId) =>
-    set({ status: "connected", entered: true, customerId, view: "overview", scope: {}, editor: { open: false }, dialog: null }),
+  selectAccount: (customerId) => {
+    if (get().mode === "live" && customerId !== get().customerId) return void chooseLive(customerId, true);
+    set({ status: "connected", entered: true, customerId, view: "overview", scope: {}, editor: { open: false }, dialog: null });
+  },
 
-  changeAccount: () => set((s) => (s.status === "connected" ? { status: "selecting", entered: false } : {})),
+  changeAccount: () => {
+    if (get().mode === "live") return void liveRun(loadAdsOptions);
+    set((s) => (s.status === "connected" ? { status: "selecting", entered: false } : {}));
+  },
 
   enterWorkspace: () => set((s) => (s.status === "connected" && s.customerId ? { entered: true, view: "overview", scope: {} } : {})),
 
-  disconnect: () =>
-    set({ status: "disconnected", entered: false, googleEmail: null, accessible: [], accounts: {}, customerId: null, view: "overview", scope: {} }),
+  disconnect: () => {
+    const reset = () =>
+      set({ status: "disconnected", entered: false, googleEmail: null, accessible: [], accounts: {}, customerId: null, view: "overview", scope: {} });
+    if (get().mode !== "live") return reset();
+    void liveRun(async (workspaceId) => {
+      await liveApi.disconnect(workspaceId, "ads");
+      reset();
+    });
+  },
 
-  startMerchantConnect: () => set((s) => ({ merchant: { ...s.merchant, status: "authorizing" } })),
+  startMerchantConnect: () => {
+    if (get().mode === "live") return void get().startLiveConnect("merchant");
+    set((s) => ({ merchant: { ...s.merchant, status: "authorizing" } }));
+  },
 
   completeMerchantAuth: () =>
     set((s) => ({ merchant: { ...s.merchant, status: "selecting", email: DEMO_GOOGLE_EMAIL, accounts: MERCHANT_ACCOUNTS } })),
 
-  selectMerchantAccount: (merchantId) =>
-    set((s) => (s.merchant.accounts.some((a) => a.merchantId === merchantId) ? { merchant: { ...s.merchant, status: "connected", merchantId } } : {})),
+  selectMerchantAccount: (merchantId) => {
+    if (get().mode === "live")
+      return void liveRun(async (workspaceId) => {
+        await liveApi.select(workspaceId, "merchant", merchantId);
+        set((s) => ({ merchant: { ...s.merchant, status: "connected", merchantId } }));
+      });
+    set((s) => (s.merchant.accounts.some((a) => a.merchantId === merchantId) ? { merchant: { ...s.merchant, status: "connected", merchantId } } : {}));
+  },
 
-  changeMerchantAccount: () => set((s) => (s.merchant.email ? { merchant: { ...s.merchant, status: "selecting", accounts: MERCHANT_ACCOUNTS } } : {})),
+  changeMerchantAccount: () => {
+    if (get().mode === "live") return void liveRun(loadMerchantOptions);
+    set((s) => (s.merchant.email ? { merchant: { ...s.merchant, status: "selecting", accounts: MERCHANT_ACCOUNTS } } : {}));
+  },
 
   cancelMerchantConnect: () =>
     set((s) => ({ merchant: s.merchant.merchantId ? { ...s.merchant, status: "connected" } : NO_MERCHANT })),
 
-  disconnectMerchant: () => set({ merchant: NO_MERCHANT }),
+  disconnectMerchant: () => {
+    if (get().mode !== "live") return set({ merchant: NO_MERCHANT });
+    void liveRun(async (workspaceId) => {
+      await liveApi.disconnect(workspaceId, "merchant");
+      set({ merchant: NO_MERCHANT });
+    });
+  },
 
   setView: (view) => set({ view }),
 
@@ -624,7 +810,8 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
     ),
 
   setChatMode: (mode) => set((s) => withAccount(s, (a) => ({ ...a, chats: a.chats.map((c) => (c.id === a.activeChatId ? { ...c, mode } : c)) }))),
-}));
+  };
+});
 
 /** The selected account's state; null until an account is picked. */
 export function useAccountState(): AccountState | null {

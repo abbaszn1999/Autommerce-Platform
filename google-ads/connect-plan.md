@@ -227,7 +227,7 @@ Referrer-Policy: no-referrer
 
 - **Google Cloud:** مشروع `autommerce` (رقم 630607511282)، وفيه Google Ads API و Merchant API مفعّلان، وشاشة الموافقة (External, Testing)، وعميل OAuth "Autommerce Composio". طلب Explorer قُدّم.
 - **Composio Auth Configs** (بياناتنا الخاصة، redirect v3، developer token فارغ):
-  - `autommerce-googleads` → `ac_bhTLP2w5Pcxm` (scope `adwords`)
+  - `autommerce-googleads` → `ac_bhTlP2w5Pcxm` (scope `adwords`)
   - `autommerce-merchant` (scope `content`)
 - **Google Ads:**
   - ✅ ربط حساب، وقراءة الحسابات (Kalema `204-636-2164` يعمل).
