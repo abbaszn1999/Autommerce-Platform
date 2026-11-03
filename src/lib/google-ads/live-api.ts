@@ -1,7 +1,7 @@
 // Browser calls to /api/google-ads/connection and /api/google-ads/data. The store
 // uses these in live mode; demo mode never touches the network.
 
-import type { AccountData } from "./types";
+import type { AccountData, MutateOp } from "./types";
 
 export type LiveKind = "ads" | "merchant";
 
@@ -40,6 +40,9 @@ export const LIVE_ERRORS: Record<string, string> = {
   connect_failed: "Couldn't start Google sign-in. Try again.",
   network: "Couldn't reach the connection service. Check your internet and try again.",
   no_account: "Pick a Google Ads account first.",
+  cannot_undo: "This change was already undone, or can't be undone.",
+  invalid_change: "This change couldn't be read. Nothing was sent.",
+  too_large: "This change is too large to send at once. Split it up.",
   invalid_range: "That date range can't be loaded.",
 };
 
@@ -73,6 +76,20 @@ export const liveApi = {
     }),
 
   disconnect: (workspaceId: string, kind: LiveKind) => call<{ ok: true }>(`/api/google-ads/connection?${qs({ workspaceId, kind })}`, { method: "DELETE" }),
+
+  /**
+   * Send an approved change (or an undo) to Google Ads. A refusal (Google's or our
+   * safety checks) comes back as `failed` with the reason; only transport problems throw.
+   */
+  change: async (
+    body: { workspaceId: string; clientChangeId: string } & ({ title: string; source: string; ops: MutateOp[] } | { undoOf: string })
+  ): Promise<{ status: "applied"; id: string; inverse: MutateOp[]; warnings: string[] } | { status: "failed"; id: string; error: string }> => {
+    const res = await fetch("/api/google-ads/changes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
+    const data = (await res.json().catch(() => ({}))) as { status?: string; error?: string };
+    if (res.status === 422 && data.status === "failed") return data as { status: "failed"; id: string; error: string };
+    if (!res.ok) throw new LiveApiError(LIVE_ERRORS[data.error ?? ""] ?? "Couldn't reach Google Ads. Try again; the change is never sent twice.");
+    return data as { status: "applied"; id: string; inverse: MutateOp[]; warnings: string[] };
+  },
 
   /** Read-only snapshot of the chosen Google Ads account for a date range. */
   account: (workspaceId: string, range: { start: string; end: string }, force: boolean) =>

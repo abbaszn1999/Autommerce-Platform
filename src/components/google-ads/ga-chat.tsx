@@ -165,7 +165,7 @@ export function GaChat({ width }: { width: number }) {
         <GaComposer key={chat.id} busy={agentBusy} mode={chat.mode} onModeChange={setChatMode} onSend={send} accountName={acc.data.account.name} />
         <div className="mt-1.5 flex items-center justify-center gap-1.5 text-[10.5px] text-muted-foreground/70">
           <Megaphone className="h-3 w-3 shrink-0" />
-          <span className="truncate">{live ? "Preview: changes stay here, nothing reaches Google Ads yet" : "Demo data, nothing reaches Google Ads"} · Alt+N new chat</span>
+          <span className="truncate">{live ? "Live account: changes reach Google Ads only after you approve them" : "Demo data, nothing reaches Google Ads"} · Alt+N new chat</span>
         </div>
       </div>
     </aside>
@@ -539,16 +539,23 @@ function ChangeCard({ change }: { change: ProposedChange }) {
         <Pill tone={RISK_TONE[change.risk]}>{change.risk.toLowerCase()} risk</Pill>
       </div>
       <p className="mt-1 text-[10px] text-muted-foreground">{change.diff.length} item{change.diff.length === 1 ? "" : "s"} · <button type="button" className="underline-offset-2 hover:underline" onClick={() => setView("pending")}>review details</button></p>
+      {change.status === "PENDING" && change.error && <p className="mt-2 text-[11px] text-red-600">{change.error}</p>}
       {change.status === "PENDING" ? (
         <div className="mt-2 flex gap-1.5">
           <button
             type="button"
+            disabled={change.applying}
             onClick={() => applyChange(change.id)}
-            className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-[#400095] px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-[#33007a] dark:bg-violet-600"
+            className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-[#400095] px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-[#33007a] disabled:opacity-60 dark:bg-violet-600"
           >
-            <Check className="h-3.5 w-3.5" /> Approve
+            {change.applying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {change.applying ? "Sending to Google" : "Approve"}
           </button>
-          <button type="button" onClick={() => rejectChange(change.id)} className="inline-flex items-center justify-center gap-1 rounded-lg border border-border/70 px-2.5 py-1.5 text-[11px] font-medium hover:bg-muted">
+          <button
+            type="button"
+            disabled={change.applying}
+            onClick={() => rejectChange(change.id)}
+            className="inline-flex items-center justify-center gap-1 rounded-lg border border-border/70 px-2.5 py-1.5 text-[11px] font-medium hover:bg-muted disabled:opacity-60"
+          >
             <X className="h-3.5 w-3.5" /> Reject
           </button>
         </div>

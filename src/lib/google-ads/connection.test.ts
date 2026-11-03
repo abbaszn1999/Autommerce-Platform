@@ -152,6 +152,78 @@ describe("store in live mode", () => {
     useGoogleAds.getState().setRange("LAST_30_DAYS");
   });
 
+  describe("approving changes on a live account", () => {
+    const connect = async () => {
+      routes["GET /api/google-ads/connection"] = {
+        configured: true,
+        ads: { ...none, status: "connected", accountId: "2046362164", accountName: "Kalema", currency: "USD", timeZone: "Asia/Beirut" },
+        merchant: none,
+      };
+      await useGoogleAds.getState().initLive("ws1");
+      await vi.waitFor(() => expect(useGoogleAds.getState().accounts["2046362164"]!.sync.status).not.toBe("loading"));
+      calls.length = 0;
+    };
+    const acc = () => useGoogleAds.getState().accounts["2046362164"]!;
+    const op = { kind: "budget.update" as const, budgetId: "900", amount: 30 };
+
+    it("Approve sends the change to the server, then history gets the server's id and undo", async () => {
+      await connect();
+      routes["POST /api/google-ads/changes"] = { status: "applied", id: "srv-1", inverse: [{ ...op, amount: 20 }], warnings: [] };
+      const change = useGoogleAds.getState().propose({ title: "Raise budget", rationale: "r", ops: [op], risk: "LOW" });
+      expect(acc().changes[0]!.status).toBe("PENDING");
+      useGoogleAds.getState().applyChange(change.id);
+      await vi.waitFor(() => expect(acc().changes[0]!.status).toBe("APPLIED"));
+      const sent = calls.find((c) => c.url === "/api/google-ads/changes")!;
+      expect(sent.body).toEqual({ workspaceId: "ws1", clientChangeId: change.id, title: "Raise budget", source: "AGENT", ops: [op] });
+      expect(acc().history[0]).toMatchObject({ serverId: "srv-1", inverse: [{ ...op, amount: 20 }], title: "Raise budget" });
+      // Then it reloads from Google instead of guessing.
+      await vi.waitFor(() => expect(calls.some((c) => c.url.includes("refresh=1"))).toBe(true));
+
+      routes["POST /api/google-ads/changes"] = { status: "applied", id: "srv-2", inverse: [], warnings: [] };
+      useGoogleAds.getState().undo(acc().history[0]!.id);
+      await vi.waitFor(() => expect(acc().history[1]!.undone).toBe(true));
+      const undoCall = calls.filter((c) => c.url === "/api/google-ads/changes").at(-1)!;
+      // Undo sends only the server id: the server uses its own stored inverse.
+      expect(undoCall.body).toMatchObject({ workspaceId: "ws1", undoOf: "srv-1" });
+      expect(undoCall.body).not.toHaveProperty("ops");
+    });
+
+    it("a refusal marks the change failed with the reason", async () => {
+      await connect();
+      vi.stubGlobal("fetch", async (url: string) =>
+        url === "/api/google-ads/changes"
+          ? new Response(JSON.stringify({ status: "failed", id: "srv-3", error: "Raises above 3× must be made in smaller steps." }), { status: 422 })
+          : new Response(JSON.stringify({ error: "not_found" }), { status: 404 })
+      );
+      const change = useGoogleAds.getState().propose({ title: "Huge", rationale: "r", ops: [{ ...op, amount: 999 }], risk: "HIGH" });
+      useGoogleAds.getState().applyChange(change.id);
+      await vi.waitFor(() => expect(acc().changes[0]!.status).toBe("FAILED"));
+      expect(acc().changes[0]!.error).toMatch(/smaller steps/);
+      expect(acc().history).toHaveLength(0);
+    });
+
+    it("a network failure leaves the change pending so Approve can be pressed again safely", async () => {
+      await connect();
+      vi.stubGlobal("fetch", async () => {
+        throw new TypeError("Failed to fetch");
+      });
+      const change = useGoogleAds.getState().propose({ title: "Raise budget", rationale: "r", ops: [op], risk: "LOW" });
+      useGoogleAds.getState().applyChange(change.id);
+      await vi.waitFor(() => expect(acc().changes[0]!.error).toMatch(/never sent twice/));
+      expect(acc().changes[0]).toMatchObject({ status: "PENDING", applying: false });
+    });
+
+    it("auto-approve can't be turned on, and direct edits go through the same approval path", async () => {
+      await connect();
+      useGoogleAds.getState().setAutoApprove(true);
+      expect(useGoogleAds.getState().autoApprove).toBe(false);
+      routes["POST /api/google-ads/changes"] = { status: "applied", id: "srv-4", inverse: [], warnings: [] };
+      expect(useGoogleAds.getState().applyDirect("Edit budget", [op])).toEqual({ ok: true });
+      await vi.waitFor(() => expect(acc().changes[0]).toMatchObject({ status: "APPLIED", source: "USER" }));
+      expect(calls.some((c) => c.url === "/api/google-ads/changes")).toBe(true);
+    });
+  });
+
   it("reports a sign-in that didn't finish", async () => {
     routes["GET /api/google-ads/connection"] = { configured: true, ads: none, merchant: none };
     await useGoogleAds.getState().initLive("ws1", { result: "failed", kind: "merchant" });

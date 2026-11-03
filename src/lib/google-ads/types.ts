@@ -720,6 +720,8 @@ export type ProposedChange = {
   /** Conversation turn that proposed it. */
   messageId?: string;
   error?: string;
+  /** Live accounts: being sent to Google Ads right now. */
+  applying?: boolean;
 };
 
 export type ChangeEvent = {
@@ -735,6 +737,10 @@ export type ChangeEvent = {
   changeId?: string;
   /** Which campaigns, ad groups and asset groups the change touched, so history can be filtered to one of them. */
   touched?: ChangeTouched;
+  /** Live accounts: the server's record of this change; undo goes through it. */
+  serverId?: string;
+  undoing?: boolean;
+  undoError?: string;
 };
 
 export type ChangeTouched = { campaignIds: string[]; adGroupIds: string[]; assetGroupIds: string[] };

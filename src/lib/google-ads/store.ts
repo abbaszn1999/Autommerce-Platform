@@ -265,6 +265,9 @@ function withAccount(state: GaStore, update: (a: AccountState) => AccountState):
 
 export const NEW_CHAT_TITLE = "New chat";
 
+/** Accounts that asked for a reload while one was already running. */
+const reloadAfter = new Set<string>();
+
 function newThread(): ChatThread {
   const now = new Date().toISOString();
   return { id: gid("chat"), title: NEW_CHAT_TITLE, messages: [], mode: "agent", pinned: false, createdAt: now, updatedAt: now };
@@ -384,6 +387,93 @@ export const useGoogleAds = create<GaStore>((set, get) => {
     set((s) => ({ merchant: { ...s.merchant, status: "selecting", accounts: accounts.map((a) => liveMerchant(a.merchantId, a.name, a.website)) } }));
   };
 
+  /** Update one change / history entry of one account (the account a request started on, even if the user switched). */
+  const patchChange = (customerId: string, changeId: string, patch: Partial<ProposedChange>) =>
+    set((s) => {
+      const a = s.accounts[customerId];
+      return a ? { accounts: { ...s.accounts, [customerId]: { ...a, changes: a.changes.map((c) => (c.id === changeId ? { ...c, ...patch } : c)) } } } : {};
+    });
+  const patchEvent = (customerId: string, eventId: string, patch: Partial<ChangeEvent>) =>
+    set((s) => {
+      const a = s.accounts[customerId];
+      return a ? { accounts: { ...s.accounts, [customerId]: { ...a, history: a.history.map((e) => (e.id === eventId ? { ...e, ...patch } : e)) } } } : {};
+    });
+  const liveMessage = (err: unknown) => (err instanceof LiveApiError ? err.message : "Couldn't reach Google Ads. Try again; the change is never sent twice.");
+
+  /**
+   * Live: send an approved change to Google Ads through the server. A refusal marks it
+   * FAILED with the reason; a network problem leaves it PENDING so Approve can be pressed
+   * again (the server never applies the same change id twice).
+   */
+  const applyLive = async (changeId: string) => {
+    const start = get();
+    const customerId = start.customerId;
+    const workspaceId = start.workspaceId;
+    const acc = current(start);
+    const change = acc?.changes.find((c) => c.id === changeId);
+    if (!customerId || !workspaceId || !acc || !change || change.status !== "PENDING" || change.applying) return;
+    patchChange(customerId, changeId, { applying: true, error: undefined });
+    try {
+      const res = await liveApi.change({ workspaceId, clientChangeId: change.id, title: change.title, source: change.source, ops: change.ops });
+      if (res.status === "failed") return patchChange(customerId, changeId, { applying: false, status: "FAILED", error: res.error });
+      const event: ChangeEvent = {
+        id: gid("evt"),
+        at: new Date().toISOString(),
+        actor: change.source === "AGENT" ? "Agent (approved by you)" : ACTOR,
+        source: change.source,
+        title: change.title,
+        diff: change.diff,
+        inverse: res.inverse.length ? res.inverse : undefined,
+        changeId,
+        serverId: res.id,
+        touched: touchedBy(acc.data, change.ops, acc.data),
+      };
+      set((s) => {
+        const a = s.accounts[customerId];
+        if (!a) return {};
+        const changes = a.changes.map((c) => (c.id === changeId ? { ...c, applying: false, status: "APPLIED" as const } : c));
+        return { accounts: { ...s.accounts, [customerId]: { ...a, changes, history: [event, ...a.history] } } };
+      });
+      // Show what Google now has, not our guess of it.
+      if (get().customerId === customerId) void get().refreshData({ force: true });
+    } catch (err) {
+      patchChange(customerId, changeId, { applying: false, error: liveMessage(err) });
+    }
+  };
+
+  const undoLive = async (eventId: string) => {
+    const start = get();
+    const customerId = start.customerId;
+    const workspaceId = start.workspaceId;
+    const acc = current(start);
+    const event = acc?.history.find((e) => e.id === eventId);
+    if (!customerId || !workspaceId || !acc || !event?.serverId || !event.inverse || event.undone || event.undoing) return;
+    patchEvent(customerId, eventId, { undoing: true, undoError: undefined });
+    try {
+      const res = await liveApi.change({ workspaceId, clientChangeId: gid("undo"), undoOf: event.serverId });
+      if (res.status === "failed") return patchEvent(customerId, eventId, { undoing: false, undoError: res.error });
+      const undoEvent: ChangeEvent = {
+        id: gid("evt"),
+        at: new Date().toISOString(),
+        actor: ACTOR,
+        source: "USER",
+        title: `Undo: ${event.title}`,
+        diff: describeOps(acc.data, event.inverse),
+        serverId: res.id,
+        touched: event.touched,
+      };
+      set((s) => {
+        const a = s.accounts[customerId];
+        if (!a) return {};
+        const history = [undoEvent, ...a.history.map((e) => (e.id === eventId ? { ...e, undoing: false, undone: true } : e))];
+        return { accounts: { ...s.accounts, [customerId]: { ...a, history } } };
+      });
+      if (get().customerId === customerId) void get().refreshData({ force: true });
+    } catch (err) {
+      patchEvent(customerId, eventId, { undoing: false, undoError: liveMessage(err) });
+    }
+  };
+
   const connectedAccount = (c: LiveConnection): GoogleAccount | null =>
     c.status === "connected" && c.accountId
       ? liveGoogleAccount({ customerId: c.accountId, name: c.accountName ?? c.accountId, currency: c.currency ?? "", timeZone: c.timeZone ?? "", isManager: false })
@@ -415,6 +505,7 @@ export const useGoogleAds = create<GaStore>((set, get) => {
     set({
       mode: "live",
       workspaceId,
+      autoApprove: false,
       status: "disconnected",
       entered: false,
       googleEmail: null,
@@ -542,7 +633,12 @@ export const useGoogleAds = create<GaStore>((set, get) => {
     const start = get();
     const id = start.customerId;
     const acc = current(start);
-    if (!id || !acc || acc.sync.status === "loading") return;
+    if (!id || !acc) return;
+    if (acc.sync.status === "loading") {
+      // A change landed (or the range changed) while loading: load once more when this one ends.
+      reloadAfter.add(id);
+      return;
+    }
     // Patch the account this load was for, even if the user switched accounts meanwhile.
     const patch = (sync: Partial<SyncState>, data?: AccountData) =>
       set((s) => {
@@ -557,6 +653,7 @@ export const useGoogleAds = create<GaStore>((set, get) => {
     } catch (err) {
       patch({ status: "error", error: (err as Error).message || "Could not load this account." });
     }
+    if (reloadAfter.delete(id) && get().customerId === id) await get().refreshData({ force: true });
   },
 
   setScope: (scope, view) =>
@@ -571,7 +668,7 @@ export const useGoogleAds = create<GaStore>((set, get) => {
     // Live: per-keyword and per-ad totals are exact for one range, so load the new one.
     if (get().mode === "live") void get().refreshData();
   },
-  setAutoApprove: (on) => set({ autoApprove: on }),
+  setAutoApprove: (on) => set({ autoApprove: get().mode === "live" ? false : on }),
   setAgentBusy: (busy, chatId) =>
     set((s) => {
       const acc = current(s);
@@ -599,11 +696,13 @@ export const useGoogleAds = create<GaStore>((set, get) => {
       messageId: input.messageId,
     };
     set((s) => withAccount(s, (a) => ({ ...a, changes: [change, ...a.changes] })));
-    if (get().autoApprove) get().applyChange(change.id);
+    // Real accounts: nothing reaches Google without a person pressing Approve.
+    if (get().autoApprove && get().mode !== "live") get().applyChange(change.id);
     return change;
   },
 
   applyChange: (changeId) => {
+    if (get().mode === "live") return void applyLive(changeId);
     const acc = current(get());
     const change = acc?.changes.find((c) => c.id === changeId);
     if (!acc || !change || change.status !== "PENDING") return;
@@ -674,6 +773,12 @@ export const useGoogleAds = create<GaStore>((set, get) => {
   applyDirect: (title, ops, source = "USER") => {
     const acc = current(get());
     if (!acc) return { ok: false, error: "No account selected" };
+    if (get().mode === "live") {
+      // The person's own edit is their approval; it still goes through the server's checks and appears in Pending/History.
+      const change = get().propose({ title, rationale: "Edited directly in Autommerce.", ops, risk: "LOW", source });
+      void applyLive(change.id);
+      return { ok: true };
+    }
     const errors = validateOps(acc.data, ops);
     if (errors.length) return { ok: false, error: errors.join(" ") };
     try {
@@ -688,6 +793,7 @@ export const useGoogleAds = create<GaStore>((set, get) => {
   },
 
   undo: (eventId) => {
+    if (get().mode === "live") return void undoLive(eventId);
     const acc = current(get());
     const event = acc?.history.find((e) => e.id === eventId);
     if (!acc || !event?.inverse || event.undone) return;

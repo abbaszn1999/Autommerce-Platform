@@ -241,6 +241,25 @@ async function execute<T>(row: ConnectionRow, slug: string, args: Record<string,
 }
 
 /**
+ * GoogleAdsService.Mutate through Composio: all operations succeed together or none
+ * do (partial_failure off). With `validateOnly`, Google checks everything and changes nothing.
+ */
+export async function batchMutate(
+  row: ConnectionRow,
+  customerId: string,
+  operations: Record<string, unknown>[],
+  opts: { validateOnly: boolean }
+): Promise<{ mutate_operation_responses?: unknown[]; mutateOperationResponses?: unknown[] } & Record<string, unknown>> {
+  return execute(row, "GOOGLEADS_BATCH_MUTATE", {
+    customer_id: customerId,
+    mutate_operations: operations,
+    validate_only: opts.validateOnly,
+    partial_failure: false,
+    response_content_type: "RESOURCE_NAME_ONLY",
+  });
+}
+
+/**
  * Run a GAQL query on one customer and return every row (follows page tokens).
  * The customer id always comes from our database, never from the browser or the model.
  */
