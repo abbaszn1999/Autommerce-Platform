@@ -96,8 +96,10 @@ export async function POST(request: NextRequest, { params }: Params) {
     model: { id: modelId, params: body.model?.params ?? (chat.model_params as StartRunRequest["model"]["params"]) ?? [] },
     mode: body.buildPlanId ? "agent" : (body.mode ?? (chat.mode as "agent" | "plan")),
     ...(body.buildPlanId ? { buildPlanId: body.buildPlanId } : {}),
-    autoRun: prefs?.auto_run === true,
-    autoRunBulk: prefs?.auto_run === true && ["owner", "admin"].includes(String(access.ctx.membershipRole)),
+    // Google Ads changes move real money: every one waits for a person, whatever the auto-run setting.
+    autoRun: access.domain === "store" && prefs?.auto_run === true,
+    autoRunBulk: access.domain === "store" && prefs?.auto_run === true && ["owner", "admin"].includes(String(access.ctx.membershipRole)),
+    domain: access.domain,
     billing: {
       ownerUserId: access.ctx.subscription!.user_id as string,
       remainingCredits: Math.max(0, Number(access.ctx.credits?.total ?? 0)),

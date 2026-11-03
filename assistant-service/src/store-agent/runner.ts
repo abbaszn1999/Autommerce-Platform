@@ -29,7 +29,9 @@ import { createScriptTool } from "./script-tool";
 import { loadShopifyConnection, type ShopifyConnection } from "./shopify/client";
 import { storePlatform } from "./store-connection";
 import { loadWooConnection, type WooConnection } from "./woocommerce/client";
-import { createStoreAgentTools } from "./tools";
+import { createChatTools, createStoreAgentTools } from "./tools";
+import { veraAdsRule } from "./google-ads/instructions";
+import { createGoogleAdsTools } from "./google-ads/tools";
 
 /**
  * Cursor tools the agent gets. File access goes through our confined tools
@@ -54,6 +56,9 @@ export type StoreAgentDeps = {
   /** Parent folder of every chat's working folder. */
   workRoot: string;
   log: (message: string, extra?: unknown) => void;
+  /** Google Ads chats: the site their tools call, signed with the service secret. */
+  secret?: string;
+  platformUrl?: string;
 };
 
 /** Marks a run stopped by a deploy or shutdown rather than by the user. */
@@ -174,6 +179,19 @@ async function retryOnNetwork<T>(fn: () => Promise<T>, run: StoreAgentRun, log: 
  * Changes the user undid (from the cards, outside the conversation) since the
  * previous run started, so the agent does not answer from stale memory.
  */
+/** The Google Ads account a Google Ads chat works on (picked on the Google Ads page). */
+async function loadAdsAccount(db: SupabaseClient, workspaceId: string): Promise<{ accountName: string; customerId: string; currency: string }> {
+  const { data } = await db
+    .from("google_ads_connections")
+    .select("account_id, account_name, account_currency")
+    .eq("workspace_id", workspaceId)
+    .eq("kind", "ads")
+    .not("composio_connected_account_id", "is", null)
+    .maybeSingle();
+  if (!data?.account_id) throw new Error("Google Ads is not connected for this workspace. Connect it on the Google Ads page.");
+  return { accountName: String(data.account_name ?? data.account_id), customerId: String(data.account_id), currency: String(data.account_currency ?? "") };
+}
+
 async function undoneSinceLastRun(db: SupabaseClient, chatId: string, currentRunId: string): Promise<string[]> {
   const { data: previous } = await db
     .from("store_agent_runs")
@@ -466,19 +484,24 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     chatFiles = files;
     await files.prepare();
 
-    const platform = await storePlatform(db, req.workspaceId);
+    // Google Ads chats (the Google Ads page) never touch the store: no store connection, store rules or store tools.
+    const isAds = req.domain === "google_ads";
+    /** What the agent works on, for the notes it gets about earlier runs. */
+    const where = isAds ? "Google Ads account" : "store";
+    const platform = isAds ? ("shopify" as const) : await storePlatform(db, req.workspaceId);
     let connection: ShopifyConnection | null = null;
     const getConnection = async () => (connection ??= await loadShopifyConnection(db, req.workspaceId));
     let wooConnection: WooConnection | null = null;
     const getWoo = async () => (wooConnection ??= await loadWooConnection(db, req.workspaceId));
-    const storeInfo =
-      platform === "woocommerce"
+    const storeInfo = isAds
+      ? { name: "", domain: "" }
+      : platform === "woocommerce"
         ? await getWoo().then((c) => ({ name: c.storeName, domain: c.domain }))
         : await getConnection().then((c) => ({ name: c.storeName || c.shopDomain, domain: c.shopDomain }));
 
     // What this store's token may do: told to the agent up front, and kept for the sidebar's locks.
     let missingAccess: string[] = [];
-    if (platform === "shopify") {
+    if (!isAds && platform === "shopify") {
       try {
         const granted = await grantedScopes(await getConnection());
         missingAccess = missingScopes(STORE_AGENT_SCOPES, granted).map((scope) => SCOPE_LABELS[scope]);
@@ -495,16 +518,18 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     await fs.mkdir(path.join(cwd, ".cursor", "rules"), { recursive: true });
     await fs.writeFile(
       path.join(cwd, ".cursor", "rules", "vera.mdc"),
-      veraRule({
-        platform,
-        storeName: storeInfo.name,
-        shopDomain: storeInfo.domain,
-        mode: req.mode,
-        autoRun: req.autoRun,
-        autoRunBulk: req.autoRunBulk,
-        notes: await loadStoreNotes(db, req.workspaceId),
-        missingAccess,
-      })
+      isAds
+        ? veraAdsRule({ ...(await loadAdsAccount(db, req.workspaceId)), mode: req.mode })
+        : veraRule({
+            platform,
+            storeName: storeInfo.name,
+            shopDomain: storeInfo.domain,
+            mode: req.mode,
+            autoRun: req.autoRun,
+            autoRunBulk: req.autoRunBulk,
+            notes: await loadStoreNotes(db, req.workspaceId),
+            missingAccess,
+          })
     );
 
     const images: NonNullable<SDKUserMessage["images"]> = [];
@@ -548,14 +573,14 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
       ...converted.map((note) => `[${note}]`),
       ...mentioned.notes.map((note) => `[${note}]`),
       undone.length
-        ? `[Since your last reply the user undid these changes from their cards, so the store has the earlier values again: ${undone.map((s) => `"${s}"`).join("; ")}. Read the store again before relying on those values.]`
+        ? `[Since your last reply the user undid these changes from their cards, so the ${where} has the earlier values again: ${undone.map((s) => `"${s}"`).join("; ")}. Read the ${where} again before relying on those values.]`
         : "",
       unfinished
         ? `[Your previous run in this chat stopped before it finished (${unfinished.status}). ${
             unfinished.changes.length
-              ? `These store changes from it WERE applied: ${unfinished.changes.map((s) => `"${s}"`).join("; ")}.`
-              : "No store change from it was applied."
-          } Read the current state of the store before continuing, and never repeat a change that was already applied.]`
+              ? `These ${isAds ? "Google Ads" : "store"} changes from it WERE applied: ${unfinished.changes.map((s) => `"${s}"`).join("; ")}.`
+              : `No ${isAds ? "Google Ads" : "store"} change from it was applied.`
+          } Read the current state of the ${where} before continuing, and never repeat a change that was already applied.]`
         : "",
     ].filter(Boolean);
     const text = notes.length ? `${agentMessage}\n\n${notes.join("\n")}` : agentMessage;
@@ -563,20 +588,25 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     // ── Tools ──────────────────────────────────────────────────────────────
     const written = new Set<string>();
     // Re-delivered calls join the first execution, which has already seen any guidance.
+    const toolContext = {
+      db,
+      run,
+      files,
+      platform,
+      connection: getConnection,
+      woo: getWoo,
+      // Google Ads changes always wait for a person (the gateway also sends false).
+      autoRun: isAds ? false : req.autoRun,
+      autoRunBulk: isAds ? false : req.autoRunBulk,
+      planMode: req.mode === "plan",
+      checkpoint,
+      log,
+    };
+    if (isAds && (!deps.secret || !deps.platformUrl)) throw new Error("The Google Ads agent is not configured (PLATFORM_URL).");
     const customTools = oncePerToolCall(withGuidance({
-      ...createStoreAgentTools({
-        db,
-        run,
-        files,
-        platform,
-        connection: getConnection,
-        woo: getWoo,
-        autoRun: req.autoRun,
-        autoRunBulk: req.autoRunBulk,
-        planMode: req.mode === "plan",
-        checkpoint,
-        log,
-      }),
+      ...(isAds
+        ? { ...createGoogleAdsTools(toolContext, { url: deps.platformUrl!, secret: deps.secret! }), ...createChatTools(toolContext) }
+        : createStoreAgentTools(toolContext)),
       ...createFileTools(cwd, (relative) => written.add(relative)),
       ...createScriptTool(cwd, (relative, inputs) => {
         written.add(relative);

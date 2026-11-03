@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     .select(CHAT_COLUMNS)
     .eq("workspace_id", workspaceId)
     .eq("user_id", access.userId)
+    .eq("domain", access.domain)
     .order("pinned", { ascending: false })
     .order("last_activity_at", { ascending: false })
     .limit(200);
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
       model_id: modelId,
       model_params: modelParams,
       mode: parsed.data.mode ?? "agent",
+      domain: access.domain,
     })
     .select(CHAT_COLUMNS)
     .single();

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const workspaceId = request.nextUrl.searchParams.get("workspaceId") ?? "";
   const term = (request.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 60);
-  const access = await authorizeStoreAgent({ workspaceId });
+  const access = await authorizeStoreAgent({ workspaceId, domain: "store" });
   if (access instanceof NextResponse) return access;
   if (!term) return NextResponse.json({ results: [] });
   try {

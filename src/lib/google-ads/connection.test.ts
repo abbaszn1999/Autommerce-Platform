@@ -148,8 +148,38 @@ describe("store in live mode", () => {
     await vi.waitFor(() => expect(useGoogleAds.getState().accounts["2046362164"]!.sync.status).toBe("ready"));
     calls.length = 0;
     await useGoogleAds.getState().refreshData({ force: true });
-    expect(calls.at(-1)!.url).toContain("refresh=1");
+    expect(calls.find((c) => c.url.startsWith("/api/google-ads/data"))!.url).toContain("refresh=1");
+    // Live history comes from the server after each load.
+    await vi.waitFor(() => expect(calls.some((c) => c.url === "/api/google-ads/changes?workspaceId=ws1")).toBe(true));
     useGoogleAds.getState().setRange("LAST_30_DAYS");
+  });
+
+  it("history comes from the server: chat-approved changes included, Undo only while it can be undone", async () => {
+    routes["GET /api/google-ads/connection"] = {
+      configured: true,
+      ads: { ...none, status: "connected", accountId: "2046362164", accountName: "Kalema", currency: "USD", timeZone: "Asia/Beirut" },
+      merchant: none,
+    };
+    const range = useGoogleAds.getState().range;
+    routes["GET /api/google-ads/data"] = {
+      data: { ...useGoogleAds.getState().accounts["2046362164"]?.data, account: { customerId: "2046362164", name: "Kalema", currency: "USD", timeZone: "", isManager: false, optimizationScore: 0, autoTagging: false }, exact: { start: range.start, end: range.end, byId: {} } },
+      fetchedAt: new Date().toISOString(),
+    };
+    const op = { kind: "budget.update", budgetId: "900", amount: 30 };
+    routes["GET /api/google-ads/changes"] = {
+      changes: [
+        { id: "c3", title: "Undo: Raise budget", source: "UNDO", status: "applied", ops: [op], inverse: [], undo_of: "c1", undone_at: null, created_at: "2026-11-03T10:02:00Z" },
+        { id: "c2", title: "Pause keyword", source: "AGENT", status: "applied", ops: [], inverse: [{ kind: "status.set", entity: "KEYWORD", ids: ["1~2"], status: "ENABLED" }], undo_of: null, undone_at: null, created_at: "2026-11-03T10:01:00Z" },
+        { id: "c1", title: "Raise budget", source: "USER", status: "applied", ops: [op], inverse: [{ ...op, amount: 20 }], undo_of: null, undone_at: "2026-11-03T10:02:00Z", created_at: "2026-11-03T10:00:00Z" },
+      ],
+    };
+    await useGoogleAds.getState().initLive("ws1");
+    await vi.waitFor(() => expect(useGoogleAds.getState().accounts["2046362164"]!.history).toHaveLength(3));
+    const [undoRow, agentRow, userRow] = useGoogleAds.getState().accounts["2046362164"]!.history;
+    expect(agentRow).toMatchObject({ serverId: "c2", actor: "Vera (approved by you)", source: "AGENT", undone: false });
+    expect(agentRow!.inverse).toHaveLength(1);
+    expect(userRow).toMatchObject({ serverId: "c1", undone: true });
+    expect(undoRow!.inverse).toBeUndefined();
   });
 
   describe("approving changes on a live account", () => {

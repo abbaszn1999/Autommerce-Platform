@@ -446,6 +446,12 @@ function createShopifyTools(ctx: ToolContext): Record<string, SDKCustomTool> {
   };
 }
 
+/** The chat tools the Google Ads agent shares with the Store Assistant (no store notes: those belong to the store). */
+export function createChatTools(ctx: ToolContext): Record<string, SDKCustomTool> {
+  const { ask_user, show_file } = createSharedTools(ctx);
+  return { ask_user: ask_user!, show_file: show_file! };
+}
+
 function createSharedTools(ctx: ToolContext): Record<string, SDKCustomTool> {
   return {
     save_store_note: {

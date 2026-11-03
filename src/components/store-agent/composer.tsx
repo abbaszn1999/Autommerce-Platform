@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { ArrowUp, ClipboardList, FileText, Image as ImageIcon, ListChecks, Loader2, Paperclip, ShieldCheck, ShieldOff, Square, X, Bot } from "lucide-react";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { ModelParam } from "@/lib/store-agent/protocol";
+import type { AgentDomain, ModelParam } from "@/lib/store-agent/protocol";
 import { STORE_AGENT_LIMITS } from "@/lib/store-agent/protocol";
 import { cn } from "@/lib/utils";
 import { FILE_SECTIONS, fileSection } from "@/lib/store-agent/file-kinds";
@@ -92,8 +92,11 @@ export function Composer({
   workspaceId,
   files = [],
   plans = [],
+  domain = "store",
 }: {
   workspaceId: string;
+  /** Google Ads page: no store search in the @ menu, no auto-run (every change asks), Google Ads wording. */
+  domain?: AgentDomain;
   /** This chat's files and plans, offered in the @ menu. */
   files?: ChatFile[];
   plans?: Plan[];
@@ -141,7 +144,7 @@ export function Composer({
 
   // Search the store for the word after "@", a moment after typing stops.
   useEffect(() => {
-    if (!picker || picker.query.length < 2) return;
+    if (!picker || picker.query.length < 2 || domain !== "store") return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
       setSearching(true);
@@ -466,8 +469,8 @@ export function Composer({
           running
             ? "Add guidance while the agent works…"
             : mode === "plan"
-              ? "Describe what you want planned — nothing in the store will change…"
-              : `Ask anything about ${storeName || "your store"}, or tell the agent what to do…`
+              ? `Describe what you want planned — nothing in ${domain === "google_ads" ? "Google Ads" : "the store"} will change…`
+              : `Ask anything about ${storeName || (domain === "google_ads" ? "your Google Ads" : "your store")}, or tell the agent what to do…`
         }
         className={cn(
           "relative block max-h-[240px] w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-[14px] leading-relaxed outline-none placeholder:text-muted-foreground/60 disabled:opacity-50",
@@ -525,6 +528,7 @@ export function Composer({
 
         <ModelPicker models={models} modelId={modelId} params={modelParams} onChange={onModelChange} disabled={running} />
 
+        {domain === "store" && (
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -545,6 +549,7 @@ export function Composer({
               : "Ask first: every change to your store waits for your approval."}
           </TooltipContent>
         </Tooltip>
+        )}
 
         <div className="flex-1" />
         <ContextRing used={context.used} window={context.window} />

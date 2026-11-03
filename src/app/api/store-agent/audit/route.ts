@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 /** Every change the agent made to the store in this workspace, newest first. */
 export async function GET(request: NextRequest) {
   const workspaceId = request.nextUrl.searchParams.get("workspaceId") ?? "";
-  const access = await authorizeStoreAgent({ workspaceId });
+  const access = await authorizeStoreAgent({ workspaceId, domain: "store" });
   if (access instanceof NextResponse) return access;
   const before = request.nextUrl.searchParams.get("before");
 

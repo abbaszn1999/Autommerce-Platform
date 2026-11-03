@@ -11,9 +11,19 @@ import { reviseDoc, type DocComment } from "./docs";
 import { gid } from "./mutations";
 import { activeChatOf, useGoogleAds } from "./store";
 
+/** Live accounts: where "ask the agent" prompts go instead of the simulated agent (Vera's open chat). */
+let liveAgentHandler: ((text: string) => void) | null = null;
+export function setLiveAgentHandler(handler: ((text: string) => void) | null) {
+  liveAgentHandler = handler;
+}
+
 export function runAgentTurn(text: string): void {
   const message = text.trim();
   const store = useGoogleAds.getState();
+  if (store.mode === "live") {
+    if (message) liveAgentHandler?.(message);
+    return;
+  }
   const state = store.customerId ? store.accounts[store.customerId] : null;
   if (!message || store.agentBusy || !state) return;
 

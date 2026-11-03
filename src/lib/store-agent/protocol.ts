@@ -33,6 +33,17 @@ export const attachmentRefSchema = z.object({
 });
 export type AttachmentRef = z.infer<typeof attachmentRefSchema>;
 
+/**
+ * Where a chat lives: the Store Assistant ("store") or the Google Ads page
+ * ("google_ads"). It picks the agent's rules and tools; the default keeps every
+ * Store Assistant request exactly as before.
+ */
+export const AGENT_DOMAINS = ["store", "google_ads"] as const;
+export type AgentDomain = (typeof AGENT_DOMAINS)[number];
+export const agentDomainSchema = z.enum(AGENT_DOMAINS);
+/** Header the chat UI sends (or `domain` query parameter, for links like images). */
+export const AGENT_DOMAIN_HEADER = "x-agent-domain";
+
 /** Gateway → service: start a run in a chat. */
 export const startRunSchema = z.object({
   runId: z.string().uuid(),
@@ -51,6 +62,8 @@ export const startRunSchema = z.object({
   locale: z.string().max(20).optional(),
   /** Build this plan (store_agent_plans.id): an Agent-mode run that carries it out. */
   buildPlanId: z.string().uuid().optional(),
+  /** Missing means "store": every Store Assistant request stays exactly as it was. */
+  domain: agentDomainSchema.optional(),
 });
 export type StartRunRequest = z.infer<typeof startRunSchema>;
 

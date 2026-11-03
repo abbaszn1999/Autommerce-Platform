@@ -7,6 +7,32 @@ const SOURCES = new Set(["AGENT", "USER", "RECOMMENDATION"]);
 const MAX_BODY = 200_000;
 
 /**
+ * The workspace's Google Ads change history for its current account: changes
+ * approved on the page or in Vera's chats, newest first.
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const workspaceId = request.nextUrl.searchParams.get("workspaceId") ?? "";
+    const { admin } = await requireConnectionAccess(workspaceId);
+    const row = await loadConnection(admin, workspaceId, "ads");
+    if (!row?.account_id) return NextResponse.json({ changes: [] });
+    const { data, error } = await admin
+      .from("google_ads_changes")
+      .select("id, title, source, status, ops, inverse, undo_of, undone_at, created_at")
+      .eq("workspace_id", workspaceId)
+      .eq("customer_id", row.account_id)
+      .eq("status", "applied")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) return NextResponse.json({ error: "load_failed" }, { status: 500 });
+    return NextResponse.json({ changes: data ?? [] }, { headers: { "Cache-Control": "no-store" } });
+  } catch (err) {
+    const { status, code } = errorStatus(err);
+    return NextResponse.json({ error: code }, { status });
+  }
+}
+
+/**
  * Send an approved change to the workspace's Google Ads account, or undo one.
  * Owners and admins only: these changes move real money. The account comes from
  * our database; the browser only sends what to change.

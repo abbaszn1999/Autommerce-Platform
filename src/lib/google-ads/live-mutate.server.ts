@@ -72,7 +72,12 @@ export async function fetchBefore(admin: SupabaseClient, row: ConnectionRow, cus
   const campaignIds = inList(campaigns);
   const budgetIds = inList(budgets);
   const adGroupIds = inList(adGroups);
-  const [unit, cRows, bRows, gRows, kRows, aRows, nRows, created] = await Promise.all([
+  // Campaigns that use a budget being changed: their names go on the card, and a budget shared by several shows so.
+  const budgetNames = [...budgets].filter((id) => ID.test(id)).map((id) => `'customers/${customerId}/campaignBudgets/${id}'`);
+  const budgetCampaigns = budgetNames.length
+    ? q(`SELECT campaign.id, campaign.name, campaign.status, campaign.campaign_budget, campaign.bidding_strategy_type FROM campaign WHERE campaign.campaign_budget IN (${budgetNames.join(", ")}) AND campaign.status != 'REMOVED'`)
+    : none;
+  const [unit, cRows, bRows, gRows, kRows, aRows, nRows, created, bcRows] = await Promise.all([
     q(`SELECT currency_constant.billable_unit_micros FROM currency_constant WHERE currency_constant.code = '${currency}'`),
     campaignIds
       ? q(`SELECT campaign.id, campaign.name, campaign.status, campaign.campaign_budget, campaign.bidding_strategy_type, campaign.target_cpa.target_cpa_micros,
@@ -94,6 +99,7 @@ export async function fetchBefore(admin: SupabaseClient, row: ConnectionRow, cus
            WHERE campaign_criterion.type = 'KEYWORD' AND campaign_criterion.negative = TRUE AND campaign.id IN (${campaignIds})`)
       : none,
     admin.from("google_ads_changes").select("created_ids").eq("workspace_id", row.workspace_id).eq("customer_id", customerId).eq("status", "applied"),
+    budgetCampaigns,
   ]);
 
   const before: BeforeState = {
@@ -107,7 +113,7 @@ export async function fetchBefore(admin: SupabaseClient, row: ConnectionRow, cus
     createdKeywordIds: new Set((created.data ?? []).flatMap((r) => (Array.isArray(r.created_ids) ? (r.created_ids as string[]) : []))),
   };
   if (created.error) throw new ConnectionHttpError(500, "load_failed");
-  for (const r of cRows) {
+  for (const r of [...bcRows, ...cRows]) {
     const c = r.campaign ?? {};
     before.campaigns[String(c.id)] = {
       name: String(c.name ?? ""),

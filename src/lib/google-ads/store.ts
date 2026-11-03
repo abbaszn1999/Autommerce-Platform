@@ -474,6 +474,46 @@ export const useGoogleAds = create<GaStore>((set, get) => {
     }
   };
 
+  /**
+   * Live: the account's change history comes from the server, so changes approved
+   * in Vera's chats show here too, each with Undo while it can still be undone.
+   */
+  const loadLiveHistory = async (customerId: string) => {
+    const workspaceId = get().workspaceId;
+    if (!workspaceId) return;
+    try {
+      const { changes } = await liveApi.history(workspaceId);
+      set((s) => {
+        const a = s.accounts[customerId];
+        if (!a) return {};
+        const history: ChangeEvent[] = changes.map((c) => {
+          let diff: ChangeEvent["diff"] = [];
+          try {
+            diff = describeOps(a.data, c.ops);
+          } catch {
+            // An entity that no longer exists can't be described; the title still says what happened.
+          }
+          const undoable = c.source !== "UNDO" && !c.undone_at && !!c.inverse?.length;
+          return {
+            id: `srv-${c.id}`,
+            at: c.created_at,
+            actor: c.source === "AGENT" ? "Vera (approved by you)" : ACTOR,
+            source: c.source === "AGENT" ? "AGENT" : c.source === "RECOMMENDATION" ? "RECOMMENDATION" : "USER",
+            title: c.title,
+            diff,
+            inverse: undoable || c.undone_at ? (c.inverse ?? undefined) : undefined,
+            undone: !!c.undone_at,
+            serverId: c.id,
+            touched: touchedBy(a.data, c.ops, a.data),
+          };
+        });
+        return { accounts: { ...s.accounts, [customerId]: { ...a, history } } };
+      });
+    } catch {
+      // History is informative; the account itself still works without it.
+    }
+  };
+
   const connectedAccount = (c: LiveConnection): GoogleAccount | null =>
     c.status === "connected" && c.accountId
       ? liveGoogleAccount({ customerId: c.accountId, name: c.accountName ?? c.accountId, currency: c.currency ?? "", timeZone: c.timeZone ?? "", isManager: false })
@@ -650,6 +690,7 @@ export const useGoogleAds = create<GaStore>((set, get) => {
       const next = await getDataSource().fetchAccount(id, acc.data, { range: start.range, force: opts?.force });
       // Keep any change made while loading unless the source returned a new snapshot.
       patch({ status: "ready", refreshedAt: new Date().toISOString(), error: undefined }, next === acc.data ? undefined : next);
+      if (get().mode === "live") void loadLiveHistory(id);
     } catch (err) {
       patch({ status: "error", error: (err as Error).message || "Could not load this account." });
     }

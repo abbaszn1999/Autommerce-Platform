@@ -7,6 +7,7 @@ import { useGoogleAds } from "@/lib/google-ads/store";
 import type { GaView } from "@/lib/google-ads/types";
 import { GaCampaignEditor } from "./ga-campaign-editor";
 import { GaChat } from "./ga-chat";
+import { GaVera } from "./ga-vera";
 import { GaConnect } from "./ga-connect";
 import { GaDialogs } from "./ga-dialogs";
 import { GaNav } from "./ga-nav";
@@ -144,6 +145,8 @@ export function GoogleAdsShell({ live = false }: { live?: boolean }) {
 
 function Workspace() {
   const view = useGoogleAds((s) => s.view);
+  // Live accounts talk to Vera; the demo keeps its simulated agent.
+  const live = useGoogleAds((s) => s.mode === "live");
   const customerId = useGoogleAds((s) => s.customerId);
   const scope = useGoogleAds((s) => s.scope);
   const activeTab = useAccountState()?.activeTab ?? "account";
@@ -172,7 +175,7 @@ function Workspace() {
   return (
     <div className="autommerce-dashboard flex h-full min-h-0 w-full bg-background [font-family:var(--brand-font)]">
       {/* Agent panel: the lighter surface. The ads panel on the right is the recessed canvas (tinted in light, darkest in dark), so the two read as different places. */}
-      <GaChat width={width} />
+      {live ? <GaVera width={width} /> : <GaChat width={width} />}
       <div
         role="separator"
         aria-orientation="vertical"

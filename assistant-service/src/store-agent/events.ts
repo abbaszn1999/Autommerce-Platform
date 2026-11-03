@@ -67,6 +67,12 @@ export function describeTool(name: string, args: Args): Described {
       return { kind: "file", title: "Preparing an image for the store", detail: base(args.path) || undefined };
     case "save_store_note":
       return { kind: "other", title: "Remembering for this store", detail: clip(str(args.note), 120) || undefined };
+    case "ads_overview":
+      return { kind: "store_read", title: "Reading the Google Ads account" };
+    case "ads_query":
+      return { kind: "store_read", title: "Querying Google Ads", detail: clip(str(args.purpose), 140) || undefined };
+    case "ads_change":
+      return { kind: "store_write", title: "Changing Google Ads", detail: clip(str(args.title), 140) || undefined };
     case "run_script":
       return { kind: "file", title: "Analysing the data", detail: Array.isArray(args.inputs) ? clip(args.inputs.map(base).join(", "), 100) : undefined };
     case "make_document":
@@ -181,6 +187,18 @@ export function summarizeResult(name: string, result: unknown): { ok: boolean; s
         return { ok: true, summary: text ? clip(scrub(text).replace(/\s+/g, " "), 140) : undefined };
       }
     }
+    case "ads_overview":
+      return { ok: true, summary: /saved to google-ads\//.test(text) ? "large result saved to a file" : undefined };
+    case "ads_query": {
+      if (/saved to google-ads\//.test(text)) return { ok: true, summary: "large result saved to a file" };
+      try {
+        return { ok: true, summary: `${(JSON.parse(text) as { rowCount?: number }).rowCount ?? 0} rows` };
+      } catch {
+        return { ok: true };
+      }
+    }
+    case "ads_change":
+      return { ok: true, summary: "applied in Google Ads" };
     case "shopify_schema":
     case "woo_schema":
     case "webSearch":

@@ -22,6 +22,8 @@ export interface ServiceConfig {
   rates: TokenRates;
   /** Store Agent: on when Supabase and the integration key are configured. */
   storeAgent: { supabaseUrl: string; serviceRoleKey: string; workDir: string } | null;
+  /** The platform site, which the Google Ads agent's tools call (signed with `secret`). */
+  platformUrl: string;
 }
 
 export type TokenRates = { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -90,5 +92,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServiceConfig 
       cacheWrite: num(env.ASSISTANT_RATE_CACHE_WRITE, base.cacheWrite),
     },
     storeAgent,
+    platformUrl: (env.PLATFORM_URL || "http://127.0.0.1:4000").replace(/\/+$/, ""),
   };
 }

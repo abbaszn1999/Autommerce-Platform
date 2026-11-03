@@ -3,12 +3,13 @@
 import { create } from "zustand";
 import { emptyReply, reduceReply, type ReplyState } from "@/lib/store-agent/blocks";
 import { requestLabel } from "@/lib/store-agent/mentions";
-import type { ModelParam, StoreAgentEvent } from "@/lib/store-agent/protocol";
+import type { AgentDomain, ModelParam, StoreAgentEvent } from "@/lib/store-agent/protocol";
 import { toast } from "sonner";
 import {
   ApiError,
   PLAN_TAB_PREFIX,
   readEvents,
+  setAgentDomain,
   storeAgentApi,
   type ApprovalState,
   type ChatFile,
@@ -62,9 +63,12 @@ type State = {
   availability: "checking" | "ready" | "off" | "no_store" | "error";
   /** Concrete gaps found in the store, for the new-chat screen. */
   insights: Insight[];
+  /** Which agent's chats are loaded: the Store Assistant's or the Google Ads page's. */
+  domain: AgentDomain;
 };
 
 const initial: State = {
+  domain: "store",
   availability: "checking",
   insights: [],
   workspaceId: null,
@@ -90,7 +94,8 @@ const replayUntil = new Map<string, number>();
 let onRunFinished: (() => void) | null = null;
 
 const isDraft = (id: string) => id.startsWith("draft-");
-const tabsKey = (ws: string) => `store-agent:tabs:${ws}`;
+// Store Assistant tabs keep their original key; Google Ads tabs are kept apart.
+const tabsKey = (ws: string) => (get().domain === "store" ? `store-agent:tabs:${ws}` : `store-agent:tabs:${get().domain}:${ws}`);
 
 function saveTabs() {
   const { workspaceId, openTabs, activeChatId } = get();
@@ -130,12 +135,14 @@ function defaultModel(): { modelId: string; modelParams: ModelParam[] } {
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
-export async function initStoreAgent(workspaceId: string, opts: { onRunFinished?: () => void } = {}) {
+export async function initStoreAgent(workspaceId: string, opts: { onRunFinished?: () => void; domain?: AgentDomain } = {}) {
   onRunFinished = opts.onRunFinished ?? null;
-  if (get().workspaceId === workspaceId && get().chatsLoaded) return;
+  const domain = opts.domain ?? "store";
+  if (get().workspaceId === workspaceId && get().domain === domain && get().chatsLoaded) return;
   for (const reader of readers.values()) reader.abort();
   readers.clear();
-  set({ ...initial, workspaceId });
+  setAgentDomain(domain);
+  set({ ...initial, workspaceId, domain });
 
   let catalog: Awaited<ReturnType<typeof storeAgentApi.models>>;
   try {
@@ -148,10 +155,11 @@ export async function initStoreAgent(workspaceId: string, opts: { onRunFinished?
   const chats = await storeAgentApi.listChats(workspaceId).catch(() => ({ chats: [] as ChatSummary[] }));
   set({ chats: chats.chats, chatsLoaded: true, models: catalog.models, autoRun: catalog.prefs.autoRun, availability: "ready" });
   // Suggestions come from a quick scan of the store; the page does not wait for them.
-  void storeAgentApi
-    .insights(workspaceId)
-    .then((r) => get().workspaceId === workspaceId && set({ insights: r.insights ?? [] }))
-    .catch(() => undefined);
+  if (domain === "store")
+    void storeAgentApi
+      .insights(workspaceId)
+      .then((r) => get().workspaceId === workspaceId && get().domain === "store" && set({ insights: r.insights ?? [] }))
+      .catch(() => undefined);
 
   let saved: { tabs?: string[]; active?: string | null } = {};
   try {

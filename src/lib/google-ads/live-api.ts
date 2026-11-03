@@ -28,6 +28,18 @@ export type LiveAdsAccount = {
 
 export type LiveMerchantAccount = { merchantId: string; name: string; website: string; timeZone: string };
 
+export type LiveChangeRecord = {
+  id: string;
+  title: string;
+  source: "AGENT" | "USER" | "RECOMMENDATION" | "UNDO";
+  status: "applied";
+  ops: MutateOp[];
+  inverse: MutateOp[] | null;
+  undo_of: string | null;
+  undone_at: string | null;
+  created_at: string;
+};
+
 /** Readable text for the error codes the routes return. */
 export const LIVE_ERRORS: Record<string, string> = {
   invalid_customer_id: "Enter the 10-digit Google Ads customer ID, e.g. 123-456-7890.",
@@ -90,6 +102,9 @@ export const liveApi = {
     if (!res.ok) throw new LiveApiError(LIVE_ERRORS[data.error ?? ""] ?? "Couldn't reach Google Ads. Try again; the change is never sent twice.");
     return data as { status: "applied"; id: string; inverse: MutateOp[]; warnings: string[] };
   },
+
+  /** Applied changes for the workspace's account, newest first (from the page and from Vera's chats). */
+  history: (workspaceId: string) => call<{ changes: LiveChangeRecord[] }>(`/api/google-ads/changes?${qs({ workspaceId })}`),
 
   /** Read-only snapshot of the chosen Google Ads account for a date range. */
   account: (workspaceId: string, range: { start: string; end: string }, force: boolean) =>
