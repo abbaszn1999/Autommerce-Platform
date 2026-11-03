@@ -780,6 +780,11 @@ export type AccountData = {
    * reports child metrics directly.
    */
   weights: Record<string, { share: number; efficiency: number }>;
+  /**
+   * Live accounts: real totals per ad group, keyword, ad and search term for one
+   * date range. Used as-is for that range; other ranges fall back to `weights`.
+   */
+  exact?: { start: string; end: string; byId: Record<string, BaseMetrics> };
 };
 
 // ─── Agent conversation ────────────────────────────────────────────────────

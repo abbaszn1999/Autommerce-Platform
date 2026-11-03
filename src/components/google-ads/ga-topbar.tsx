@@ -118,7 +118,7 @@ export function GaTopbar() {
       <div className="ml-auto flex items-center gap-1.5">
         <button
           type="button"
-          onClick={() => void refreshData()}
+          onClick={() => void refreshData({ force: true })}
           disabled={acc.sync.status === "loading"}
           className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 px-2.5 text-xs hover:bg-muted disabled:opacity-60"
           title={`${getDataSource().label}. Reload the latest numbers.`}

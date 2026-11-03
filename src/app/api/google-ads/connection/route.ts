@@ -11,6 +11,7 @@ import {
   startConnection,
   toClientConnection,
 } from "@/lib/google-ads/connection.server";
+import { forgetLiveAccount } from "@/lib/google-ads/live-report.server";
 
 const fail = (err: unknown) => {
   const { status, code } = errorStatus(err);
@@ -59,6 +60,7 @@ export async function DELETE(request: NextRequest) {
     if (!isConnectionKind(kind)) return NextResponse.json({ error: "invalid_kind" }, { status: 400 });
     const { admin } = await requireConnectionAccess(workspaceId, { admin: true });
     await disconnect(admin, workspaceId, kind);
+    if (kind === "ads") forgetLiveAccount(workspaceId);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return fail(err);

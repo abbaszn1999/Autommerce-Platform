@@ -91,7 +91,9 @@ describe("store in live mode", () => {
     useGoogleAds.getState().chooseAccount("2046362164");
     await vi.waitFor(() => expect(useGoogleAds.getState().status).toBe("connected"));
     s = useGoogleAds.getState();
-    expect(calls.at(-1)).toMatchObject({ method: "POST", body: { workspaceId: "ws1", kind: "ads", accountId: "2046362164" } });
+    expect(calls.find((c) => c.method === "POST")).toMatchObject({ body: { workspaceId: "ws1", kind: "ads", accountId: "2046362164" } });
+    // Opening the account loads its data right away.
+    expect(calls.at(-1)!.url).toMatch(/^\/api\/google-ads\/data\?workspaceId=ws1&start=/);
     expect(s.customerId).toBe("2046362164");
     expect(s.accounts["2046362164"]!.data.account).toMatchObject({ name: "Kalema", currency: "USD" });
     // A real account starts empty: no demo campaigns leak in.
@@ -99,7 +101,7 @@ describe("store in live mode", () => {
     expect(s.entered).toBe(false);
   });
 
-  it("reopens a connected account and its Merchant Center without calling Google", async () => {
+  it("reopens a connected account and its Merchant Center without listing accounts again", async () => {
     routes["GET /api/google-ads/connection"] = {
       configured: true,
       ads: { ...none, status: "connected", accountId: "2046362164", accountName: "Kalema", currency: "USD", timeZone: "Asia/Beirut" },
@@ -109,7 +111,45 @@ describe("store in live mode", () => {
     const s = useGoogleAds.getState();
     expect(s.status).toBe("connected");
     expect(s.merchant).toMatchObject({ status: "connected", merchantId: "5898433148" });
-    expect(calls).toHaveLength(1);
+    // The connection, then the account's data; no account list.
+    expect(calls.map((c) => c.url.split("?")[0])).toEqual(["/api/google-ads/connection", "/api/google-ads/data"]);
+  });
+
+  it("loads the real account for the range on screen, and reloads when the range changes", async () => {
+    routes["GET /api/google-ads/connection"] = {
+      configured: true,
+      ads: { ...none, status: "connected", accountId: "2046362164", accountName: "Kalema", currency: "USD", timeZone: "Asia/Beirut" },
+      merchant: none,
+    };
+    const snapshot = (start: string, end: string) => ({
+      data: {
+        ...useGoogleAds.getState().accounts["2046362164"]?.data,
+        account: { customerId: "2046362164", name: "Kalema", currency: "USD", timeZone: "Asia/Beirut", isManager: false, optimizationScore: 0.5, autoTagging: true },
+        campaigns: [{ id: "111", name: "Brand – Search" }],
+        exact: { start, end, byId: {} },
+      },
+      fetchedAt: new Date().toISOString(),
+    });
+    const range = useGoogleAds.getState().range;
+    routes["GET /api/google-ads/data"] = snapshot(range.start, range.end);
+    // Opening the connected account loads it; no extra call needed.
+    await useGoogleAds.getState().initLive("ws1");
+    await vi.waitFor(() => expect(useGoogleAds.getState().accounts["2046362164"]!.data.campaigns).toHaveLength(1));
+    const load = calls.find((c) => c.url.startsWith("/api/google-ads/data"))!;
+    expect(load.url).toBe(`/api/google-ads/data?workspaceId=ws1&start=${range.start}&end=${range.end}`);
+
+    calls.length = 0;
+    useGoogleAds.getState().setRange("LAST_7_DAYS");
+    await vi.waitFor(() => expect(calls.some((c) => c.url.startsWith("/api/google-ads/data"))).toBe(true));
+    const week = useGoogleAds.getState().range;
+    expect(calls.find((c) => c.url.startsWith("/api/google-ads/data"))!.url).toContain(`start=${week.start}`);
+
+    // Refresh button: skips the server cache.
+    await vi.waitFor(() => expect(useGoogleAds.getState().accounts["2046362164"]!.sync.status).toBe("ready"));
+    calls.length = 0;
+    await useGoogleAds.getState().refreshData({ force: true });
+    expect(calls.at(-1)!.url).toContain("refresh=1");
+    useGoogleAds.getState().setRange("LAST_30_DAYS");
   });
 
   it("reports a sign-in that didn't finish", async () => {

@@ -1,5 +1,7 @@
-// Browser calls to /api/google-ads/connection. The store uses these in live mode;
-// demo mode never touches the network.
+// Browser calls to /api/google-ads/connection and /api/google-ads/data. The store
+// uses these in live mode; demo mode never touches the network.
+
+import type { AccountData } from "./types";
 
 export type LiveKind = "ads" | "merchant";
 
@@ -37,6 +39,8 @@ export const LIVE_ERRORS: Record<string, string> = {
   google_request_failed: "Google didn't answer. Try again in a moment.",
   connect_failed: "Couldn't start Google sign-in. Try again.",
   network: "Couldn't reach the connection service. Check your internet and try again.",
+  no_account: "Pick a Google Ads account first.",
+  invalid_range: "That date range can't be loaded.",
 };
 
 export class LiveApiError extends Error {}
@@ -69,4 +73,10 @@ export const liveApi = {
     }),
 
   disconnect: (workspaceId: string, kind: LiveKind) => call<{ ok: true }>(`/api/google-ads/connection?${qs({ workspaceId, kind })}`, { method: "DELETE" }),
+
+  /** Read-only snapshot of the chosen Google Ads account for a date range. */
+  account: (workspaceId: string, range: { start: string; end: string }, force: boolean) =>
+    call<{ data: AccountData; fetchedAt: string }>(
+      `/api/google-ads/data?${qs({ workspaceId, start: range.start, end: range.end, ...(force ? { refresh: "1" } : {}) })}`
+    ),
 };

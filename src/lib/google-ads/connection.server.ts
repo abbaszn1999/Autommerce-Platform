@@ -12,7 +12,8 @@ export type ConnectionKind = "ads" | "merchant";
 export const isConnectionKind = (v: unknown): v is ConnectionKind => v === "ads" || v === "merchant";
 
 export class ConnectionHttpError extends Error {
-  constructor(public status: number, message: string) {
+  /** `message` is the code sent to the browser; `detail` (e.g. Google's error text) is for server logs only. */
+  constructor(public status: number, message: string, public detail?: string) {
     super(message);
   }
 }
@@ -235,8 +236,28 @@ async function execute<T>(row: ConnectionRow, slug: string, args: Record<string,
     arguments: args,
     dangerouslySkipVersionCheck: true,
   });
-  if (!result.successful) throw new ConnectionHttpError(502, "google_request_failed");
+  if (!result.successful) throw new ConnectionHttpError(502, "google_request_failed", String(result.error ?? "").slice(0, 600));
   return result.data as T;
+}
+
+/**
+ * Run a GAQL query on one customer and return every row (follows page tokens).
+ * The customer id always comes from our database, never from the browser or the model.
+ */
+export async function searchGaql<T = Record<string, unknown>>(row: ConnectionRow, customerId: string, query: string, maxPages = 10): Promise<T[]> {
+  const rows: T[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < maxPages; page++) {
+    const data = await execute<{ results?: T[]; next_page_token?: string | null; nextPageToken?: string | null }>(row, "GOOGLEADS_SEARCH_GAQL", {
+      customer_id: customerId,
+      query,
+      ...(pageToken ? { page_token: pageToken } : {}),
+    });
+    rows.push(...(data.results ?? []));
+    pageToken = data.next_page_token ?? data.nextPageToken ?? undefined;
+    if (!pageToken) break;
+  }
+  return rows;
 }
 
 type CustomerRow = { customer?: { id?: string; descriptiveName?: string; currencyCode?: string; timeZone?: string; manager?: boolean } };

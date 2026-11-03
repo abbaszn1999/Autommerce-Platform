@@ -8,7 +8,7 @@ import { create } from "zustand";
 import { rangeFor } from "./metrics";
 import { MANAGER_ACCOUNT, MERCHANT_ACCOUNTS, buildDemoAccount, buildEmptyAccount, buildSecondAccount, DEMO_GOOGLE_EMAIL } from "./mock-data";
 import { LANDING_PAGE_TYPES } from "./constants";
-import { freshSync, getDataSource, type SyncState } from "./data-source";
+import { freshSync, getDataSource, liveDataSource, setDataSource, type SyncState } from "./data-source";
 import { applyOps, describeOps, gid, touchedBy } from "./mutations";
 import { validateOps } from "./validation";
 import { DEFAULT_PROFILE, seedMemories, type AgentDoc, type AgentMemory, type BusinessProfile } from "./docs";
@@ -148,7 +148,7 @@ type GaStore = {
 
   setView: (view: GaView) => void;
   /** Reload the open account from the data source (shows loading, then ready or an error with Retry). */
-  refreshData: () => Promise<void>;
+  refreshData: (opts?: { force?: boolean }) => Promise<void>;
   setScope: (scope: GaScope, view?: GaView) => void;
   setRange: (preset: DateRangePreset) => void;
   setAutoApprove: (on: boolean) => void;
@@ -328,7 +328,7 @@ function liveGoogleAccount(a: LiveAccountFields): GoogleAccount {
 
 /** A real account starts empty; its campaigns and reports load from Google in a later step. */
 function liveAccountData(account: GoogleAccount): AccountData {
-  return { ...buildEmptyAccount(), account, audiences: [], conversions: [] };
+  return { ...buildEmptyAccount(), account, audiences: [], conversions: [], links: [] };
 }
 
 const liveMerchant = (merchantId: string, name: string, website = ""): MerchantAccount => ({ merchantId, name, website, country: "" });
@@ -357,7 +357,7 @@ export const useGoogleAds = create<GaStore>((set, get) => {
     }));
   };
 
-  const openAdsAccount = (account: GoogleAccount, entered: boolean) =>
+  const openAdsAccount = (account: GoogleAccount, entered: boolean) => {
     set((s) => ({
       status: "connected",
       entered,
@@ -369,6 +369,9 @@ export const useGoogleAds = create<GaStore>((set, get) => {
       editor: { open: false },
       dialog: null,
     }));
+    // First open of a real account: load it from Google (the server caches it for a while).
+    if (!get().accounts[account.customerId]?.data.exact) void get().refreshData();
+  };
 
   const chooseLive = (customerId: string, entered: boolean) =>
     liveRun(async (workspaceId) => {
@@ -408,6 +411,7 @@ export const useGoogleAds = create<GaStore>((set, get) => {
   dialog: null,
 
   initLive: async (workspaceId, notice) => {
+    setDataSource(liveDataSource(workspaceId));
     set({
       mode: "live",
       workspaceId,
@@ -534,16 +538,20 @@ export const useGoogleAds = create<GaStore>((set, get) => {
 
   setView: (view) => set({ view }),
 
-  refreshData: async () => {
+  refreshData: async (opts) => {
     const start = get();
     const id = start.customerId;
     const acc = current(start);
     if (!id || !acc || acc.sync.status === "loading") return;
+    // Patch the account this load was for, even if the user switched accounts meanwhile.
     const patch = (sync: Partial<SyncState>, data?: AccountData) =>
-      set((s) => withAccount(s, (a) => ({ ...a, data: data ?? a.data, sync: { ...a.sync, ...sync } })));
+      set((s) => {
+        const a = s.accounts[id];
+        return a ? { accounts: { ...s.accounts, [id]: { ...a, data: data ?? a.data, sync: { ...a.sync, ...sync } } } } : {};
+      });
     patch({ status: "loading", error: undefined });
     try {
-      const next = await getDataSource().fetchAccount(id, acc.data);
+      const next = await getDataSource().fetchAccount(id, acc.data, { range: start.range, force: opts?.force });
       // Keep any change made while loading unless the source returned a new snapshot.
       patch({ status: "ready", refreshedAt: new Date().toISOString(), error: undefined }, next === acc.data ? undefined : next);
     } catch (err) {
@@ -558,7 +566,11 @@ export const useGoogleAds = create<GaStore>((set, get) => {
       return { scope, view: viewForScope(view ?? s.view, scope, type) };
     }),
 
-  setRange: (preset) => set({ range: rangeFor(preset) }),
+  setRange: (preset) => {
+    set({ range: rangeFor(preset) });
+    // Live: per-keyword and per-ad totals are exact for one range, so load the new one.
+    if (get().mode === "live") void get().refreshData();
+  },
   setAutoApprove: (on) => set({ autoApprove: on }),
   setAgentBusy: (busy, chatId) =>
     set((s) => {

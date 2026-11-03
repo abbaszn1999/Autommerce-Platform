@@ -91,7 +91,16 @@ function weightOf(data: AccountData, id: string) {
   return { id, ...(data.weights[id] ?? { share: 1, efficiency: 1 }) };
 }
 
+/** Real totals from Google when the account was loaded for exactly this range. */
+function exactFor(data: AccountData, id: string, range: DateRange): BaseMetrics | null {
+  const e = data.exact;
+  if (!e || e.start !== range.start || e.end !== range.end) return null;
+  return e.byId[id] ?? EMPTY_BASE;
+}
+
 export function adGroupBase(data: AccountData, adGroupId: string, range: DateRange): BaseMetrics {
+  const exact = exactFor(data, adGroupId, range);
+  if (exact) return exact;
   const adGroup = data.adGroups.find((g) => g.id === adGroupId);
   if (!adGroup) return EMPTY_BASE;
   const siblings = data.adGroups.filter((g) => g.campaignId === adGroup.campaignId && g.status !== "REMOVED");
@@ -106,6 +115,8 @@ export function assetGroupBase(data: AccountData, assetGroupId: string, range: D
 }
 
 export function keywordBase(data: AccountData, keywordId: string, range: DateRange): BaseMetrics {
+  const exact = exactFor(data, keywordId, range);
+  if (exact) return exact;
   const kw = data.keywords.find((k) => k.id === keywordId);
   if (!kw || kw.status === "PAUSED" || kw.status === "REMOVED") return EMPTY_BASE;
   const siblings = data.keywords.filter((k) => k.adGroupId === kw.adGroupId && k.status === "ENABLED");
@@ -113,6 +124,8 @@ export function keywordBase(data: AccountData, keywordId: string, range: DateRan
 }
 
 export function adBase(data: AccountData, adId: string, range: DateRange): BaseMetrics {
+  const exact = exactFor(data, adId, range);
+  if (exact) return exact;
   const ad = data.ads.find((a) => a.id === adId);
   if (!ad || ad.status !== "ENABLED" || ad.policy === "DISAPPROVED") return EMPTY_BASE;
   const siblings = data.ads.filter((a) => a.adGroupId === ad.adGroupId && a.status === "ENABLED" && a.policy !== "DISAPPROVED");
@@ -120,6 +133,8 @@ export function adBase(data: AccountData, adId: string, range: DateRange): BaseM
 }
 
 export function searchTermBase(data: AccountData, termId: string, range: DateRange): BaseMetrics {
+  const exact = exactFor(data, termId, range);
+  if (exact) return exact;
   const term = data.searchTerms.find((t) => t.id === termId);
   if (!term) return EMPTY_BASE;
   const siblings = data.searchTerms.filter((t) => t.adGroupId === term.adGroupId || (!t.adGroupId && t.campaignId === term.campaignId));
