@@ -1,6 +1,7 @@
 // Browser calls to /api/google-ads/connection and /api/google-ads/data. The store
 // uses these in live mode; demo mode never touches the network.
 
+import type { MerchantSnapshot } from "./merchant-live";
 import type { AccountData, MutateOp } from "./types";
 
 export type LiveKind = "ads" | "merchant";
@@ -111,4 +112,8 @@ export const liveApi = {
     call<{ data: AccountData; fetchedAt: string }>(
       `/api/google-ads/data?${qs({ workspaceId, start: range.start, end: range.end, ...(force ? { refresh: "1" } : {}) })}`
     ),
+
+  /** Products, their status and issues in the chosen Merchant Center account. */
+  merchant: (workspaceId: string, force: boolean) =>
+    call<{ data: MerchantSnapshot }>(`/api/google-ads/merchant?${qs({ workspaceId, ...(force ? { refresh: "1" } : {}) })}`),
 };

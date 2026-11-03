@@ -180,16 +180,24 @@ async function retryOnNetwork<T>(fn: () => Promise<T>, run: StoreAgentRun, log: 
  * previous run started, so the agent does not answer from stale memory.
  */
 /** The Google Ads account a Google Ads chat works on (picked on the Google Ads page). */
-async function loadAdsAccount(db: SupabaseClient, workspaceId: string): Promise<{ accountName: string; customerId: string; currency: string }> {
+async function loadAdsAccount(
+  db: SupabaseClient,
+  workspaceId: string
+): Promise<{ accountName: string; customerId: string; currency: string; merchant: { name: string; id: string } | null }> {
   const { data } = await db
     .from("google_ads_connections")
-    .select("account_id, account_name, account_currency")
+    .select("kind, account_id, account_name, account_currency")
     .eq("workspace_id", workspaceId)
-    .eq("kind", "ads")
-    .not("composio_connected_account_id", "is", null)
-    .maybeSingle();
-  if (!data?.account_id) throw new Error("Google Ads is not connected for this workspace. Connect it on the Google Ads page.");
-  return { accountName: String(data.account_name ?? data.account_id), customerId: String(data.account_id), currency: String(data.account_currency ?? "") };
+    .not("composio_connected_account_id", "is", null);
+  const ads = data?.find((r) => r.kind === "ads");
+  const merchant = data?.find((r) => r.kind === "merchant" && r.account_id);
+  if (!ads?.account_id) throw new Error("Google Ads is not connected for this workspace. Connect it on the Google Ads page.");
+  return {
+    accountName: String(ads.account_name ?? ads.account_id),
+    customerId: String(ads.account_id),
+    currency: String(ads.account_currency ?? ""),
+    merchant: merchant ? { name: String(merchant.account_name ?? merchant.account_id), id: String(merchant.account_id) } : null,
+  };
 }
 
 async function undoneSinceLastRun(db: SupabaseClient, chatId: string, currentRunId: string): Promise<string[]> {

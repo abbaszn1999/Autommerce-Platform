@@ -12,6 +12,7 @@ import { metricColumns } from "../ga-columns";
 import { BulkButton, GaTable, type GaColumn } from "../ga-table";
 import { Card, EmptyState, ImageTile, Pill, Segmented, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
+import { LiveProductsView } from "./merchant-products";
 import { SearchBox } from "./campaigns";
 import { campaignProducts } from "./search-insights";
 
@@ -23,6 +24,12 @@ const STATUS: Record<Product["status"], { label: string; tone: "good" | "warn" |
 };
 
 export function ProductsView() {
+  // Live accounts read products straight from the connected Merchant Center.
+  const live = useGoogleAds((s) => s.mode === "live");
+  return live ? <LiveProductsView /> : <DemoProductsView />;
+}
+
+function DemoProductsView() {
   const { data, range, currency, campaign, assetGroup } = useGa();
   const setView = useGoogleAds((s) => s.setView);
   const merchantConnected = useGoogleAds((s) => !!s.merchant.merchantId);

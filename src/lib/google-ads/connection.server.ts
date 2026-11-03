@@ -228,7 +228,8 @@ async function deleteComposioAccount(id: string) {
   }
 }
 
-async function execute<T>(row: ConnectionRow, slug: string, args: Record<string, unknown>): Promise<T> {
+/** Run one Composio tool on this connection; a refusal from Google becomes `google_request_failed`. */
+export async function execute<T>(row: ConnectionRow, slug: string, args: Record<string, unknown>): Promise<T> {
   if (!row.composio_connected_account_id) throw new ConnectionHttpError(409, "not_connected");
   const result = await getComposio().tools.execute(slug, {
     userId: row.workspace_id,

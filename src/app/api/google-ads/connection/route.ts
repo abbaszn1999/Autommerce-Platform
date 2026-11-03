@@ -12,6 +12,7 @@ import {
   toClientConnection,
 } from "@/lib/google-ads/connection.server";
 import { forgetLiveAccount } from "@/lib/google-ads/live-report.server";
+import { forgetMerchant } from "@/lib/google-ads/merchant.server";
 
 const fail = (err: unknown) => {
   const { status, code } = errorStatus(err);
@@ -61,6 +62,7 @@ export async function DELETE(request: NextRequest) {
     const { admin } = await requireConnectionAccess(workspaceId, { admin: true });
     await disconnect(admin, workspaceId, kind);
     if (kind === "ads") forgetLiveAccount(workspaceId);
+    else forgetMerchant(workspaceId);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return fail(err);

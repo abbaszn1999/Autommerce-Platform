@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authorizeStoreAgent, callStoreAgentService, chatDomain, type StoreAgentAccess } from "@/lib/store-agent/server";
 import { errorStatus, loadConnection } from "@/lib/google-ads/connection.server";
 import { applyLiveChange } from "@/lib/google-ads/live-mutate.server";
+import { applyMerchantChange } from "@/lib/google-ads/merchant.server";
 import { LIVE_ERRORS } from "@/lib/google-ads/live-api";
 
 export const runtime = "nodejs";
@@ -55,18 +56,20 @@ async function undoGoogleAdsApproval(access: StoreAgentAccess, approvalId: strin
   const { data: chat } = await access.admin.from("store_agent_chats").select("user_id, workspace_id").eq("id", chatId).maybeSingle();
   if (!chat || chat.user_id !== access.userId) return NextResponse.json({ error: "Not found" }, { status: 404 });
   try {
-    const row = await loadConnection(access.admin, String(chat.workspace_id), "ads");
-    if (!row?.composio_connected_account_id || !row.account_id) return NextResponse.json({ error: LIVE_ERRORS.not_connected }, { status: 409 });
     const { data: change } = await access.admin
       .from("google_ads_changes")
-      .select("id")
+      .select("id, target")
       .eq("workspace_id", String(chat.workspace_id))
       .eq("client_change_id", approvalId)
       .eq("status", "applied")
       .maybeSingle();
     if (!change) return NextResponse.json({ error: "This change was not applied, so there is nothing to undo." }, { status: 409 });
+    const merchant = change.target === "merchant";
+    const row = await loadConnection(access.admin, String(chat.workspace_id), merchant ? "merchant" : "ads");
+    if (!row?.composio_connected_account_id || !row.account_id) return NextResponse.json({ error: LIVE_ERRORS.not_connected }, { status: 409 });
     // A fixed id per approval: pressing Undo twice can't undo twice.
-    const result = await applyLiveChange({ admin: access.admin, row, userId: access.userId, input: { clientChangeId: `undo:${approvalId}`, undoOf: change.id } });
+    const undo = { admin: access.admin, row, userId: access.userId, input: { clientChangeId: `undo:${approvalId}`, undoOf: String(change.id) } };
+    const result = merchant ? await applyMerchantChange(undo) : await applyLiveChange(undo);
     if (result.status === "failed") return NextResponse.json({ error: result.error }, { status: 422 });
     await access.admin.from("store_agent_approvals").update({ undone_at: new Date().toISOString(), undoable: false }).eq("id", approvalId);
     return NextResponse.json({ restored: 1, failed: 0, errors: [], skipped: [] });

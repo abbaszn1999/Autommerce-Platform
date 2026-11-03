@@ -270,7 +270,7 @@ function ApprovalCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className={cn("flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide", style.accent)}>
-            {block.operations.includes("Google Ads") ? "Google Ads change" : style.label}
+            {block.operations.includes("Google Ads") ? "Google Ads change" : block.operations.includes("Merchant Center") ? "Merchant Center change" : style.label}
             {!!block.records && block.records > 1 && (
               <span className="rounded-full bg-background/70 px-1.5 py-px text-[10px] font-semibold normal-case tracking-normal text-muted-foreground">
                 {block.records.toLocaleString()} records

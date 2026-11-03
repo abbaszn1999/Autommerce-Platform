@@ -8,9 +8,11 @@ export type AdsPlatform = { url: string; secret: string };
 
 export class AdsPlatformError extends Error {}
 
+export type AdsAction = "overview" | "query" | "preview" | "apply" | "merchant" | "merchant_preview" | "merchant_apply";
+
 export async function callAdsPlatform<T>(
   platform: AdsPlatform,
-  params: { action: "overview" | "query" | "preview" | "apply"; userId: string; body: Record<string, unknown>; signal?: AbortSignal }
+  params: { action: AdsAction; userId: string; body: Record<string, unknown>; signal?: AbortSignal }
 ): Promise<T> {
   const path = `/api/google-ads/agent/${params.action}`;
   const body = JSON.stringify(params.body);
@@ -38,6 +40,7 @@ export async function callAdsPlatform<T>(
     const readable: Record<string, string> = {
       forbidden: "Only the workspace owner or an admin can use the Google Ads agent.",
       not_connected: "Google Ads is not connected for this workspace any more. The user must reconnect it on the Google Ads page.",
+      merchant_not_connected: "Merchant Center is not connected for this workspace. The user can connect it on the Google Ads page (Connections).",
       not_approved: "This change was not approved, so it was not applied.",
       network: "Google Ads could not be reached. Try again in a moment.",
       google_request_failed: "Google Ads did not answer. Try again in a moment.",

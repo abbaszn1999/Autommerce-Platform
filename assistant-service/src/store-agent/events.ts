@@ -73,6 +73,10 @@ export function describeTool(name: string, args: Args): Described {
       return { kind: "store_read", title: "Querying Google Ads", detail: clip(str(args.purpose), 140) || undefined };
     case "ads_change":
       return { kind: "store_write", title: "Changing Google Ads", detail: clip(str(args.title), 140) || undefined };
+    case "merchant_products":
+      return { kind: "store_read", title: "Reading Merchant Center products" };
+    case "merchant_change":
+      return { kind: "store_write", title: "Fixing Merchant Center products", detail: clip(str(args.title), 140) || undefined };
     case "run_script":
       return { kind: "file", title: "Analysing the data", detail: Array.isArray(args.inputs) ? clip(args.inputs.map(base).join(", "), 100) : undefined };
     case "make_document":
@@ -199,6 +203,10 @@ export function summarizeResult(name: string, result: unknown): { ok: boolean; s
     }
     case "ads_change":
       return { ok: true, summary: "applied in Google Ads" };
+    case "merchant_products":
+      return { ok: true, summary: /saved to google-ads\//.test(text) ? "large result saved to a file" : undefined };
+    case "merchant_change":
+      return { ok: true, summary: "sent to Merchant Center" };
     case "shopify_schema":
     case "woo_schema":
     case "webSearch":

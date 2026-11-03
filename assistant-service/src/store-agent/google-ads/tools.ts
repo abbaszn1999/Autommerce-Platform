@@ -7,7 +7,7 @@ import type { SDKCustomTool } from "@cursor/sdk";
 import type { ApprovalPreview } from "../../../../src/lib/store-agent/protocol";
 import { INLINE_RESULT_BYTES, byteLength } from "../sdk-output";
 import { failure, setChatStatus, stamp, text, writeChatFile, type ToolContext } from "../tool-helpers";
-import { AdsPlatformError, callAdsPlatform, type AdsPlatform } from "./platform";
+import { AdsPlatformError, callAdsPlatform, type AdsAction, type AdsPlatform } from "./platform";
 
 type PreviewItem = ApprovalPreview["items"][number];
 type PreviewResult = { ok: true; items: PreviewItem[]; warnings: string[]; operations: number } | { ok: false; error: string };
@@ -25,9 +25,62 @@ async function compact(ctx: ToolContext, payload: unknown, name: string): Promis
   return `The result is large (${json.length.toLocaleString("en")} characters) and was saved to ${relative}. Read it with read_file or analyse it with run_script. First part:\n${json.slice(0, 4000)}`;
 }
 
+/** Where a change goes: its platform actions and the label on its card. */
+const TARGETS = {
+  ads: { preview: "preview", apply: "apply", label: "Google Ads" },
+  merchant: { preview: "merchant_preview", apply: "merchant_apply", label: "Merchant Center" },
+} as const;
+
 export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): Record<string, SDKCustomTool> {
-  const call = <T>(action: "overview" | "query" | "preview" | "apply", body: Record<string, unknown>) =>
+  const call = <T>(action: AdsAction, body: Record<string, unknown>) =>
     callAdsPlatform<T>(platform, { action, userId: ctx.run.userId, body: { workspaceId: ctx.run.workspaceId, chatId: ctx.run.chatId, ...body }, signal: ctx.run.signal });
+
+  /** Check → card (always waits for a person) → apply; the platform re-checks the approval. */
+  const propose = async (target: keyof typeof TARGETS, args: Record<string, unknown>) => {
+    const { preview: previewAction, apply: applyAction, label } = TARGETS[target];
+    const title = typeof args.title === "string" ? args.title.trim().slice(0, 200) : "";
+    const reason = typeof args.reason === "string" ? args.reason.trim().slice(0, 1500) : "";
+    const ops = Array.isArray(args.edits) ? (args.edits as Record<string, unknown>[]) : [];
+    if (!title || !reason || !ops.length) return failure("Give the change a title, a reason and at least one edit.");
+    if (ctx.planMode) {
+      return failure(`Plan mode is on, so nothing in ${label} can change. Put this step in the plan; the user switches to Agent mode to carry it out.`);
+    }
+
+    // 1. Same checks as applying (and Google's validate_only for Google Ads). Refused changes never reach the card.
+    let preview: PreviewResult;
+    try {
+      preview = await call<PreviewResult>(previewAction, { ops });
+    } catch (error) {
+      return failure((error as Error).message);
+    }
+    if (!preview.ok) return failure(`This change can't be made: ${preview.error}`);
+
+    // 2. The card. These changes always wait for a person, whatever auto-run is set to.
+    const outcome = await waitForAdsApproval(ctx, { title, reason, items: preview.items, warnings: preview.warnings, label });
+    if (!outcome.ok) return failure(outcome.message);
+
+    // 3. Apply. The platform checks the approval again and reads the current state from Google.
+    let result: ApplyResult;
+    try {
+      result = await call<ApplyResult>(applyAction, { approvalId: outcome.approvalId, title, ops });
+    } catch (error) {
+      const message = error instanceof AdsPlatformError ? error.message : String(error);
+      return failure(`The change was approved but not confirmed by ${label}: ${message} Check the account before trying again; it is never applied twice.`);
+    } finally {
+      ctx.checkpoint();
+    }
+    if (result.status === "failed") return failure(`${label} did not apply the change: ${result.error}`);
+    // Applied: the card can now offer Undo (the platform kept the inverse).
+    ctx.run.emit({ type: "approval_resolved", approvalId: outcome.approvalId, status: "approved", auto: false, undoable: result.inverse.length > 0 });
+    return text(
+      JSON.stringify({
+        applied: true,
+        edits: ops.length,
+        warnings: result.warnings,
+        undo: result.inverse.length ? "The user can undo this change from its card." : "This change cannot be undone automatically.",
+      })
+    );
+  };
 
   return {
     ads_overview: {
@@ -83,50 +136,43 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
         },
         required: ["title", "reason", "edits"],
       },
-      execute: async (args) => {
-        const title = typeof args.title === "string" ? args.title.trim().slice(0, 200) : "";
-        const reason = typeof args.reason === "string" ? args.reason.trim().slice(0, 1500) : "";
-        const ops = Array.isArray(args.edits) ? (args.edits as Record<string, unknown>[]) : [];
-        if (!title || !reason || !ops.length) return failure("Give the change a title, a reason and at least one edit.");
-        if (ctx.planMode) {
-          return failure("Plan mode is on, so nothing in Google Ads can change. Put this step in the plan; the user switches to Agent mode to carry it out.");
-        }
+      execute: (args) => propose("ads", args),
+    },
 
-        // 1. Same checks as applying, plus Google's validate_only. Refused changes never reach the card.
-        let preview: PreviewResult;
+    merchant_products: {
+      description:
+        "The connected Merchant Center account's products: each product's id, title, description, brand, GTIN, image, price, availability, " +
+        "status (approved, limited, disapproved, pending) and every issue Google reports, plus the account's own issues and issue counts. " +
+        "Start here for any product or feed question.",
+      inputSchema: {
+        type: "object",
+        properties: { refresh: { type: "boolean", description: "Read fresh from Google instead of the last few minutes' copy. Only after a fix." } },
+      },
+      execute: async (args) => {
         try {
-          preview = await call<PreviewResult>("preview", { ops });
+          const res = await call<{ overview: unknown; fetchedAt: string }>("merchant", { refresh: args.refresh === true });
+          return text(await compact(ctx, { ...(res.overview as object), dataAsOf: res.fetchedAt }, "merchant-products"));
         } catch (error) {
           return failure((error as Error).message);
         }
-        if (!preview.ok) return failure(`This change can't be made: ${preview.error}`);
-
-        // 2. The card. Google Ads changes always wait for a person, whatever auto-run is set to.
-        const outcome = await waitForAdsApproval(ctx, { title, reason, items: preview.items, warnings: preview.warnings });
-        if (!outcome.ok) return failure(outcome.message);
-
-        // 3. Apply. The platform checks the approval again and uses Google's current state.
-        let result: ApplyResult;
-        try {
-          result = await call<ApplyResult>("apply", { approvalId: outcome.approvalId, title, ops });
-        } catch (error) {
-          const message = error instanceof AdsPlatformError ? error.message : String(error);
-          return failure(`The change was approved but not confirmed by Google Ads: ${message} Check the account before trying again; it is never applied twice.`);
-        } finally {
-          ctx.checkpoint();
-        }
-        if (result.status === "failed") return failure(`Google Ads did not apply the change: ${result.error}`);
-        // Applied: the card can now offer Undo (the platform kept the inverse).
-        ctx.run.emit({ type: "approval_resolved", approvalId: outcome.approvalId, status: "approved", auto: false, undoable: result.inverse.length > 0 });
-        return text(
-          JSON.stringify({
-            applied: true,
-            edits: ops.length,
-            warnings: result.warnings,
-            undo: result.inverse.length ? "The user can undo this change from its card." : "This change cannot be undone automatically.",
-          })
-        );
       },
+    },
+
+    merchant_change: {
+      description:
+        "Propose fixes to Merchant Center products: title, description, brand, GTIN, MPN, image link or Google product category. " +
+        "The user sees every product before → after on a card and must approve it; nothing changes without that. " +
+        'Edits: { "kind": "product.update", "productId": "<id from merchant_products>", "set": { ...fields } }, one per product.',
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: 'Short title in the user\'s language, e.g. "Clearer titles for 3 products".' },
+          reason: { type: "string", description: "Why: which issue or weakness each fix solves, in the user's language. Shown on the card." },
+          edits: { type: "array", minItems: 1, maxItems: 50, items: { type: "object", additionalProperties: true }, description: "One product.update per product." },
+        },
+        required: ["title", "reason", "edits"],
+      },
+      execute: (args) => propose("merchant", args),
     },
   };
 }
@@ -139,7 +185,7 @@ type AdsApproval = { ok: true; approvalId: string } | { ok: false; message: stri
  */
 async function waitForAdsApproval(
   ctx: ToolContext,
-  change: { title: string; reason: string; items: PreviewItem[]; warnings: string[] }
+  change: { title: string; reason: string; items: PreviewItem[]; warnings: string[]; label: string }
 ): Promise<AdsApproval> {
   const preview: ApprovalPreview = { items: change.items.slice(0, CARD_ITEMS), more: Math.max(0, change.items.length - CARD_ITEMS) };
   const summary = [change.title, change.reason, ...change.warnings.map((w) => `⚠ ${w}`)].join("\n\n").slice(0, 2000);
@@ -151,7 +197,7 @@ async function waitForAdsApproval(
       run_id: ctx.run.id,
       kind: "write",
       summary,
-      operations: ["Google Ads"],
+      operations: [change.label],
       preview,
     })
     .select("id")
@@ -159,7 +205,7 @@ async function waitForAdsApproval(
   if (error || !data) return { ok: false, message: `Could not record the change for approval (${error?.message ?? "no row"}). Do not make this change.` };
   const approvalId = data.id as string;
 
-  ctx.run.emit({ type: "approval", approvalId, risk: "write", summary, operations: ["Google Ads"], preview, records: change.items.length });
+  ctx.run.emit({ type: "approval", approvalId, risk: "write", summary, operations: [change.label], preview, records: change.items.length });
   await setChatStatus(ctx, "awaiting_approval");
   const decision = await ctx.run.waitForApproval(approvalId);
   await setChatStatus(ctx, "running");
