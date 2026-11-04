@@ -14,10 +14,18 @@ import { Input } from "@/components/ui/input";
 import { BulkButton, GaTable, type GaColumn } from "../ga-table";
 import { ACCENT_BTN, Card, Delta, EmptyState, Field, Pill, SelectBox, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
+import { useGoogleAds } from "@/lib/google-ads/store";
+import { LiveKeywordPlannerView } from "./keyword-planner-live";
 
 // ─── Keyword Planner ───────────────────────────────────────────────────────
 
+/** Live accounts use Google's Keyword Planner; the demo keeps its sample ideas. */
 export function KeywordPlannerView() {
+  const live = useGoogleAds((s) => s.mode === "live");
+  return live ? <LiveKeywordPlannerView /> : <DemoKeywordPlannerView />;
+}
+
+function DemoKeywordPlannerView() {
   const { data } = useGa();
   const [seed, setSeed] = useState("running shoes");
   const [location, setLocation] = useState("Saudi Arabia");

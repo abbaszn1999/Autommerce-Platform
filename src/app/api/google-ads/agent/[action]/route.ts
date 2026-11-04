@@ -14,6 +14,8 @@ import { rangeFor } from "@/lib/google-ads/metrics";
 import { PROFILE_SOURCES, ProfileEditError, fieldLabel, formatValue, missingRequired, profileForAgent, type ProfileEdit, type ProfileSource } from "@/lib/business-profile";
 import { editProfile, loadProfile } from "@/lib/business-profile.server";
 import { DocInputError, parsePlanInput, parseReportInput } from "@/lib/google-ads/live-docs";
+import { KeywordInputError, rowsForAgent } from "@/lib/google-ads/keyword-planner";
+import { keywordForecast, keywordResearch } from "@/lib/google-ads/keyword-planner.server";
 import { docConnections, getDoc, savePlan, saveReport } from "@/lib/google-ads/live-docs.server";
 import type { MutateOp } from "@/lib/google-ads/types";
 
@@ -35,6 +37,8 @@ const ACTIONS = new Set([
   "doc_plan",
   "doc_report",
   "doc_read",
+  "keywords",
+  "keyword_forecast",
 ]);
 const UUID = /^[0-9a-f-]{36}$/i;
 const MAX_BODY = 200_000;
@@ -96,6 +100,28 @@ export async function POST(request: NextRequest, { params }: Params) {
       const targetRoas = given ?? (typeof saved === "number" ? saved : undefined);
       const report = await runReport(row, body.report, days, { targetRoas, force: body.refresh === true });
       return NextResponse.json({ ok: true, report });
+    }
+
+    if (action === "keywords" || action === "keyword_forecast") {
+      try {
+        if (action === "keyword_forecast") return NextResponse.json({ ok: true, forecast: await keywordForecast(admin, row, body) });
+        const research = await keywordResearch(admin, row, body);
+        return NextResponse.json({
+          ok: true,
+          research: {
+            mode: research.mode,
+            seed: research.seed,
+            countries: research.countries.map((c) => c.name),
+            language: research.language?.name ?? "all languages",
+            currency: research.currency,
+            totalIdeas: research.totalIdeas,
+            keywords: rowsForAgent(research.rows),
+          },
+        });
+      } catch (err) {
+        if (err instanceof KeywordInputError) return NextResponse.json({ ok: false, error: err.message });
+        throw err;
+      }
     }
 
     if (action === "query") {

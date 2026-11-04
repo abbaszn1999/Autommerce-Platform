@@ -80,7 +80,7 @@ function Help({ children, tone = "muted" }: { children: ReactNode; tone?: "muted
 }
 
 /** Every country's English name, for the countries field's suggestions. */
-function countryNames(): string[] {
+export function countryNames(): string[] {
   const names = new Intl.DisplayNames(["en"], { type: "region" });
   const out: string[] = [];
   for (let a = 65; a <= 90; a++)
@@ -93,7 +93,7 @@ function countryNames(): string[] {
 }
 
 /** A list typed as chips: Enter or comma adds, × removes. */
-function ChipsInput({
+export function ChipsInput({
   value,
   onChange,
   placeholder,

@@ -81,6 +81,12 @@ export function describeTool(name: string, args: Args): Described {
       return { kind: "store_write", title: "Fixing Merchant Center products", detail: clip(str(args.title), 140) || undefined };
     case "business_profile":
       return { kind: "store_read", title: "Reading the business profile" };
+    case "keyword_research": {
+      const seed = str(args.site) || str(args.url) || (Array.isArray(args.keywords) ? (args.keywords as unknown[]).slice(0, 3).map(String).join(", ") : "");
+      return { kind: "store_read", title: args.mode === "metrics" ? "Checking search volumes" : "Finding keyword ideas", detail: clip(seed, 120) || undefined };
+    }
+    case "keyword_forecast":
+      return { kind: "store_read", title: "Forecasting keywords", detail: Number(args.dailyBudget) ? `${args.dailyBudget} a day` : undefined };
     case "save_plan":
       return { kind: "plan", title: args.documentId ? "Revising the plan" : "Writing the plan", detail: clip(str(args.title), 140) || undefined };
     case "save_report":
@@ -234,7 +240,16 @@ export function summarizeResult(name: string, result: unknown): { ok: boolean; s
       }
     case "save_report":
     case "read_document":
+    case "keyword_forecast":
       return { ok: true };
+    case "keyword_research":
+      if (/saved to google-ads\//.test(text)) return { ok: true, summary: "large result saved to a file" };
+      try {
+        const n = ((JSON.parse(text) as { keywords?: unknown[] }).keywords ?? []).length;
+        return { ok: true, summary: `${n} keyword${n === 1 ? "" : "s"}` };
+      } catch {
+        return { ok: true };
+      }
     case "update_business_profile":
       try {
         const parsed = JSON.parse(text) as { saved?: unknown[]; skipped?: unknown[] };

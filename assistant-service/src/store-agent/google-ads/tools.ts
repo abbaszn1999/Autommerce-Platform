@@ -264,6 +264,70 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
       },
     },
 
+    keyword_research: {
+      description:
+        "Google Keyword Planner on the connected account (Google's own numbers, not estimates from a third party). " +
+        "mode \"ideas\": new keyword ideas from ONE seed: keywords (up to 20), url (a product or category page), site (a whole domain: the store's or a competitor's), " +
+        "or keywords + url together. mode \"metrics\": search volumes for keywords you already have (up to 1000). " +
+        "Each keyword: average monthly searches (last 12 months), competition, the top-of-page bid range in the account currency, " +
+        "the last 3 months against the average and the peak month when the year is seasonal, and whether the account already has it or a negative blocks it. " +
+        "Countries default to the business profile's markets and the language to its language; pass them to override.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          mode: { type: "string", enum: ["ideas", "metrics"] },
+          keywords: { type: "array", items: { type: "string" }, description: "ideas: up to 20 seed keywords; metrics: the keywords to measure (up to 1000)." },
+          url: { type: "string", description: "ideas: a page to read for ideas." },
+          site: { type: "string", description: "ideas: a whole domain, e.g. competitor.com. Not combined with keywords or url." },
+          countries: { type: "array", items: { type: "string" }, description: "Country names or two-letter codes, up to 10. Default: the profile's markets." },
+          language: { type: "string", description: "One language name or code (e.g. Arabic, en), or \"all\". Default: the profile's language." },
+          limit: { type: "number", description: "ideas: how many ideas to return, best first (10–1000, default 300)." },
+        },
+        required: ["mode"],
+      },
+      execute: async (args) => {
+        try {
+          const res = await call<{ ok: boolean; error?: string; research?: unknown }>("keywords", args);
+          if (!res.ok) return failure(res.error ?? "Keyword Planner did not answer.");
+          return text(await compact(ctx, res.research, "keywords"));
+        } catch (error) {
+          return failure((error as Error).message);
+        }
+      },
+    },
+
+    keyword_forecast: {
+      description:
+        "Google Keyword Planner forecast: what a set of keywords would bring with a daily budget (clicks, cost, average cost per click) over the next days. " +
+        "Nothing is created in the account. Use it to size a new campaign or a budget plan; say it is Google's forecast, not a promise.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          keywords: {
+            type: "array",
+            minItems: 1,
+            maxItems: 200,
+            items: { type: "object", properties: { text: { type: "string" }, matchType: { type: "string", enum: ["EXACT", "PHRASE", "BROAD"] } }, required: ["text"] },
+          },
+          dailyBudget: { type: "number", description: "Daily budget in the account currency." },
+          maxCpc: { type: "number", description: "Optional maximum cost per click (manual bidding); without it the forecast uses Maximize clicks." },
+          days: { type: "number", description: "Forecast length in days (7–365, default 30)." },
+          countries: { type: "array", items: { type: "string" } },
+          language: { type: "string" },
+        },
+        required: ["keywords", "dailyBudget"],
+      },
+      execute: async (args) => {
+        try {
+          const res = await call<{ ok: boolean; error?: string; forecast?: unknown }>("keyword_forecast", args);
+          if (!res.ok) return failure(res.error ?? "Keyword Planner did not answer.");
+          return text(JSON.stringify(res.forecast, null, 1));
+        } catch (error) {
+          return failure((error as Error).message);
+        }
+      },
+    },
+
     save_plan: {
       description:
         "Save a plan to the Documents page, where the owner reviews it and applies its steps (one by one or all together), with undo. " +

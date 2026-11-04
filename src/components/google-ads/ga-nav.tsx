@@ -19,6 +19,7 @@ import {
   MapPin,
   PanelsTopLeft,
   Plug,
+  Radar,
   Search,
   Settings2,
   ShoppingBag,
@@ -98,6 +99,8 @@ export function GaNav() {
       title: "Targeting & queries",
       items: [
         tabItem("keywords", KeyRound),
+        // Google's search volumes and ideas for the whole account (live accounts only).
+        { view: "keywordPlanner", label: "Keyword Planner", icon: Radar, hidden: !live || inCampaign },
         tabItem("searches", Search),
         tabItem("audiences", Users),
         tabItem("audienceSignalsPmax", Users),

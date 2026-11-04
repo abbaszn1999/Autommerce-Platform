@@ -21,7 +21,9 @@ export type AdsAction =
   | "profile_update"
   | "doc_plan"
   | "doc_report"
-  | "doc_read";
+  | "doc_read"
+  | "keywords"
+  | "keyword_forecast";
 
 export async function callAdsPlatform<T>(
   platform: AdsPlatform,
