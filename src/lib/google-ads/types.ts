@@ -631,9 +631,18 @@ export type DailyPoint = BaseMetrics & { date: string; searchImprShare?: number 
 
 export type MetricKey = keyof Metrics;
 
-export type DateRangePreset = "LAST_7_DAYS" | "LAST_14_DAYS" | "LAST_30_DAYS" | "LAST_90_DAYS";
+export type DateRangePreset =
+  | "TODAY"
+  | "YESTERDAY"
+  | "LAST_7_DAYS"
+  | "LAST_14_DAYS"
+  | "LAST_30_DAYS"
+  | "THIS_MONTH"
+  | "LAST_MONTH"
+  | "LAST_90_DAYS";
 
-export type DateRange = { preset: DateRangePreset; start: string; end: string };
+/** A preset, or "CUSTOM" for dates the user picked. */
+export type DateRange = { preset: DateRangePreset | "CUSTOM"; start: string; end: string };
 
 // ─── Mutations (proposed and applied changes) ──────────────────────────────
 

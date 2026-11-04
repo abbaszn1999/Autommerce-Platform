@@ -13,12 +13,20 @@ vi.mock("@/lib/google-ads/live-mutate.server", () => ({
   googleMessage: (d: string) => d,
 }));
 vi.mock("@/lib/google-ads/live-report.server", () => ({ loadLiveAccount: vi.fn() }));
+const runReport = vi.fn();
+vi.mock("@/lib/google-ads/live-reports.server", () => ({ runReport: (...a: unknown[]) => runReport(...a), forgetReports: vi.fn() }));
 const merchantApply = vi.fn();
 const merchantPreview = vi.fn();
 vi.mock("@/lib/google-ads/merchant.server", () => ({
   applyMerchantChange: (...a: unknown[]) => merchantApply(...a),
   previewMerchantChange: (...a: unknown[]) => merchantPreview(...a),
   loadMerchantSnapshot: vi.fn().mockResolvedValue({ merchantId: "5898578821", products: [], accountIssues: [], truncated: false, fetchedAt: "now" }),
+}));
+const editProfile = vi.fn();
+const loadProfile = vi.fn();
+vi.mock("@/lib/business-profile.server", () => ({
+  editProfile: (...a: unknown[]) => editProfile(...a),
+  loadProfile: (...a: unknown[]) => loadProfile(...a),
 }));
 vi.mock("@/lib/google-ads/connection.server", async () => {
   const actual = await vi.importActual<typeof import("@/lib/google-ads/connection.server")>("@/lib/google-ads/connection.server");
@@ -56,6 +64,7 @@ beforeEach(() => {
   tables.workspace_members = { role: "admin" };
   tables.store_agent_chats = { id: CHAT };
   tables.store_agent_approvals = { id: APPROVAL, status: "approved", decided_by: "u1" };
+  loadProfile.mockReset().mockResolvedValue({ values: {}, meta: {}, updatedAt: null, revision: null });
 });
 
 describe("POST /api/google-ads/agent/[action]", () => {
@@ -100,6 +109,59 @@ describe("POST /api/google-ads/agent/[action]", () => {
   it("refuses unknown actions and bad ids", async () => {
     expect((await post("delete", { workspaceId: WS, chatId: CHAT })).status).toBe(404);
     expect((await post("overview", { workspaceId: "nope", chatId: CHAT })).status).toBe(400);
+  });
+
+  describe("reports", () => {
+    beforeEach(() => runReport.mockReset().mockResolvedValue({ report: "conversions", findings: [] }));
+
+    it("runs a named report on the workspace's own account, 30 days by default", async () => {
+      const res = await post("report", { workspaceId: WS, chatId: CHAT, report: "conversions" });
+      expect(await res.json()).toMatchObject({ ok: true, report: { report: "conversions" } });
+      expect(runReport).toHaveBeenCalledWith(expect.objectContaining({ account_id: "2046362164" }), "conversions", 30, { targetRoas: undefined, force: false });
+    });
+
+    it("accepts only known reports and periods, and a sane target ROAS", async () => {
+      expect(await (await post("report", { workspaceId: WS, chatId: CHAT, report: "everything" })).json()).toMatchObject({ ok: false });
+      await post("report", { workspaceId: WS, chatId: CHAT, report: "products", days: 365, targetRoas: 1000 });
+      expect(runReport).toHaveBeenCalledWith(expect.anything(), "products", 30, { targetRoas: undefined, force: false });
+      await post("report", { workspaceId: WS, chatId: CHAT, report: "products", days: 90, targetRoas: 4 });
+      expect(runReport).toHaveBeenLastCalledWith(expect.anything(), "products", 90, { targetRoas: 4, force: false });
+    });
+
+    it("judges products against the target ROAS saved in the business profile", async () => {
+      loadProfile.mockResolvedValue({ values: { targetRoas: 5 }, meta: {}, updatedAt: null, revision: 1 });
+      await post("report", { workspaceId: WS, chatId: CHAT, report: "products" });
+      expect(runReport).toHaveBeenLastCalledWith(expect.anything(), "products", 30, { targetRoas: 5, force: false });
+    });
+  });
+
+  describe("business profile", () => {
+    const saved = { changes: [{ field: "margin", before: null, after: 0.4 }], skipped: [], profile: { values: { margin: 0.4 }, meta: {}, updatedAt: null } };
+    beforeEach(() => editProfile.mockReset().mockResolvedValue(saved));
+
+    it("saves what the user said in chat as confirmed, under the chat", async () => {
+      const res = await post("profile_update", { workspaceId: WS, chatId: CHAT, edits: [{ field: "margin", value: 40 }], statedByUser: true });
+      expect(await res.json()).toMatchObject({ ok: true, status: "confirmed", saved: [{ field: "margin", before: "(empty)", after: "40%" }] });
+      expect(editProfile).toHaveBeenCalledWith(expect.anything(), WS, [{ field: "margin", value: 40 }], { source: "chat", status: "confirmed" }, { userId: "u1", chatId: CHAT });
+    });
+
+    it("saves the agent's own findings only as suggestions, never as the owner", async () => {
+      for (const source of ["merchant", "owner", "chat", undefined]) {
+        await post("profile_update", { workspaceId: WS, chatId: CHAT, edits: [{ field: "brandVoice", value: "Calm." }], statedByUser: false, source });
+      }
+      expect(editProfile.mock.calls.map((c) => c[3])).toEqual([
+        { source: "merchant", status: "suggested" },
+        { source: "website", status: "suggested" },
+        { source: "website", status: "suggested" },
+        { source: "website", status: "suggested" },
+      ]);
+    });
+
+    it("needs owners or admins, like every other agent action", async () => {
+      tables.workspace_members = { role: "editor" };
+      expect((await post("profile_update", { workspaceId: WS, chatId: CHAT, edits: [{ field: "margin", value: 40 }], statedByUser: true })).status).toBe(403);
+      expect(editProfile).not.toHaveBeenCalled();
+    });
   });
 
   describe("Merchant Center", () => {

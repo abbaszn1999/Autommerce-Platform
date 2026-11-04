@@ -18,6 +18,8 @@ import { grantedScopes } from "./shopify/client";
 import { missingScopes } from "./shopify/guard";
 import { SCOPE_LABELS, STORE_AGENT_SCOPES } from "./shopify/scopes";
 import { plainMentions } from "../../../src/lib/store-agent/mentions";
+import { profileBrief } from "../../../src/lib/business-profile";
+import { loadProfile } from "../../../src/lib/business-profile.server";
 import { mentionContext, type MentionContext } from "./mentions";
 import { createDocumentTool } from "./document-tool";
 import { createExcelTool } from "./excel-tool";
@@ -175,10 +177,6 @@ async function retryOnNetwork<T>(fn: () => Promise<T>, run: StoreAgentRun, log: 
   }
 }
 
-/**
- * Changes the user undid (from the cards, outside the conversation) since the
- * previous run started, so the agent does not answer from stale memory.
- */
 /** The Google Ads account a Google Ads chat works on (picked on the Google Ads page). */
 async function loadAdsAccount(
   db: SupabaseClient,
@@ -200,6 +198,24 @@ async function loadAdsAccount(
   };
 }
 
+/**
+ * The workspace's shared business profile as the agent reads it. A failure
+ * to read it never stops the chat: the agent works without.
+ */
+async function loadBusinessContext(db: SupabaseClient, workspaceId: string, currency: string, log: (m: string, e?: unknown) => void) {
+  try {
+    const profile = await loadProfile(db, workspaceId);
+    return { brief: profileBrief(profile, currency), filled: Object.keys(profile.values).length > 0 };
+  } catch (error) {
+    log("reading the business profile failed", error);
+    return { brief: "", filled: false };
+  }
+}
+
+/**
+ * Changes the user undid (from the cards, outside the conversation) since the
+ * previous run started, so the agent does not answer from stale memory.
+ */
 async function undoneSinceLastRun(db: SupabaseClient, chatId: string, currentRunId: string): Promise<string[]> {
   const { data: previous } = await db
     .from("store_agent_runs")
@@ -524,11 +540,14 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     }
 
     await fs.mkdir(path.join(cwd, ".cursor", "rules"), { recursive: true });
+    const adsAccount = isAds ? await loadAdsAccount(db, req.workspaceId) : null;
+    const business = await loadBusinessContext(db, req.workspaceId, adsAccount?.currency ?? "", log);
     await fs.writeFile(
       path.join(cwd, ".cursor", "rules", "vera.mdc"),
-      isAds
-        ? veraAdsRule({ ...(await loadAdsAccount(db, req.workspaceId)), mode: req.mode })
+      adsAccount
+        ? veraAdsRule({ ...adsAccount, profile: business.brief, mode: req.mode })
         : veraRule({
+            businessProfile: business.filled ? business.brief : "",
             platform,
             storeName: storeInfo.name,
             shopDomain: storeInfo.domain,

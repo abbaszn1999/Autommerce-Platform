@@ -6,16 +6,20 @@ import { ConnectionHttpError, batchMutate, errorStatus, loadConnection, searchGa
 import { LivePlanError, planLiveChange } from "@/lib/google-ads/live-mutate";
 import { applyLiveChange, fetchBefore, googleMessage } from "@/lib/google-ads/live-mutate.server";
 import { loadLiveAccount } from "@/lib/google-ads/live-report.server";
+import { REPORTS, REPORT_DAYS, isReportName, type ReportDays } from "@/lib/google-ads/live-reports";
+import { runReport } from "@/lib/google-ads/live-reports.server";
 import { MerchantPlanError, merchantOverview, type MerchantOp } from "@/lib/google-ads/merchant-live";
 import { applyMerchantChange, loadMerchantSnapshot, previewMerchantChange } from "@/lib/google-ads/merchant.server";
 import { rangeFor } from "@/lib/google-ads/metrics";
+import { PROFILE_SOURCES, ProfileEditError, fieldLabel, formatValue, missingRequired, profileForAgent, type ProfileEdit, type ProfileSource } from "@/lib/business-profile";
+import { editProfile, loadProfile } from "@/lib/business-profile.server";
 import type { MutateOp } from "@/lib/google-ads/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-const ACTIONS = new Set(["overview", "query", "preview", "apply", "merchant", "merchant_preview", "merchant_apply"]);
+const ACTIONS = new Set(["overview", "query", "report", "preview", "apply", "merchant", "merchant_preview", "merchant_apply", "profile", "profile_update"]);
 const UUID = /^[0-9a-f-]{36}$/i;
 const MAX_BODY = 200_000;
 
@@ -55,6 +59,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (!member || !["owner", "admin"].includes(String(member.role))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
     if (!chat) return NextResponse.json({ error: "not_found" }, { status: 404 });
     if (action.startsWith("merchant")) return await merchantAction(action, body, { admin, workspaceId, chatId });
+    if (action === "profile" || action === "profile_update") return await profileAction(action, body, { admin, workspaceId, chatId }, caller.userId);
     const row = await loadConnection(admin, workspaceId, "ads");
     if (!row?.composio_connected_account_id || !row.account_id) return NextResponse.json({ error: "not_connected" }, { status: 409 });
     const customerId = row.account_id;
@@ -63,6 +68,17 @@ export async function POST(request: NextRequest, { params }: Params) {
       const range = rangeFor("LAST_30_DAYS");
       const { data, fetchedAt } = await loadLiveAccount(row, range);
       return NextResponse.json({ overview: accountOverview(data, range), fetchedAt });
+    }
+
+    if (action === "report") {
+      if (!isReportName(body.report)) return NextResponse.json({ ok: false, error: `Unknown report. Use one of: ${REPORTS.join(", ")}.` });
+      const days = (REPORT_DAYS as readonly number[]).includes(Number(body.days)) ? (Number(body.days) as ReportDays) : 30;
+      // The store's own target (business profile) unless the agent passes one; otherwise the account average.
+      const given = typeof body.targetRoas === "number" && body.targetRoas > 0 && body.targetRoas < 100 ? body.targetRoas : undefined;
+      const saved = body.report === "products" && given === undefined ? (await loadProfile(admin, workspaceId)).values.targetRoas : undefined;
+      const targetRoas = given ?? (typeof saved === "number" ? saved : undefined);
+      const report = await runReport(row, body.report, days, { targetRoas, force: body.refresh === true });
+      return NextResponse.json({ ok: true, report });
     }
 
     if (action === "query") {
@@ -129,6 +145,33 @@ async function approvedChange(admin: Ctx["admin"], body: Record<string, unknown>
     .maybeSingle();
   if (!approval || approval.status !== "approved" || !approval.decided_by) return NextResponse.json({ error: "not_approved" }, { status: 403 });
   return { approvalId, title, decidedBy: String(approval.decided_by) };
+}
+
+/**
+ * The business profile. What the user said in the chat is saved as confirmed;
+ * what the agent found itself (website, account data) only as a suggestion,
+ * under the rules in planProfileEdits.
+ */
+async function profileAction(action: string, body: Record<string, unknown>, { admin, workspaceId, chatId }: Ctx, userId: string) {
+  const currency = (await loadConnection(admin, workspaceId, "ads"))?.account_currency ?? "";
+  if (action === "profile") return NextResponse.json({ ok: true, profile: profileForAgent(await loadProfile(admin, workspaceId), currency) });
+  try {
+    const edits = Array.isArray(body.edits) ? (body.edits as ProfileEdit[]) : [];
+    if (!edits.length || !edits.every((e) => e && typeof e === "object")) return NextResponse.json({ ok: false, error: "Give at least one { field, value } edit." });
+    const stated = body.statedByUser === true;
+    const source = PROFILE_SOURCES.includes(body.source as ProfileSource) && body.source !== "owner" && body.source !== "chat" ? (body.source as ProfileSource) : "website";
+    const result = await editProfile(admin, workspaceId, edits, stated ? { source: "chat", status: "confirmed" } : { source, status: "suggested" }, { userId, chatId });
+    return NextResponse.json({
+      ok: true,
+      saved: result.changes.map((c) => ({ field: c.field, label: fieldLabel(c.field), before: formatValue(c.field, c.before, currency), after: formatValue(c.field, c.after, currency) })),
+      status: stated ? "confirmed" : "suggested",
+      skipped: result.skipped.map((s) => ({ field: s.field, label: fieldLabel(s.field), reason: s.reason })),
+      missingRequired: missingRequired(result.profile.values),
+    });
+  } catch (err) {
+    if (err instanceof ProfileEditError) return NextResponse.json({ ok: false, error: err.message });
+    throw err;
+  }
 }
 
 /** Merchant Center: products and issues, and product fixes (same approval rules as Google Ads). */

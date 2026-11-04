@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ConnectionHttpError, batchMutate, searchGaql, type ConnectionRow } from "./connection.server";
 import { forgetLiveAccount } from "./live-report.server";
+import { forgetReports } from "./live-reports.server";
 import { LivePlanError, inverseForCreated, planLiveChange, resultNames, type BeforeState } from "./live-mutate";
 import type { GaqlRow } from "./live-report";
 import type { EntityStatus, MatchType, MutateOp } from "./types";
@@ -240,6 +241,7 @@ export async function applyLiveChange(opts: {
     const inverse = [...created.inverse, ...plan.inverse];
     await finish(admin, claimed.id, { status: "applied", inverse, created_ids: created.keywordIds });
     forgetLiveAccount(row.workspace_id);
+    forgetReports(row.workspace_id);
     return { status: "applied", id: claimed.id, inverse, warnings: plan.warnings };
   } catch (err) {
     if (err instanceof LivePlanError) return fail(err.message);

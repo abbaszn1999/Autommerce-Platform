@@ -73,10 +73,18 @@ export function describeTool(name: string, args: Args): Described {
       return { kind: "store_read", title: "Querying Google Ads", detail: clip(str(args.purpose), 140) || undefined };
     case "ads_change":
       return { kind: "store_write", title: "Changing Google Ads", detail: clip(str(args.title), 140) || undefined };
+    case "ads_report":
+      return { kind: "store_read", title: "Analysing Google Ads", detail: str(args.report).replace(/_/g, " ") || undefined };
     case "merchant_products":
       return { kind: "store_read", title: "Reading Merchant Center products" };
     case "merchant_change":
       return { kind: "store_write", title: "Fixing Merchant Center products", detail: clip(str(args.title), 140) || undefined };
+    case "business_profile":
+      return { kind: "store_read", title: "Reading the business profile" };
+    case "update_business_profile": {
+      const fields = Array.isArray(args.edits) ? (args.edits as Array<{ field?: unknown }>).map((e) => str(e?.field)).filter(Boolean).join(", ") : "";
+      return { kind: "other", title: args.statedByUser === true ? "Saving to the business profile" : "Suggesting business profile values", detail: clip(fields, 120) || undefined };
+    }
     case "run_script":
       return { kind: "file", title: "Analysing the data", detail: Array.isArray(args.inputs) ? clip(args.inputs.map(base).join(", "), 100) : undefined };
     case "make_document":
@@ -203,10 +211,23 @@ export function summarizeResult(name: string, result: unknown): { ok: boolean; s
     }
     case "ads_change":
       return { ok: true, summary: "applied in Google Ads" };
+    case "ads_report":
+      return { ok: true, summary: /saved to google-ads\//.test(text) ? "large result saved to a file" : undefined };
     case "merchant_products":
       return { ok: true, summary: /saved to google-ads\//.test(text) ? "large result saved to a file" : undefined };
     case "merchant_change":
       return { ok: true, summary: "sent to Merchant Center" };
+    case "business_profile":
+      return { ok: true };
+    case "update_business_profile":
+      try {
+        const parsed = JSON.parse(text) as { saved?: unknown[]; skipped?: unknown[] };
+        const saved = parsed.saved?.length ?? 0;
+        const skipped = parsed.skipped?.length ?? 0;
+        return { ok: true, summary: `${saved} saved${skipped ? `, ${skipped} left to the owner` : ""}` };
+      } catch {
+        return { ok: true };
+      }
     case "shopify_schema":
     case "woo_schema":
     case "webSearch":

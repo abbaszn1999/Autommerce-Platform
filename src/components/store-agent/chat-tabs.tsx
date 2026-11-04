@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Popover } from "radix-ui";
-import { History, Loader2, MessageSquare, MoreHorizontal, Pencil, Pin, PinOff, Plus, Search, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, History, Loader2, MessageSquare, MoreHorizontal, Pencil, Pin, PinOff, Plus, Search, Trash2, X } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +35,70 @@ function StatusDot({ status }: { status: ChatSummary["status"] | "draft" }) {
     return <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-500" title="Waiting for you" />;
   if (status === "error" || status === "interrupted") return <span className="h-2 w-2 shrink-0 rounded-full bg-red-500/70" />;
   return <MessageSquare className="h-3 w-3 shrink-0 opacity-50" />;
+}
+
+/**
+ * The open tabs in one row that scrolls sideways when they don't fit: the
+ * mouse wheel scrolls it, arrows appear on the side that has more, the edges
+ * fade, and the active tab is always brought into view.
+ */
+function ScrollingTabs({ activeId, count, children }: { activeId: string | null; count: number; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setEdges({ left: el.scrollLeft > 1, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 });
+    // A vertical wheel turn scrolls the row sideways (a trackpad's sideways swipe already does).
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    el.addEventListener("scroll", measure, { passive: true });
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      observer.disconnect();
+      el.removeEventListener("scroll", measure);
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, [count]);
+
+  useEffect(() => {
+    if (!activeId) return;
+    ref.current?.querySelector(`[data-tab-id="${CSS.escape(activeId)}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }, [activeId, count]);
+
+  const page = (dir: 1 | -1) => ref.current?.scrollBy({ left: dir * Math.max(160, (ref.current?.clientWidth ?? 0) * 0.7), behavior: "smooth" });
+  const arrow = "absolute top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm hover:text-foreground";
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      <div
+        ref={ref}
+        className="flex items-center gap-0.5 overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{
+          maskImage: `linear-gradient(to right, ${edges.left ? "transparent, black 32px" : "black, black"}, ${edges.right ? "black calc(100% - 32px), transparent" : "black, black"})`,
+        }}
+      >
+        {children}
+      </div>
+      {edges.left && (
+        <button type="button" aria-label="Earlier tabs" onClick={() => page(-1)} className={cn(arrow, "left-0")}>
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {edges.right && (
+        <button type="button" aria-label="More tabs" onClick={() => page(1)} className={cn(arrow, "right-0")}>
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
 }
 
 export function ChatTabs({
@@ -149,13 +213,14 @@ export function ChatTabs({
 
   return (
     <div className={cn("flex h-10 shrink-0 items-center gap-1 border-b bg-background px-2", className)}>
-      <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
+      <ScrollingTabs activeId={activeId} count={tabs.length}>
         {tabs.map((id) => {
           const chat = byId.get(id);
           const active = id === activeId;
           return (
             <div
               key={id}
+              data-tab-id={id}
               className={cn(
                 "group relative flex h-8 min-w-[110px] max-w-[220px] shrink-0 items-center gap-1.5 rounded-lg ps-2.5 pe-1 text-[12.5px] transition-colors",
                 active ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
@@ -179,16 +244,16 @@ export function ChatTabs({
             </div>
           );
         })}
-        <button
-          type="button"
-          onClick={onNew}
-          aria-label="New chat"
-          title="New chat"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
+      </ScrollingTabs>
+      <button
+        type="button"
+        onClick={onNew}
+        aria-label="New chat"
+        title="New chat"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        <Plus className="h-4 w-4" />
+      </button>
 
       {actions}
       <Popover.Root open={historyOpen} onOpenChange={setHistoryOpen}>

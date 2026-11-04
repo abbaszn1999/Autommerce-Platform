@@ -65,6 +65,8 @@ export type AdsAccountOption = {
   managerCustomerId?: string;
   /** False for cancelled, suspended or otherwise unusable accounts. */
   usable: boolean;
+  /** Why an unusable account can't be used, when Google says. */
+  reason?: string;
 };
 
 export type MerchantAccountOption = { merchantId: string; name: string; website: string; timeZone: string };
@@ -115,7 +117,7 @@ export async function requireConnectionAccess(workspaceId: string, opts: { admin
   const { data: member } = await admin.from("workspace_members").select("role").eq("workspace_id", workspaceId).eq("user_id", user.id).maybeSingle();
   if (!member) throw new ConnectionHttpError(403, "forbidden");
   if (opts.admin && !["owner", "admin"].includes(member.role)) throw new ConnectionHttpError(403, "forbidden");
-  return { user, admin };
+  return { user, admin, role: String(member.role) };
 }
 
 export async function loadConnections(admin: SupabaseClient, workspaceId: string): Promise<Record<ConnectionKind, ConnectionRow | null>> {
@@ -280,6 +282,15 @@ export async function searchGaql<T = Record<string, unknown>>(row: ConnectionRow
   return rows;
 }
 
+/** Why Google won't open an account, in words a store owner understands. */
+export function unusableReason(detail: string | undefined): string {
+  if (!detail) return "Google didn't open this account";
+  if (/CUSTOMER_NOT_ENABLED/.test(detail)) return "Deactivated or not set up in Google Ads (often a payment problem)";
+  if (/USER_PERMISSION_DENIED|NOT_ACTIVE|PERMISSION_DENIED/.test(detail)) return "This sign-in has no access to it";
+  if (/CUSTOMER_NOT_FOUND/.test(detail)) return "Not found in Google Ads";
+  return "Google didn't open this account";
+}
+
 type CustomerRow = { customer?: { id?: string; descriptiveName?: string; currencyCode?: string; timeZone?: string; manager?: boolean } };
 type SubAccount = { customerClient?: { id?: string; descriptiveName?: string; manager?: boolean; status?: string; level?: string | number } };
 
@@ -297,9 +308,9 @@ export async function listAdsAccounts(row: ConnectionRow): Promise<AdsAccountOpt
         });
         const c = data.results?.[0]?.customer ?? {};
         return { customerId: id, name: c.descriptiveName || id, currency: c.currencyCode ?? "", timeZone: c.timeZone ?? "", isManager: !!c.manager, usable: true };
-      } catch {
-        // Google refuses cancelled or not-yet-enabled accounts; show them greyed out.
-        return { customerId: id, name: id, currency: "", timeZone: "", isManager: false, usable: false };
+      } catch (err) {
+        // Google refuses cancelled or not-yet-enabled accounts; show them greyed out, with Google's reason.
+        return { customerId: id, name: id, currency: "", timeZone: "", isManager: false, usable: false, reason: unusableReason((err as ConnectionHttpError).detail) };
       }
     })
   );

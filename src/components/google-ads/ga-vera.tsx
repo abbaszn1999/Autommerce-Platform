@@ -17,13 +17,35 @@ export function GaVera({ width }: { width: number }) {
   const accountName = useAccountData()?.account.name ?? "Google Ads";
 
   useEffect(() => {
-    setLiveAgentHandler((text) => {
+    // Ready means loaded AND its saved tabs reopened: a chat started before that is replaced by them.
+    const ready = () => {
       const s = useStoreAgent.getState();
-      if (s.domain !== "google_ads" || s.availability !== "ready") return;
-      const chatId = s.activeChatId ?? newChat();
-      void sendMessage(chatId, text, []);
+      return s.domain === "google_ads" && s.availability === "ready" && !!s.activeChatId;
+    };
+    const send = (text: string, chatId: string | null) => void sendMessage(chatId ?? newChat(), text, []);
+    let stopWaiting: (() => void) | null = null;
+    setLiveAgentHandler((text) => {
+      if (ready()) return send(text, useStoreAgent.getState().activeChatId);
+      // Just opened (e.g. straight from the setup screen): once the chat has loaded, send it in a chat of its own; drop it after 30 s.
+      stopWaiting?.();
+      const unsubscribe = useStoreAgent.subscribe(() => {
+        if (!ready()) return;
+        stopWaiting?.();
+        // An empty new chat that just opened is used as it is.
+        const active = useStoreAgent.getState().activeChatId;
+        send(text, active?.startsWith("draft-") ? active : null);
+      });
+      const timer = setTimeout(() => stopWaiting?.(), 30_000);
+      stopWaiting = () => {
+        unsubscribe();
+        clearTimeout(timer);
+        stopWaiting = null;
+      };
     });
-    return () => setLiveAgentHandler(null);
+    return () => {
+      stopWaiting?.();
+      setLiveAgentHandler(null);
+    };
   }, []);
 
   if (!workspace) return null;

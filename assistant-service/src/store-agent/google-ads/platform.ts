@@ -8,7 +8,17 @@ export type AdsPlatform = { url: string; secret: string };
 
 export class AdsPlatformError extends Error {}
 
-export type AdsAction = "overview" | "query" | "preview" | "apply" | "merchant" | "merchant_preview" | "merchant_apply";
+export type AdsAction =
+  | "overview"
+  | "query"
+  | "report"
+  | "preview"
+  | "apply"
+  | "merchant"
+  | "merchant_preview"
+  | "merchant_apply"
+  | "profile"
+  | "profile_update";
 
 export async function callAdsPlatform<T>(
   platform: AdsPlatform,

@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useWorkspaceContext } from "@/app/(dashboard)/w/[workspaceSlug]/workspace-context";
+import { Loader2 } from "lucide-react";
+import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import { useGoogleAds } from "@/lib/google-ads/store";
 import type { GaView } from "@/lib/google-ads/types";
+import { ProfileSetup } from "./profile-setup";
 import { GaCampaignEditor } from "./ga-campaign-editor";
 import { GaChat } from "./ga-chat";
 import { GaVera } from "./ga-vera";
@@ -129,18 +132,59 @@ export function GoogleAdsShell({ live = false }: { live?: boolean }) {
 
   // Connecting Google Ads alone stays on the connect screen until "Go to agent".
   const inWorkspace = status === "connected" && entered;
+  const setup = useFirstRunSetup(live && inWorkspace ? workspaceId : undefined);
   return (
     <>
-      {inWorkspace ? (
+      {!inWorkspace ? (
+        <GaConnect />
+      ) : setup.state === "show" && workspaceId ? (
+        <ProfileSetup workspaceId={workspaceId} onDone={setup.finish} />
+      ) : setup.state === "checking" ? (
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-[#400095]" />
+        </div>
+      ) : (
         <TooltipProvider delayDuration={200}>
           <Workspace />
         </TooltipProvider>
-      ) : (
-        <GaConnect />
       )}
       <MerchantConnectDialog />
     </>
   );
+}
+
+const FILL_FROM_WEBSITE =
+  "I just set up my business profile. Read my website and fill in the rest of it: key selling points, competitive advantages, shipping and returns, " +
+  "languages, product categories, brand identity, voice, visual direction, logo and colours. Save what you find as suggestions for me to confirm, then summarise in a few lines what you saved.";
+
+/**
+ * Live accounts: the first time an owner or admin enters, ask whether the
+ * business profile setup was done. A failed check never blocks the workspace.
+ */
+function useFirstRunSetup(workspaceId: string | undefined) {
+  // The answer is kept per workspace, so switching workspaces checks again.
+  const [answer, setAnswer] = useState<{ workspaceId: string; show: boolean } | null>(null);
+  useEffect(() => {
+    if (!workspaceId) return;
+    let alive = true;
+    fetch(`/api/business-profile/setup?${new URLSearchParams({ workspaceId })}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { show: false }))
+      .then((d: { show?: boolean }) => alive && setAnswer({ workspaceId, show: !!d.show }))
+      .catch(() => alive && setAnswer({ workspaceId, show: false }));
+    return () => {
+      alive = false;
+    };
+  }, [workspaceId]);
+  const finish = useCallback(
+    ({ fillFromWebsite }: { fillFromWebsite: boolean }) => {
+      if (workspaceId) setAnswer({ workspaceId, show: false });
+      useGoogleAds.getState().setView("profile");
+      if (fillFromWebsite) runAgentTurn(FILL_FROM_WEBSITE);
+    },
+    [workspaceId]
+  );
+  const state = !workspaceId ? "done" : answer?.workspaceId !== workspaceId ? "checking" : answer.show ? "show" : "done";
+  return { state, finish };
 }
 
 function Workspace() {

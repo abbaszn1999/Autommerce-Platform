@@ -122,6 +122,40 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
       },
     },
 
+    ads_report: {
+      description:
+        "An expert report on the connected Google Ads account, computed by the platform: " +
+        "conversions (tracking health: double counting, values, primary actions, bidding volume), " +
+        "shopping_pmax (asset groups, asset coverage, listing groups, signals, PMax search categories), " +
+        "products (every advertised product tiered star / on_target / below_target / loser / too_early, plus products that barely serve), " +
+        "recommendations (Google's open recommendations, each with a verdict from the account's own numbers, and auto-apply), " +
+        "reach (devices, countries, location targeting, audiences, ad assets, recent account changes). Each returns findings ranked by severity.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          report: { type: "string", enum: ["conversions", "shopping_pmax", "products", "recommendations", "reach"] },
+          days: { type: "number", enum: [7, 14, 30, 90], description: "Period, default 30. Recommendations always use 30." },
+          targetRoas: { type: "number", description: "products only: the store's real target ROAS (e.g. 4 = 400%) when the user gives one; otherwise the account average is used." },
+          refresh: { type: "boolean", description: "Read fresh from Google instead of the last 15 minutes' copy. Only after a change." },
+        },
+        required: ["report"],
+      },
+      execute: async (args) => {
+        try {
+          const res = await call<{ ok: boolean; error?: string; report?: unknown }>("report", {
+            report: args.report,
+            days: args.days,
+            targetRoas: args.targetRoas,
+            refresh: args.refresh === true,
+          });
+          if (!res.ok) return failure(res.error ?? "The report could not be made.");
+          return text(await compact(ctx, res.report, `report-${String(args.report)}`));
+        } catch (error) {
+          return failure((error as Error).message);
+        }
+      },
+    },
+
     ads_change: {
       description:
         "Propose one change to the Google Ads account: one or more related edits applied together (all or nothing). " +
@@ -174,6 +208,62 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
       },
       execute: (args) => propose("merchant", args),
     },
+
+    business_profile: {
+      description:
+        "The business profile shared by every Autommerce agent in this workspace: every field with its value, where it came from and whether the owner " +
+        "confirmed it or it is only a suggestion, and the required fields still missing. A short version is already in your rules; " +
+        "read this for the full texts (brand voice, identity, shipping and returns) or after an edit.",
+      inputSchema: { type: "object", properties: {} },
+      execute: async () => {
+        try {
+          const res = await call<{ ok: boolean; profile: unknown }>("profile", {});
+          return text(JSON.stringify(res.profile, null, 1));
+        } catch (error) {
+          return failure((error as Error).message);
+        }
+      },
+    },
+
+    update_business_profile: {
+      description:
+        "Save fields of the business profile. statedByUser: true ONLY when the user said these values in this chat (\"our margin is 40%\", " +
+        "\"add Qatar\"): they are saved as confirmed, at once; the user can change them on the Business profile page. " +
+        "statedByUser: false for what you found yourself (website, account data): saved only as suggestions the owner confirms, only into empty or " +
+        "suggested fields, and never for margin, target ROAS, monthly budget cap or goal (only the owner sets those). " +
+        "Fields: businessName, website, languages, brandTerms, markets, categories, focusProducts, goal (profit | growth | new_customers), margin (e.g. 40 for 40%), " +
+        "targetRoas (e.g. 4 for 400%), monthlyBudgetCap, averageOrderValue (amounts in the account currency), keySellingPoints, competitiveAdvantages, " +
+        "competitors ([{ name, url }]), shippingReturns, peakSeasons, neverAdvertise, brandIdentity, brandVoice, visualDirection, logoUrl, palette ([{ name, hex, role }]). " +
+        "Lists are arrays and REPLACE the whole list: to add one item, send the current items plus the new one. value null clears a field.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          edits: {
+            type: "array",
+            minItems: 1,
+            maxItems: 23,
+            items: { type: "object", properties: { field: { type: "string" }, value: {} }, required: ["field", "value"] },
+          },
+          statedByUser: { type: "boolean" },
+          source: { type: "string", enum: ["website", "google_ads", "merchant", "store"], description: "Only for suggestions: where you found the values." },
+        },
+        required: ["edits", "statedByUser"],
+      },
+      execute: async (args) => {
+        try {
+          const res = await call<{ ok: boolean; error?: string } & Record<string, unknown>>("profile_update", {
+            edits: args.edits,
+            statedByUser: args.statedByUser === true,
+            source: args.source,
+          });
+          if (!res.ok) return failure(`Not saved: ${res.error}`);
+          return text(JSON.stringify({ ...res, ok: undefined }));
+        } catch (error) {
+          return failure((error as Error).message);
+        }
+      },
+    },
+
   };
 }
 

@@ -137,7 +137,8 @@ function LiveNotice() {
   const live = useGoogleAds((s) => s.live);
   const isLive = useGoogleAds((s) => s.mode === "live");
   const clear = useGoogleAds((s) => s.clearLiveError);
-  if (!isLive || (!live.error && !live.busy)) return null;
+  // A request for one connection shows its progress on that connection's own button.
+  if (!isLive || (!live.error && (!live.busy || live.busyFor))) return null;
   if (!live.error)
     return (
       <p className="mt-5 inline-flex items-center gap-2 text-xs text-muted-foreground">
@@ -229,11 +230,25 @@ function CustomerIdDialog() {
 const CONNECT_BTN =
   "inline-flex h-11 items-center gap-2.5 rounded-xl border border-border bg-background px-5 text-sm font-semibold shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md";
 
-function TileLink({ onClick, children, danger }: { onClick: () => void; children: React.ReactNode; danger?: boolean }) {
+function TileLink({ onClick, children, danger, disabled }: { onClick: () => void; children: React.ReactNode; danger?: boolean; disabled?: boolean }) {
   return (
-    <button type="button" onClick={onClick} className={cn("text-[11px] font-medium hover:underline", danger ? "text-red-600" : "text-muted-foreground hover:text-foreground")}>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn("text-[11px] font-medium hover:underline disabled:pointer-events-none disabled:opacity-40", danger ? "text-red-600" : "text-muted-foreground hover:text-foreground")}
+    >
       {children}
     </button>
+  );
+}
+
+/** Shown in place of a connection's buttons while Google answers for it. */
+function TalkingToGoogle() {
+  return (
+    <span className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#400095]/25 bg-[#400095]/[0.06] px-4 text-sm font-semibold text-[#400095] dark:text-violet-300">
+      <Loader2 className="h-4 w-4 animate-spin" /> Talking to Google…
+    </span>
   );
 }
 
@@ -257,6 +272,8 @@ function ConnectionTiles() {
 
   const adsAccount = status === "connected" ? accessible.find((a) => a.customerId === customerId) : undefined;
   const merchantAccount = merchant.accounts.find((a) => a.merchantId === merchant.merchantId);
+  // While Google answers for one connection, nothing else can be pressed.
+  const busy = useGoogleAds((s) => (s.mode === "live" && s.live.busy ? (s.live.busyFor ?? "all") : null));
 
   const tile = "flex flex-wrap items-center gap-3 rounded-2xl border bg-background/80 p-3 pr-4 shadow-sm";
   const iconBox = (done: boolean, children: React.ReactNode) => (
@@ -277,10 +294,18 @@ function ConnectionTiles() {
                 {adsAccount.name} · {formatCustomerId(adsAccount.customerId)}
               </p>
             </div>
-            <div className="flex flex-col items-end gap-1">
-              <TileLink onClick={changeAccount}>Change account</TileLink>
-              <TileLink onClick={disconnect} danger>Disconnect</TileLink>
-            </div>
+            {busy === "ads" ? (
+              <TalkingToGoogle />
+            ) : (
+              <div className="flex flex-col items-end gap-1">
+                <TileLink onClick={changeAccount} disabled={!!busy}>
+                  Change account
+                </TileLink>
+                <TileLink onClick={disconnect} danger disabled={!!busy}>
+                  Disconnect
+                </TileLink>
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -288,10 +313,14 @@ function ConnectionTiles() {
               <p className="text-sm font-semibold">Google Ads</p>
               <p className="text-xs text-muted-foreground">Required. Campaigns, keywords, ads and reports.</p>
             </div>
-            <button type="button" onClick={startConnect} className={CONNECT_BTN}>
-              <GoogleMark className="h-5 w-5" />
-              Connect Google Ads
-            </button>
+            {busy === "ads" ? (
+              <TalkingToGoogle />
+            ) : (
+              <button type="button" onClick={startConnect} disabled={!!busy} className={cn(CONNECT_BTN, "disabled:pointer-events-none disabled:opacity-45")}>
+                <GoogleMark className="h-5 w-5" />
+                Connect Google Ads
+              </button>
+            )}
           </>
         )}
       </div>
@@ -306,10 +335,18 @@ function ConnectionTiles() {
                 {merchantAccount.name} · {merchantAccount.merchantId}
               </p>
             </div>
-            <div className="flex flex-col items-end gap-1">
-              <TileLink onClick={changeMerchantAccount}>Change account</TileLink>
-              <TileLink onClick={disconnectMerchant} danger>Disconnect</TileLink>
-            </div>
+            {busy === "merchant" ? (
+              <TalkingToGoogle />
+            ) : (
+              <div className="flex flex-col items-end gap-1">
+                <TileLink onClick={changeMerchantAccount} disabled={!!busy}>
+                  Change account
+                </TileLink>
+                <TileLink onClick={disconnectMerchant} danger disabled={!!busy}>
+                  Disconnect
+                </TileLink>
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -320,10 +357,14 @@ function ConnectionTiles() {
               </p>
               <p className="text-xs text-muted-foreground">Product feed. Lets the agent fix product issues.</p>
             </div>
-            <button type="button" onClick={startMerchantConnect} className={CONNECT_BTN}>
-              <GoogleMark className="h-5 w-5" />
-              Connect Merchant Center
-            </button>
+            {busy === "merchant" ? (
+              <TalkingToGoogle />
+            ) : (
+              <button type="button" onClick={startMerchantConnect} disabled={!!busy} className={cn(CONNECT_BTN, "disabled:pointer-events-none disabled:opacity-45")}>
+                <GoogleMark className="h-5 w-5" />
+                Connect Merchant Center
+              </button>
+            )}
           </>
         )}
       </div>
@@ -333,7 +374,8 @@ function ConnectionTiles() {
           <button
             type="button"
             onClick={enterWorkspace}
-            className="inline-flex h-12 items-center gap-2.5 rounded-xl bg-[#400095] px-6 text-sm font-bold text-white shadow-[0_10px_30px_rgba(64,0,149,.28)] transition-all hover:-translate-y-0.5 hover:bg-[#340079] dark:bg-[#F76D01] dark:hover:bg-[#d85f00]"
+            disabled={!!busy}
+            className="inline-flex h-12 disabled:pointer-events-none disabled:opacity-45 items-center gap-2.5 rounded-xl bg-[#400095] px-6 text-sm font-bold text-white shadow-[0_10px_30px_rgba(64,0,149,.28)] transition-all hover:-translate-y-0.5 hover:bg-[#340079] dark:bg-[#F76D01] dark:hover:bg-[#d85f00]"
           >
             Go to agent <ArrowRight className="h-4 w-4" />
           </button>
@@ -504,6 +546,7 @@ function AccountPicker() {
                   {/* Google gives no name for accounts it won't open; the number alone is enough then. */}
                   <span className="block truncate text-sm font-semibold">{off && acc.name === acc.customerId ? formatCustomerId(acc.customerId) : acc.name}</span>
                   {!(off && acc.name === acc.customerId) && <span className="block text-[11px] text-muted-foreground">{details}</span>}
+                  {off && live.unusableReasons[acc.customerId] && <span className="block text-[11px] text-muted-foreground">{live.unusableReasons[acc.customerId]}</span>}
                 </span>
                 {off ? (
                   <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">Not active</span>

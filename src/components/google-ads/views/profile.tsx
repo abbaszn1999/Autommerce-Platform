@@ -5,8 +5,10 @@ import { Brain, Building2, CalendarClock, Check, ExternalLink, Globe2, Lock, Pal
 import { cn } from "@/lib/utils";
 import { profileCompleteness } from "@/lib/google-ads/docs";
 import { money } from "@/lib/google-ads/metrics";
+import { useGoogleAds } from "@/lib/google-ads/store";
 import { Card, Pill, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
+import { LiveProfileView } from "./business-profile";
 
 function ago(iso?: string) {
   if (!iso) return "never";
@@ -83,11 +85,17 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
-/**
- * The business knowledge base. Read-only on purpose: the agent fills it during
- * onboarding and keeps it current, and every plan and report reads from it.
- */
 export function ProfileView() {
+  // Live workspaces have a real, editable profile shared by every agent.
+  const live = useGoogleAds((s) => s.mode === "live");
+  return live ? <LiveProfileView /> : <DemoProfileView />;
+}
+
+/**
+ * The demo's business knowledge base. Read-only on purpose: the agent fills it
+ * during onboarding and keeps it current, and every plan and report reads from it.
+ */
+function DemoProfileView() {
   const { acc, currency } = useGa();
   const p = acc.profile;
   const { sections, done, total } = profileCompleteness(p);

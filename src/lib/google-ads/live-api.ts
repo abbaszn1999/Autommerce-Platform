@@ -25,6 +25,7 @@ export type LiveAdsAccount = {
   isManager: boolean;
   managerCustomerId?: string;
   usable: boolean;
+  reason?: string;
 };
 
 export type LiveMerchantAccount = { merchantId: string; name: string; website: string; timeZone: string };

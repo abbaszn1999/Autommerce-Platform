@@ -13,15 +13,24 @@ import { activeChatOf, useGoogleAds } from "./store";
 
 /** Live accounts: where "ask the agent" prompts go instead of the simulated agent (Vera's open chat). */
 let liveAgentHandler: ((text: string) => void) | null = null;
+/** A prompt sent before Vera's chat was on screen (e.g. from the setup screen); delivered once it is. */
+let pendingLive: string | null = null;
 export function setLiveAgentHandler(handler: ((text: string) => void) | null) {
   liveAgentHandler = handler;
+  if (handler && pendingLive) {
+    const message = pendingLive;
+    pendingLive = null;
+    handler(message);
+  }
 }
 
 export function runAgentTurn(text: string): void {
   const message = text.trim();
   const store = useGoogleAds.getState();
   if (store.mode === "live") {
-    if (message) liveAgentHandler?.(message);
+    if (!message) return;
+    if (liveAgentHandler) liveAgentHandler(message);
+    else pendingLive = message;
     return;
   }
   const state = store.customerId ? store.accounts[store.customerId] : null;

@@ -36,23 +36,58 @@ export function addDays(iso: string, days: number): string {
   return isoDay(d);
 }
 
-/** Reports end yesterday: today's data is incomplete in Google Ads. */
+const ROLLING: Partial<Record<DateRangePreset, number>> = { LAST_7_DAYS: 7, LAST_14_DAYS: 14, LAST_30_DAYS: 30, LAST_90_DAYS: 90 };
+
+/**
+ * Rolling ranges end yesterday: today's data is incomplete in Google Ads.
+ * "Today" and "This month" include today, as in Google Ads.
+ */
 export function rangeFor(preset: DateRangePreset, today = isoDay(new Date())): DateRange {
-  const end = addDays(today, -1);
-  const start = addDays(end, -(DATE_PRESETS[preset].days - 1));
-  return { preset, start, end };
+  const yesterday = addDays(today, -1);
+  const monthStart = `${today.slice(0, 8)}01`;
+  switch (preset) {
+    case "TODAY":
+      return { preset, start: today, end: today };
+    case "YESTERDAY":
+      return { preset, start: yesterday, end: yesterday };
+    case "THIS_MONTH":
+      return { preset, start: monthStart, end: today };
+    case "LAST_MONTH": {
+      const end = addDays(monthStart, -1);
+      return { preset, start: `${end.slice(0, 8)}01`, end };
+    }
+    default:
+      return { preset, start: addDays(yesterday, -((ROLLING[preset] ?? 30) - 1)), end: yesterday };
+  }
 }
 
+/** Dates the user picked, in order. */
+export function customRange(a: string, b: string): DateRange {
+  return a <= b ? { preset: "CUSTOM", start: a, end: b } : { preset: "CUSTOM", start: b, end: a };
+}
+
+/** Days in a range, both ends included. */
+export function rangeDays(range: { start: string; end: string }): number {
+  return Math.round((Date.parse(`${range.end}T00:00:00Z`) - Date.parse(`${range.start}T00:00:00Z`)) / 86_400_000) + 1;
+}
+
+/** The same number of days just before the range, for comparisons. */
 export function previousRange(range: DateRange): DateRange {
-  const days = DATE_PRESETS[range.preset].days;
+  const days = rangeDays(range);
   return { preset: range.preset, start: addDays(range.start, -days), end: addDays(range.start, -1) };
 }
 
 export function formatRange(range: DateRange): string {
-  const fmt = (iso: string) =>
-    new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-  return `${fmt(range.start)} – ${fmt(range.end)}`;
+  const sameYear = range.start.slice(0, 4) === range.end.slice(0, 4);
+  const thisYear = range.end.slice(0, 4) === String(new Date().getUTCFullYear());
+  const fmt = (iso: string, year: boolean) =>
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(year ? { year: "numeric" } : {}), timeZone: "UTC" });
+  if (range.start === range.end) return fmt(range.start, !thisYear);
+  return `${fmt(range.start, !sameYear)} – ${fmt(range.end, !sameYear || !thisYear)}`;
 }
+
+/** The range's name in menus: the preset's, or "Custom". */
+export const rangeLabel = (range: DateRange) => (range.preset === "CUSTOM" ? "Custom" : DATE_PRESETS[range.preset].label);
 
 // ─── Aggregation ────────────────────────────────────────────────────────────
 
