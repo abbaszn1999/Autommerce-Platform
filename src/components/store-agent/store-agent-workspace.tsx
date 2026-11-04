@@ -361,6 +361,50 @@ function Hero({ storeName, insights, onPick }: { storeName: string; insights: In
   );
 }
 
+/** A chat while it loads: message shapes (and, before anything has loaded, the tabs and the composer). */
+function ChatSkeleton({ withChrome = false }: { withChrome?: boolean }) {
+  const bone = "animate-pulse rounded-md bg-zinc-200/80 dark:bg-zinc-800";
+  return (
+    <div className="flex h-full min-h-0 flex-1 flex-col" aria-busy="true" aria-label="Loading the chat">
+      {withChrome && (
+        <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
+          <div className={cn(bone, "h-6 w-28")} />
+          <div className={cn(bone, "h-6 w-24")} />
+          <div className={cn(bone, "ms-auto h-6 w-16")} />
+        </div>
+      )}
+      <div className="min-h-0 flex-1 space-y-6 overflow-hidden px-4 pt-5">
+        <div className="flex justify-end">
+          <div className={cn(bone, "h-14 w-3/5 rounded-2xl")} />
+        </div>
+        <div className="flex gap-3">
+          <div className={cn(bone, "h-7 w-7 shrink-0 rounded-lg")} />
+          <div className="flex-1 space-y-2 pt-1">
+            <div className={cn(bone, "h-3 w-11/12")} />
+            <div className={cn(bone, "h-3 w-4/5")} />
+            <div className={cn(bone, "h-3 w-2/3")} />
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <div className={cn(bone, "h-10 w-2/5 rounded-2xl")} />
+        </div>
+        <div className="flex gap-3">
+          <div className={cn(bone, "h-7 w-7 shrink-0 rounded-lg")} />
+          <div className="flex-1 space-y-2 pt-1">
+            <div className={cn(bone, "h-3 w-full")} />
+            <div className={cn(bone, "h-3 w-3/4")} />
+          </div>
+        </div>
+      </div>
+      {withChrome && (
+        <div className="shrink-0 px-3 pb-3 pt-1">
+          <div className={cn(bone, "h-[92px] w-full rounded-2xl")} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StoreAgentWorkspace({
   workspaceId,
   basePath,
@@ -474,7 +518,7 @@ export function StoreAgentWorkspace({
     [chatWidth]
   );
 
-  if (state.availability === "checking") return <PageLoader />;
+  if (state.availability === "checking") return variant === "panel" ? <ChatSkeleton withChrome /> : <PageLoader />;
   if (state.availability !== "ready") {
     const noStore = state.availability === "no_store";
     return (
@@ -592,7 +636,7 @@ export function StoreAgentWorkspace({
           }
         >
           {chatState?.status === "loading" ? (
-            <PageLoader />
+            <ChatSkeleton />
           ) : empty ? (
             isAds ? <AdsHero accountName={storeName} onPick={pick} /> : <Hero storeName={storeName} insights={state.insights} onPick={pick} />
           ) : (

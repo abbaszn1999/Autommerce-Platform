@@ -13,13 +13,29 @@ import { applyMerchantChange, loadMerchantSnapshot, previewMerchantChange } from
 import { rangeFor } from "@/lib/google-ads/metrics";
 import { PROFILE_SOURCES, ProfileEditError, fieldLabel, formatValue, missingRequired, profileForAgent, type ProfileEdit, type ProfileSource } from "@/lib/business-profile";
 import { editProfile, loadProfile } from "@/lib/business-profile.server";
+import { DocInputError, parsePlanInput, parseReportInput } from "@/lib/google-ads/live-docs";
+import { docConnections, getDoc, savePlan, saveReport } from "@/lib/google-ads/live-docs.server";
 import type { MutateOp } from "@/lib/google-ads/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-const ACTIONS = new Set(["overview", "query", "report", "preview", "apply", "merchant", "merchant_preview", "merchant_apply", "profile", "profile_update"]);
+const ACTIONS = new Set([
+  "overview",
+  "query",
+  "report",
+  "preview",
+  "apply",
+  "merchant",
+  "merchant_preview",
+  "merchant_apply",
+  "profile",
+  "profile_update",
+  "doc_plan",
+  "doc_report",
+  "doc_read",
+]);
 const UUID = /^[0-9a-f-]{36}$/i;
 const MAX_BODY = 200_000;
 
@@ -60,6 +76,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (!chat) return NextResponse.json({ error: "not_found" }, { status: 404 });
     if (action.startsWith("merchant")) return await merchantAction(action, body, { admin, workspaceId, chatId });
     if (action === "profile" || action === "profile_update") return await profileAction(action, body, { admin, workspaceId, chatId }, caller.userId);
+    if (action.startsWith("doc_")) return await docAction(action, body, { admin, workspaceId, chatId }, caller.userId);
     const row = await loadConnection(admin, workspaceId, "ads");
     if (!row?.composio_connected_account_id || !row.account_id) return NextResponse.json({ error: "not_connected" }, { status: 409 });
     const customerId = row.account_id;
@@ -170,6 +187,29 @@ async function profileAction(action: string, body: Record<string, unknown>, { ad
     });
   } catch (err) {
     if (err instanceof ProfileEditError) return NextResponse.json({ ok: false, error: err.message });
+    throw err;
+  }
+}
+
+/**
+ * Plans and reports. Saving a plan has Google check every step; the owner
+ * applies the steps from the page, never the agent.
+ */
+async function docAction(action: string, body: Record<string, unknown>, { admin, workspaceId, chatId }: Ctx, userId: string) {
+  const conns = await docConnections(admin, workspaceId);
+  const documentId = typeof body.documentId === "string" && UUID.test(body.documentId) ? body.documentId : undefined;
+  if (action === "doc_read") {
+    const doc = documentId ? await getDoc(admin, workspaceId, conns.ads.account_id!, documentId) : null;
+    return NextResponse.json(doc ? { ok: true, document: doc } : { ok: false, error: "No document with that id on this account." });
+  }
+  try {
+    const ctx = { admin, workspaceId, chatId, userId, conns };
+    const result = action === "doc_plan" ? await savePlan(ctx, documentId, parsePlanInput(body)) : await saveReport(ctx, documentId, parseReportInput(body));
+    if (!result.ok) return NextResponse.json(result);
+    const { doc } = result;
+    return NextResponse.json({ ok: true, document: { id: doc.id, kind: doc.kind, title: doc.title, version: doc.version, steps: doc.steps?.total } });
+  } catch (err) {
+    if (err instanceof DocInputError) return NextResponse.json({ ok: false, error: err.message });
     throw err;
   }
 }

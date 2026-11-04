@@ -25,6 +25,7 @@ import {
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import { useGoogleAds } from "@/lib/google-ads/store";
 import { ACCENT_BTN, Card, Pill, SelectBox, ViewHeader } from "../ga-ui";
+import { RowsSkeleton } from "../ga-skeleton";
 
 type Loaded = { profile: BusinessProfileData; canEdit: boolean; currency: string | null };
 
@@ -360,9 +361,7 @@ export function LiveProfileView() {
         {error ? (
           <p className="rounded-lg bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-400">{error}</p>
         ) : (
-          <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading the business profile…
-          </p>
+          <RowsSkeleton rows={6} />
         )}
       </div>
     );

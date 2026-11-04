@@ -163,6 +163,8 @@ export type StoreAgentEvent =
   | { type: "question_resolved"; questionId: string; answers: string[][]; inChat?: boolean; seq: number }
   /** A plan written in Plan mode, or a new version of it, or its build status changing. */
   | { type: "plan"; planId: string; title: string; content: string; version: number; status: PlanStatus; seq: number }
+  /** A Google Ads plan or report saved to the Documents page (it opens there). */
+  | { type: "doc"; docId: string; kind: "plan" | "report"; title: string; version: number; steps?: number; seq: number }
   /** `shown`: a result for the user (opened, or made for them), not one of the agent's working files. */
   | { type: "file"; fileId: string; name: string; kind: string; mime: string; open: boolean; shown?: boolean; folder?: string | null; seq: number }
   | { type: "summary"; status: "started" | "completed"; seq: number }

@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAccountState, useGoogleAds } from "@/lib/google-ads/store";
+import { closeDoc, useLiveDocs } from "@/lib/google-ads/live-docs-store";
 import type { GaView } from "@/lib/google-ads/types";
 import { LANDING_PAGE_TYPES } from "@/lib/google-ads/constants";
 import { TAB_GROUPS, groupActive, navCtx, visibleTabs } from "./nav-model";
@@ -40,6 +41,8 @@ export function GaNav() {
   const view = useGoogleAds((s) => s.view);
   const scope = useGoogleAds((s) => s.scope);
   const setView = useGoogleAds((s) => s.setView);
+  const live = useGoogleAds((s) => s.mode === "live");
+  const liveDocs = useLiveDocs((s) => s.list.filter((d) => d.status !== "archived").length);
   if (!acc) return null;
   const { data } = acc;
 
@@ -119,7 +122,7 @@ export function GaNav() {
     {
       title: "Agent",
       items: [
-        { view: "documents", label: "Documents", icon: FileStack, badge: acc.docs.length || undefined, hidden: inCampaign },
+        { view: "documents", label: "Documents", icon: FileStack, badge: (live ? liveDocs : acc.docs.length) || undefined, hidden: inCampaign },
         { view: "profile", label: "Business profile", icon: Brain, hidden: inCampaign },
         { view: "rules", label: "Rules & alerts", icon: BellRing, badge: unread || undefined, hidden: inCampaign },
       ],
@@ -140,7 +143,11 @@ export function GaNav() {
                 <button
                   key={item.view}
                   type="button"
-                  onClick={() => setView(item.view)}
+                  onClick={() => {
+                    // Documents again while one is open: back to the list.
+                    if (item.view === "documents") closeDoc();
+                    setView(item.view);
+                  }}
                   className={cn(
                     "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
                     active ? "bg-[#400095]/10 text-[#400095] dark:bg-violet-500/15 dark:text-violet-300" : "text-muted-foreground hover:bg-muted hover:text-foreground"

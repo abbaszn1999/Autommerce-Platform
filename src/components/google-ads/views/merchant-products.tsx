@@ -14,6 +14,7 @@ import type { MerchantProduct, MerchantProductStatus, MerchantSnapshot } from "@
 import { useGoogleAds } from "@/lib/google-ads/store";
 import { GaTable, type GaColumn } from "../ga-table";
 import { Card, EmptyState, Pill, Segmented, ViewHeader } from "../ga-ui";
+import { RowsSkeleton } from "../ga-skeleton";
 import { SearchBox } from "./campaigns";
 
 const STATUS: Record<MerchantProductStatus, { label: string; tone: "good" | "warn" | "bad" | "info"; icon: typeof CheckCircle2 }> = {
@@ -190,9 +191,7 @@ export function LiveProductsView() {
       />
       {error && <p className="rounded-lg bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-400">{error}</p>}
       {!data && loading && (
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading products from Merchant Center…
-        </p>
+        <RowsSkeleton rows={6} />
       )}
       {data && (
         <>

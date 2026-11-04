@@ -5,6 +5,8 @@ import { useWorkspaceContext } from "@/app/(dashboard)/w/[workspaceSlug]/workspa
 import { StoreAgentWorkspace } from "@/components/store-agent/store-agent-workspace";
 import { newChat, sendMessage, useStoreAgent } from "@/components/store-agent/use-store-agent";
 import { setLiveAgentHandler } from "@/lib/google-ads/agent-runner";
+import { initLiveDocs, openDoc, refreshDocList } from "@/lib/google-ads/live-docs-store";
+import { setDocHandlers } from "@/lib/store-agent/doc-links";
 import { useAccountData } from "@/lib/google-ads/store";
 
 /**
@@ -15,6 +17,20 @@ import { useAccountData } from "@/lib/google-ads/store";
 export function GaVera({ width }: { width: number }) {
   const { workspace, role } = useWorkspaceContext();
   const accountName = useAccountData()?.account.name ?? "Google Ads";
+
+  // Plans and reports Vera saves open on the Documents page; the chat's cards open them too.
+  useEffect(() => {
+    if (!workspace?.id) return;
+    initLiveDocs(workspace.id);
+    setDocHandlers({
+      open: openDoc,
+      saved: (doc) => {
+        void refreshDocList();
+        openDoc(doc.docId);
+      },
+    });
+    return () => setDocHandlers(null);
+  }, [workspace?.id]);
 
   useEffect(() => {
     // Ready means loaded AND its saved tabs reopened: a chat started before that is replaced by them.

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useWorkspaceContext } from "@/app/(dashboard)/w/[workspaceSlug]/workspace-context";
-import { Loader2 } from "lucide-react";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import { useGoogleAds } from "@/lib/google-ads/store";
 import type { GaView } from "@/lib/google-ads/types";
@@ -28,6 +27,7 @@ import { DevicesView, LanguagesView, LocationsView, ScheduleView } from "./views
 import { ImpressionShareView, LandingPagesView, PriceCompetitivenessView } from "./views/search-insights";
 import { TrendsView } from "./views/trends";
 import { GaSyncBanner, GaViewBoundary } from "./ga-view-boundary";
+import { WorkspaceSkeleton, firstLoadPlaceholder } from "./ga-skeleton";
 import { AssetCombinationsView, BrandExclusionsView, ChannelsView, PlacementsShownView, SearchCategoriesView } from "./views/pmax-insights";
 import { GaViewTabs } from "./ga-view-tabs";
 import { OverviewView } from "./views/overview";
@@ -140,9 +140,7 @@ export function GoogleAdsShell({ live = false }: { live?: boolean }) {
       ) : setup.state === "show" && workspaceId ? (
         <ProfileSetup workspaceId={workspaceId} onDone={setup.finish} />
       ) : setup.state === "checking" ? (
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-[#400095]" />
-        </div>
+        <WorkspaceSkeleton />
       ) : (
         <TooltipProvider delayDuration={200}>
           <Workspace />
@@ -193,7 +191,12 @@ function Workspace() {
   const live = useGoogleAds((s) => s.mode === "live");
   const customerId = useGoogleAds((s) => s.customerId);
   const scope = useGoogleAds((s) => s.scope);
-  const activeTab = useAccountState()?.activeTab ?? "account";
+  // Live plans and reports open inside the Documents page; the demo keeps its document tabs.
+  const acc = useAccountState();
+  const demoTab = acc?.activeTab ?? "account";
+  const activeTab = live ? "account" : demoTab;
+  // First load of a live account: skeletons (or a retry) instead of a page full of zeros.
+  const placeholder = firstLoadPlaceholder(view, acc?.sync);
   const [width, setWidth] = useState(CHAT_DEFAULT);
   const drag = useRef<{ x: number; w: number } | null>(null);
 
@@ -231,7 +234,7 @@ function Workspace() {
         className="w-1 shrink-0 cursor-col-resize border-s bg-border/40 transition-colors hover:bg-[#6B358D]/40 dark:hover:bg-[#F76D01]/40"
       />
       <div className="flex min-w-0 flex-1 flex-col bg-[#F6F4FA] dark:bg-background">
-        <DocTabs />
+        {!live && <DocTabs />}
         {activeTab === "account" ? (
           <>
             <GaTopbar />
@@ -240,11 +243,15 @@ function Workspace() {
               <main className="min-w-0 flex-1 overflow-y-auto">
                 {/* Keyed so local view state (filters, selection) resets with the account or scope. */}
                 <div key={`${customerId}:${scope.campaignId ?? ""}:${scope.adGroupId ?? ""}:${scope.assetGroupId ?? ""}:${view}`} className="mx-auto max-w-[1400px] px-5 py-5">
-                  <GaSyncBanner />
-                  <GaViewTabs />
-                  <GaViewBoundary resetKey={`${customerId}:${scope.campaignId ?? ""}:${scope.adGroupId ?? ""}:${scope.assetGroupId ?? ""}:${view}`}>
-                    <View />
-                  </GaViewBoundary>
+                  {placeholder ?? (
+                    <>
+                      <GaSyncBanner />
+                      <GaViewTabs />
+                      <GaViewBoundary resetKey={`${customerId}:${scope.campaignId ?? ""}:${scope.adGroupId ?? ""}:${scope.assetGroupId ?? ""}:${view}`}>
+                        <View />
+                      </GaViewBoundary>
+                    </>
+                  )}
                 </div>
               </main>
             </div>

@@ -11,6 +11,7 @@ import {
   CircleDot,
   CornerDownLeft,
   Database,
+  FileBarChart,
   FileSpreadsheet,
   FileText,
   Globe,
@@ -35,6 +36,7 @@ import type { ToolKind } from "@/lib/store-agent/protocol";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ApprovalState } from "./api";
+import { canOpenDocs, openAgentDoc } from "@/lib/store-agent/doc-links";
 import { isExtractedImage } from "@/lib/store-agent/file-kinds";
 import { Markdown } from "./markdown";
 
@@ -539,6 +541,34 @@ function PlanBlock({ block, onOpenPlan }: { block: Extract<MessageBlock, { type:
   );
 }
 
+/** A Google Ads plan or report this reply saved: opens it on the Documents page. */
+function DocCard({ block }: { block: Extract<MessageBlock, { type: "doc" }> }) {
+  const isPlan = block.kind === "plan";
+  return (
+    <button
+      type="button"
+      onClick={() => openAgentDoc(block.docId)}
+      disabled={!canOpenDocs()}
+      className="group flex w-full items-center gap-3 rounded-xl border border-[#6B358D]/25 bg-gradient-to-br from-[#400095]/[0.05] to-transparent px-3.5 py-3 text-start transition-colors hover:border-[#6B358D]/50 disabled:cursor-default dark:border-[#F76D01]/25 dark:from-[#F76D01]/[0.06] dark:hover:border-[#F76D01]/50"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#400095]/10 text-[#6B358D] dark:bg-[#F76D01]/10 dark:text-[#F76D01]">
+        {isPlan ? <ClipboardList className="h-4 w-4" /> : <FileBarChart className="h-4 w-4" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {isPlan ? "Plan" : "Report"}
+          {isPlan && block.steps ? ` · ${block.steps} step${block.steps > 1 ? "s" : ""} checked by Google` : ""}
+          {block.version > 1 ? ` · version ${block.version}` : ""}
+        </span>
+        <span dir="auto" className="block truncate text-[13.5px] font-semibold">
+          {block.title}
+        </span>
+      </span>
+      <span className="shrink-0 text-[12px] font-medium text-[#6B358D] group-hover:underline dark:text-[#F76D01]">{isPlan ? "Review" : "Open"}</span>
+    </button>
+  );
+}
+
 function FileBlock({ block, onOpenFile }: { block: Extract<MessageBlock, { type: "file" }>; onOpenFile: Handlers["onOpenFile"] }) {
   return (
     <button
@@ -678,6 +708,8 @@ export function ReplyBlocks({ blocks, ...handlers }: { blocks: MessageBlock[] } 
             return <QuestionCard key={block.questionId} block={block} live={handlers.live} onAnswer={handlers.onAnswer} />;
           case "plan":
             return <PlanBlock key={block.planId} block={block} onOpenPlan={handlers.onOpenPlan} />;
+          case "doc":
+            return <DocCard key={block.docId} block={block} />;
           case "file":
             if (!chipped.has(block.fileId)) return null;
             return (

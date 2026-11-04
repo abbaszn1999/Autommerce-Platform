@@ -683,8 +683,8 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     const options: AgentOptions = {
       apiKey: deps.cursorApiKey,
       model: { id: req.model.id, params: req.model.params },
-      // Plan mode delivers its plan through Cursor's own createPlan.
-      tools: req.mode === "plan" ? [...BUILTIN_TOOLS, "createPlan"] : BUILTIN_TOOLS,
+      // Plan mode delivers its plan through Cursor's own createPlan; Google Ads plans go to the Documents page (save_plan).
+      tools: req.mode === "plan" && !isAds ? [...BUILTIN_TOOLS, "createPlan"] : BUILTIN_TOOLS,
       local: {
         cwd,
         settingSources: ["project"],

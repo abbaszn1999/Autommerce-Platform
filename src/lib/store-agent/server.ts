@@ -165,6 +165,8 @@ export function publicEvent(event: StoreAgentEvent): StoreAgentEvent {
       };
     case "plan":
       return { ...event, title: hideProviderNames(event.title), content: hideProviderNames(event.content) };
+    case "doc":
+      return { ...event, title: hideProviderNames(event.title) };
     default:
       return event;
   }

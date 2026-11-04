@@ -9,6 +9,8 @@ export type SyncState = {
   /** ISO time of the last successful load. */
   refreshedAt: string;
   error?: string;
+  /** A live account whose numbers have not loaded yet: the page shows skeletons, not zeros. */
+  pending?: boolean;
 };
 
 export interface GoogleAdsDataSource {

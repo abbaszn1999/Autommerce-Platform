@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { emptyReply, reduceReply, type ReplyState } from "@/lib/store-agent/blocks";
+import { announceDoc } from "@/lib/store-agent/doc-links";
 import { requestLabel } from "@/lib/store-agent/mentions";
 import type { AgentDomain, ModelParam, StoreAgentEvent } from "@/lib/store-agent/protocol";
 import { toast } from "sonner";
@@ -462,6 +463,7 @@ function applyEvent(chatId: string, event: StoreAgentEvent) {
   const replayed = event.seq <= (replayUntil.get(chatId) ?? 0);
   if (event.type === "approval" && !replayed) notifyUser(chatId, "Vera is waiting for your approval");
   if (event.type === "question" && !replayed) notifyUser(chatId, "Vera has a question for you");
+  if (event.type === "doc" && !replayed) announceDoc({ docId: event.docId, kind: event.kind, title: event.title, version: event.version });
   if (event.type === "approval_resolved") {
     patchChat(chatId, (s) => ({
       approvals: {

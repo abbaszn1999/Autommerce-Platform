@@ -33,7 +33,7 @@ const TARGETS = {
 
 export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): Record<string, SDKCustomTool> {
   const call = <T>(action: AdsAction, body: Record<string, unknown>) =>
-    callAdsPlatform<T>(platform, { action, userId: ctx.run.userId, body: { workspaceId: ctx.run.workspaceId, chatId: ctx.run.chatId, ...body }, signal: ctx.run.signal });
+    callAdsPlatform<T>(platform, { action, userId: ctx.run.userId, body: { ...body, workspaceId: ctx.run.workspaceId, chatId: ctx.run.chatId }, signal: ctx.run.signal });
 
   /** Check → card (always waits for a person) → apply; the platform re-checks the approval. */
   const propose = async (target: keyof typeof TARGETS, args: Record<string, unknown>) => {
@@ -264,6 +264,134 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
       },
     },
 
+    save_plan: {
+      description:
+        "Save a plan to the Documents page, where the owner reviews it and applies its steps (one by one or all together), with undo. " +
+        "Every step is ONE change in the same edit formats as ads_change (target \"ads\") or merchant_change (target \"merchant\"); Google checks each " +
+        "step when the plan is saved, and a plan with a refused step is not saved (fix the step and save again). Steps run in the order given. " +
+        "Works in Plan mode and Agent mode; nothing changes until the owner applies a step. To revise a plan, send the whole plan again with its documentId.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          documentId: { type: "string", description: "Only to revise a plan you saved earlier (its id). Leave out for a new plan." },
+          title: { type: "string", description: "Short title in the user's language." },
+          summary: { type: "string", description: "One or two sentences: what the plan does and the expected result." },
+          period: { type: "string", description: "The data the plan rests on, e.g. \"Last 30 days (Oct 5 – Nov 3, 2026)\"." },
+          overview: { type: "string", description: "Markdown: the goal, the situation in numbers, and the approach." },
+          steps: {
+            type: "array",
+            minItems: 1,
+            maxItems: 20,
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string", description: "What this step does, e.g. \"Pause 4 keywords that spent with no sales\"." },
+                why: { type: "string", description: "Why, with the numbers behind it." },
+                target: { type: "string", enum: ["ads", "merchant"] },
+                edits: { type: "array", minItems: 1, maxItems: 50, items: { type: "object", additionalProperties: true } },
+                risk: { type: "string", enum: ["low", "medium", "high"] },
+                expected: { type: "string", description: "The expected effect, e.g. \"≈ $310 a month saved\"." },
+              },
+              required: ["title", "why", "target", "edits", "risk"],
+            },
+          },
+          notes: { type: "string", description: "Markdown: expected overall effect, risks and how they are handled, what to watch after applying." },
+        },
+        required: ["title", "summary", "overview", "steps"],
+      },
+      execute: async (args) => {
+        try {
+          const res = await call<{ ok: boolean; error?: string; steps?: unknown; document?: { id: string; kind: "plan"; title: string; version: number; steps?: number } }>("doc_plan", args);
+          if (!res.ok || !res.document) return failure(`${res.error ?? "The plan was not saved."}${res.steps ? `\n${JSON.stringify(res.steps)}` : ""}`);
+          const d = res.document;
+          ctx.run.emit({ type: "doc", docId: d.id, kind: "plan", title: d.title, version: d.version, steps: d.steps });
+          return text(JSON.stringify({ saved: true, documentId: d.id, version: d.version, steps: d.steps, shown: "The plan is open on the Documents page (Documents → Plans)." }));
+        } catch (error) {
+          return failure((error as Error).message);
+        }
+      },
+    },
+
+    save_report: {
+      description:
+        "Save a report (performance report, audit, analysis) to the Documents page, where it opens beside the chat. " +
+        "Structure: verdict (up to 3 short lines: health, biggest problem, first fix), kpis (cards), findings ranked by money at stake " +
+        "(each with evidence and the fix; the owner can turn any finding into a plan), and sections of blocks. " +
+        "Blocks: { kind: \"text\", md } · { kind: \"callout\", tone: info|good|warn|bad, title, text } · { kind: \"table\", columns, rows, align? } · " +
+        "{ kind: \"chart\", title, variant: bar|line|donut, format: money|number|percent|ratio, data: [{ label, value }] } (percent as 0–1) · " +
+        "{ kind: \"score\", score: 0–100, label, parts: [{ label, score }] }. To update a report, send it whole again with its documentId.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          documentId: { type: "string", description: "Only to update a report you saved earlier." },
+          title: { type: "string" },
+          summary: { type: "string", description: "One or two sentences for the Documents list." },
+          period: { type: "string", description: "e.g. \"Last 30 days (Oct 5 – Nov 3, 2026)\"." },
+          verdict: { type: "array", maxItems: 3, items: { type: "string" } },
+          kpis: {
+            type: "array",
+            maxItems: 8,
+            items: {
+              type: "object",
+              properties: {
+                label: { type: "string" },
+                value: { type: "string", description: "Formatted, with currency, e.g. \"$4,210\"." },
+                delta: { type: "number", description: "Change vs the previous period as a fraction (0.12 = +12%)." },
+                higherIsBetter: { type: "boolean" },
+                hint: { type: "string" },
+              },
+              required: ["label", "value"],
+            },
+          },
+          findings: {
+            type: "array",
+            maxItems: 30,
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                severity: { type: "string", enum: ["high", "medium", "low"] },
+                impact: { type: "string", description: "Money or results at stake." },
+                evidence: { type: "string" },
+                fix: { type: "string" },
+              },
+              required: ["title", "severity", "evidence", "fix"],
+            },
+          },
+          sections: {
+            type: "array",
+            maxItems: 20,
+            items: { type: "object", properties: { title: { type: "string" }, blocks: { type: "array", items: { type: "object", additionalProperties: true } } }, required: ["title", "blocks"] },
+          },
+        },
+        required: ["title", "summary", "verdict"],
+      },
+      execute: async (args) => {
+        try {
+          const res = await call<{ ok: boolean; error?: string; document?: { id: string; title: string; version: number } }>("doc_report", args);
+          if (!res.ok || !res.document) return failure(res.error ?? "The report was not saved.");
+          const d = res.document;
+          ctx.run.emit({ type: "doc", docId: d.id, kind: "report", title: d.title, version: d.version });
+          return text(JSON.stringify({ saved: true, documentId: d.id, version: d.version, shown: "The report is open on the Documents page (Documents → Reports)." }));
+        } catch (error) {
+          return failure((error as Error).message);
+        }
+      },
+    },
+
+    read_document: {
+      description: "Read a plan or report from the Documents page by its id: its content and, for a plan, each step's state (todo, applied, failed with Google's reason, undone).",
+      inputSchema: { type: "object", properties: { documentId: { type: "string" } }, required: ["documentId"] },
+      execute: async (args) => {
+        try {
+          const res = await call<{ ok: boolean; error?: string; document?: unknown }>("doc_read", { documentId: args.documentId });
+          if (!res.ok) return failure(res.error ?? "Not found.");
+          return text(await compact(ctx, res.document, "document"));
+        } catch (error) {
+          return failure((error as Error).message);
+        }
+      },
+    },
   };
 }
 

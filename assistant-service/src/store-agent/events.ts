@@ -81,6 +81,12 @@ export function describeTool(name: string, args: Args): Described {
       return { kind: "store_write", title: "Fixing Merchant Center products", detail: clip(str(args.title), 140) || undefined };
     case "business_profile":
       return { kind: "store_read", title: "Reading the business profile" };
+    case "save_plan":
+      return { kind: "plan", title: args.documentId ? "Revising the plan" : "Writing the plan", detail: clip(str(args.title), 140) || undefined };
+    case "save_report":
+      return { kind: "file", title: args.documentId ? "Updating the report" : "Writing the report", detail: clip(str(args.title), 140) || undefined };
+    case "read_document":
+      return { kind: "store_read", title: "Reading a document" };
     case "update_business_profile": {
       const fields = Array.isArray(args.edits) ? (args.edits as Array<{ field?: unknown }>).map((e) => str(e?.field)).filter(Boolean).join(", ") : "";
       return { kind: "other", title: args.statedByUser === true ? "Saving to the business profile" : "Suggesting business profile values", detail: clip(fields, 120) || undefined };
@@ -218,6 +224,16 @@ export function summarizeResult(name: string, result: unknown): { ok: boolean; s
     case "merchant_change":
       return { ok: true, summary: "sent to Merchant Center" };
     case "business_profile":
+      return { ok: true };
+    case "save_plan":
+      try {
+        const steps = (JSON.parse(text) as { steps?: number }).steps;
+        return { ok: true, summary: steps ? `${steps} step${steps > 1 ? "s" : ""}, checked by Google` : undefined };
+      } catch {
+        return { ok: true };
+      }
+    case "save_report":
+    case "read_document":
       return { ok: true };
     case "update_business_profile":
       try {

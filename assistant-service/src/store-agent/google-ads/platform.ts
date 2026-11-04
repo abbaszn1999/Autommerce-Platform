@@ -18,7 +18,10 @@ export type AdsAction =
   | "merchant_preview"
   | "merchant_apply"
   | "profile"
-  | "profile_update";
+  | "profile_update"
+  | "doc_plan"
+  | "doc_report"
+  | "doc_read";
 
 export async function callAdsPlatform<T>(
   platform: AdsPlatform,

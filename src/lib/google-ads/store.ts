@@ -375,7 +375,10 @@ export const useGoogleAds = create<GaStore>((set, get) => {
       entered,
       customerId: account.customerId,
       accessible: s.accessible.some((a) => a.customerId === account.customerId) ? s.accessible : [account],
-      accounts: { ...s.accounts, [account.customerId]: s.accounts[account.customerId] ?? freshAccountState(liveAccountData(account)) },
+      accounts: {
+        ...s.accounts,
+        [account.customerId]: s.accounts[account.customerId] ?? { ...freshAccountState(liveAccountData(account)), sync: { ...freshSync(), pending: true } },
+      },
       view: "overview",
       scope: {},
       editor: { open: false },
@@ -699,7 +702,7 @@ export const useGoogleAds = create<GaStore>((set, get) => {
     try {
       const next = await getDataSource().fetchAccount(id, acc.data, { range: start.range, force: opts?.force });
       // Keep any change made while loading unless the source returned a new snapshot.
-      patch({ status: "ready", refreshedAt: new Date().toISOString(), error: undefined }, next === acc.data ? undefined : next);
+      patch({ status: "ready", refreshedAt: new Date().toISOString(), error: undefined, pending: false }, next === acc.data ? undefined : next);
       if (get().mode === "live") void loadLiveHistory(id);
     } catch (err) {
       patch({ status: "error", error: (err as Error).message || "Could not load this account." });
