@@ -472,6 +472,8 @@ function applyEvent(chatId: string, event: StoreAgentEvent) {
       },
     }));
   }
+  if (event.type === "run" && stopWhenStarted.delete(chatId)) void stopRun(chatId);
+  if (event.type === "done") stopWhenStarted.delete(chatId);
   if (event.type === "run" || event.type === "done") {
     set((state) => ({
       chats: state.chats.map((c) =>
@@ -611,6 +613,7 @@ export async function sendMessage(
       patchChat(realId, { live: null });
       readers.delete(realId);
       if (res.status === 402) set({ blocked: body.error === "NO_SUBSCRIPTION" ? "NO_SUBSCRIPTION" : "NO_CREDITS" });
+      else if (res.status === 429) set({ notice: "Vera is still finishing the last request in this chat. Send it again in a moment." });
       else set({ notice: body.error || "The agent could not start." });
       return { restore: message };
     }
@@ -636,11 +639,18 @@ export async function sendMessage(
   }
 }
 
+/** Chats whose Stop was pressed before their run had an id: stopped as soon as it does. */
+const stopWhenStarted = new Set<string>();
+
 export async function stopRun(chatId: string) {
   const { workspaceId } = get();
-  const runId = get().chatStates[chatId]?.live?.runId;
-  if (!workspaceId || !runId) return;
-  await storeAgentApi.runAction(workspaceId, runId, "cancel").catch(() => undefined);
+  const live = get().chatStates[chatId]?.live;
+  if (!workspaceId || !live) return;
+  if (!live.runId) {
+    stopWhenStarted.add(chatId);
+    return;
+  }
+  await storeAgentApi.runAction(workspaceId, live.runId, "cancel").catch(() => undefined);
 }
 
 export async function steerRun(chatId: string, text: string): Promise<boolean> {

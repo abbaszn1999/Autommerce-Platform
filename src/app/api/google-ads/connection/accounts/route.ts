@@ -29,8 +29,16 @@ export async function GET(request: NextRequest) {
     const kind = request.nextUrl.searchParams.get("kind");
     if (!isConnectionKind(kind)) return NextResponse.json({ error: "invalid_kind" }, { status: 400 });
     const { row } = await connected(workspaceId, kind);
-    const accounts = kind === "ads" ? await listAdsAccounts(row) : await listMerchantAccounts(row);
-    return NextResponse.json({ accounts });
+    if (kind === "merchant") return NextResponse.json({ accounts: await listMerchantAccounts(row) });
+    const accounts = await listAdsAccounts(row);
+    // Every request goes through the customer ID typed before sign-in. When it isn't one this sign-in can use,
+    // Google refuses every account: say so, instead of listing them all as not active.
+    const wrongLoginId =
+      !!row.login_customer_id &&
+      accounts.length > 0 &&
+      !accounts.some((a) => a.usable) &&
+      accounts.some((a) => a.reason === "This sign-in has no access to it");
+    return NextResponse.json({ accounts, ...(wrongLoginId ? { wrongLoginId: row.login_customer_id } : {}) });
   } catch (err) {
     return fail(err);
   }

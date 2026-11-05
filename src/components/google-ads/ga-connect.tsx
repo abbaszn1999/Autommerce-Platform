@@ -155,17 +155,52 @@ function LiveNotice() {
   );
 }
 
+/** Typed or pasted text → "123-456-7890" as far as it goes; a pasted sentence keeps only its 10-digit ID. */
+export function formatIdInput(raw: string): string {
+  const pasted = raw.match(/\d{3}[\s-]?\d{3}[\s-]?\d{4}/);
+  const digits = (pasted ? pasted[0] : raw).replace(/\D/g, "").slice(0, 10);
+  return [digits.slice(0, 3), digits.slice(3, 6), digits.slice(6)].filter(Boolean).join("-");
+}
+
+/** A small picture of Google Ads' top bar, pointing at where the customer ID is. */
+function WhereIsTheId() {
+  return (
+    <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
+      <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">Where to find it in Google Ads</p>
+      <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-2 shadow-sm" aria-hidden>
+        <span className="flex h-5 w-5 items-center justify-center rounded bg-[#4285F4]/15">
+          <span className="h-2.5 w-2.5 rounded-sm bg-[#4285F4]" />
+        </span>
+        <span className="text-[11px] font-medium text-muted-foreground">Google Ads</span>
+        <span className="ms-auto flex items-center gap-2">
+          <span className="text-end leading-tight">
+            <span className="block text-[10.5px] font-semibold">Your store</span>
+            <span className="relative block rounded px-1 text-[11px] font-bold tabular-nums text-[#400095] ring-2 ring-[#F76D01] dark:text-violet-300">123-456-7890</span>
+          </span>
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">S</span>
+        </span>
+      </div>
+      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+        Top right, under your account&apos;s name, next to your profile picture. Click your profile picture there to see all your accounts.
+      </p>
+    </div>
+  );
+}
+
 /**
  * Live Google Ads sign-in asks for the customer ID first: it is the account (or
- * manager account) every request is made through. Then the browser goes to Google.
+ * manager account) every request is made through, and Google's connection needs
+ * it before sign-in. Then the browser goes to Google.
  */
 function CustomerIdDialog() {
   const cancel = useGoogleAds((s) => s.cancelConnect);
   const start = useGoogleAds((s) => s.startLiveConnect);
   const busy = useGoogleAds((s) => s.live.busy);
   const error = useGoogleAds((s) => s.live.error);
+  const wrong = useGoogleAds((s) => s.live.wrongLoginId);
   const [value, setValue] = useState("");
-  const digits = value.replace(/[\s-]/g, "");
+  const [agency, setAgency] = useState(false);
+  const digits = value.replace(/\D/g, "");
   const valid = /^\d{10}$/.test(digits);
 
   return (
@@ -177,7 +212,7 @@ function CustomerIdDialog() {
           e.preventDefault();
           if (valid && !busy) void start("ads", digits);
         }}
-        className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-background p-6 shadow-2xl"
+        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-background p-6 shadow-2xl"
       >
         <div className="mb-4 flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#400095]/10 text-[#400095] dark:bg-violet-500/15 dark:text-violet-300">
@@ -188,9 +223,24 @@ function CustomerIdDialog() {
             <p className="text-xs text-muted-foreground">Next you sign in with Google and allow access.</p>
           </div>
         </div>
-        <label htmlFor="ga-customer-id" className="text-xs font-semibold">
-          Google Ads customer ID
-        </label>
+        {wrong && (
+          <p className="mb-3 rounded-lg bg-amber-500/[0.08] px-3 py-2 text-[11.5px] text-amber-800 dark:text-amber-300">
+            {formatCustomerId(wrong)} didn&apos;t work with your Google sign-in. Check the number and try again.
+          </p>
+        )}
+        <div className="flex items-end justify-between gap-2">
+          <label htmlFor="ga-customer-id" className="text-xs font-semibold">
+            Your Google Ads customer ID
+          </label>
+          <a
+            href="https://ads.google.com/aw/overview"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[#400095] hover:underline dark:text-violet-300"
+          >
+            Open Google Ads <ArrowRight className="h-3 w-3 -rotate-45" />
+          </a>
+        </div>
         <input
           id="ga-customer-id"
           autoFocus
@@ -198,13 +248,32 @@ function CustomerIdDialog() {
           autoComplete="off"
           placeholder="123-456-7890"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
-          className="mt-1.5 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm tabular-nums outline-none focus:border-[#400095] dark:focus:border-[#F76D01]"
+          onChange={(e) => setValue(formatIdInput(e.target.value))}
+          className={cn(
+            "mt-1.5 h-12 w-full rounded-xl border bg-background px-3 text-center text-lg font-semibold tracking-wider tabular-nums outline-none focus:border-[#400095] dark:focus:border-[#F76D01]",
+            valid ? "border-emerald-500/60" : "border-border"
+          )}
         />
-        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-          It&apos;s the 10-digit number at the top right of Google Ads. If you reach your accounts through a manager account (MCC), enter the manager&apos;s
-          ID. You choose the ad account after signing in.
+        <p className="mt-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
+          <span>10 digits. Paste it with or without dashes.</span>
+          {valid && (
+            <span className="inline-flex items-center gap-1 font-semibold text-emerald-600">
+              <Check className="h-3 w-3" /> Looks right
+            </span>
+          )}
         </p>
+        <div className="mt-3">
+          <WhereIsTheId />
+        </div>
+        <button type="button" onClick={() => setAgency((v) => !v)} className="mt-3 inline-flex items-center gap-1 text-[11.5px] font-semibold text-muted-foreground hover:text-foreground">
+          <ChevronRight className={cn("h-3 w-3 transition-transform", agency && "rotate-90")} /> An agency manages my ads, or I have several accounts
+        </button>
+        {agency && (
+          <p className="mt-1.5 rounded-lg bg-muted/40 px-3 py-2 text-[11.5px] leading-relaxed text-muted-foreground">
+            Enter the ID of the <span className="font-semibold text-foreground">manager account (MCC)</span> you sign in through. After signing in you pick the
+            store&apos;s ad account from the list of accounts under it.
+          </p>
+        )}
         {error && (
           <p role="alert" className="mt-3 text-xs text-red-600">
             {error}
@@ -505,6 +574,22 @@ function AccountPicker() {
           <p role="alert" className="mb-3 rounded-xl border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-700 dark:text-red-400">
             {live.error}
           </p>
+        )}
+        {isLive && live.wrongLoginId && !live.busy && (
+          <div role="alert" className="mb-3 rounded-xl border border-amber-500/40 bg-amber-500/[0.07] px-4 py-3 text-xs">
+            <p className="text-sm font-semibold">Google won&apos;t open these accounts with the ID {formatCustomerId(live.wrongLoginId)}</p>
+            <p className="mt-1 leading-relaxed text-muted-foreground">
+              That number isn&apos;t an account this Google sign-in can use. Check the customer ID at the top right of Google Ads (or your manager account&apos;s ID if an
+              agency gave you access) and connect again.
+            </p>
+            <button
+              type="button"
+              onClick={() => startConnect()}
+              className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-[#400095] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#33007a] dark:bg-violet-600"
+            >
+              Enter the right ID
+            </button>
+          </div>
         )}
         {isLive && !clients.length && !live.busy && (
           <p className="mb-3 rounded-xl border border-border/60 bg-muted/40 px-3 py-3 text-xs text-muted-foreground">

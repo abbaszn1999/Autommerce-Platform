@@ -78,7 +78,7 @@ export const liveApi = {
   start: (workspaceId: string, kind: LiveKind, loginCustomerId?: string) =>
     call<{ redirectUrl: string }>("/api/google-ads/connection", { method: "POST", body: JSON.stringify({ workspaceId, kind, loginCustomerId }) }),
 
-  adsAccounts: (workspaceId: string) => call<{ accounts: LiveAdsAccount[] }>(`/api/google-ads/connection/accounts?${qs({ workspaceId, kind: "ads" })}`),
+  adsAccounts: (workspaceId: string) => call<{ accounts: LiveAdsAccount[]; wrongLoginId?: string }>(`/api/google-ads/connection/accounts?${qs({ workspaceId, kind: "ads" })}`),
 
   merchantAccounts: (workspaceId: string) =>
     call<{ accounts: LiveMerchantAccount[] }>(`/api/google-ads/connection/accounts?${qs({ workspaceId, kind: "merchant" })}`),

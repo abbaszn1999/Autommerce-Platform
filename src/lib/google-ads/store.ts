@@ -14,6 +14,7 @@ import { validateOps } from "./validation";
 import { DEFAULT_PROFILE, seedMemories, type AgentDoc, type AgentMemory, type BusinessProfile } from "./docs";
 import { seedDocs } from "./agent-docs";
 import { LiveApiError, liveApi, type LiveConnection, type LiveKind } from "./live-api";
+import { LIVE_OPS } from "./live-mutate";
 import type {
   AccountData,
   AgentMessage,
@@ -62,9 +63,11 @@ export type LiveState = {
   unusable: string[];
   /** Google's reason per unusable account, when it gives one. */
   unusableReasons: Record<string, string>;
+  /** The customer ID typed before sign-in, when Google refuses it for this sign-in (wrong number). */
+  wrongLoginId: string | null;
 };
 
-const LIVE_IDLE: LiveState = { busy: false, busyFor: null, error: null, unusable: [], unusableReasons: {} };
+const LIVE_IDLE: LiveState = { busy: false, busyFor: null, error: null, unusable: [], unusableReasons: {}, wrongLoginId: null };
 
 export type GaDialog =
   | { kind: "adGroup"; campaignId?: string }
@@ -356,7 +359,7 @@ export const useGoogleAds = create<GaStore>((set, get) => {
   };
 
   const loadAdsOptions = async (workspaceId: string) => {
-    const { accounts } = await liveApi.adsAccounts(workspaceId);
+    const { accounts, wrongLoginId } = await liveApi.adsAccounts(workspaceId);
     set((s) => ({
       status: "selecting",
       entered: false,
@@ -365,6 +368,7 @@ export const useGoogleAds = create<GaStore>((set, get) => {
         ...s.live,
         unusable: accounts.filter((a) => !a.usable).map((a) => a.customerId),
         unusableReasons: Object.fromEntries(accounts.filter((a) => !a.usable && a.reason).map((a) => [a.customerId, a.reason!])),
+        wrongLoginId: wrongLoginId ?? null,
       },
     }));
   };
@@ -830,6 +834,9 @@ export const useGoogleAds = create<GaStore>((set, get) => {
     const acc = current(get());
     if (!acc) return { ok: false, error: "No account selected" };
     if (get().mode === "live") {
+      // Nothing Google can't take yet is sent: say so at once instead of recording a failed change.
+      const unsupported = ops.find((o) => !(LIVE_OPS as readonly string[]).includes(o.kind));
+      if (unsupported) return { ok: false, error: "This can't be changed from Autommerce yet. Change it in Google Ads." };
       // The person's own edit is their approval; it still goes through the server's checks and appears in Pending/History.
       const change = get().propose({ title, rationale: "Edited directly in Autommerce.", ops, risk: "LOW", source });
       void applyLive(change.id);

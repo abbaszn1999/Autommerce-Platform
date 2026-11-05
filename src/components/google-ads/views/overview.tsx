@@ -7,6 +7,7 @@ import { BIDDING, CAMPAIGN_TYPES, SERVING_ISSUES } from "@/lib/google-ads/consta
 import {
   METRICS,
   accountBase,
+  adGroupBase,
   campaignBase,
   dailySeries,
   delta,
@@ -33,15 +34,16 @@ export function OverviewView() {
 }
 
 function ScopeOverview() {
-  const { data, range, currency, campaign } = useGa();
+  const { data, range, currency, campaign, adGroup } = useGa();
   const setScope = useGoogleAds((s) => s.setScope);
   const setView = useGoogleAds((s) => s.setView);
   const [tiles, setTiles] = useState<MetricKey[]>(["cost", "conversions", "conversionsValue", "roas"]);
   const [chart, setChart] = useState<[MetricKey, MetricKey]>(["cost", "conversions"]);
 
   const ids = useMemo(() => scopedCampaignIds(data, campaign), [data, campaign]);
-  const now = useMemo(() => derive(accountBase(data, range, ids)), [data, range, ids]);
-  const prev = useMemo(() => derive(accountBase(data, previousRange(range), ids)), [data, range, ids]);
+  // Inside an ad group the numbers are the ad group's; the daily chart stays the campaign's (there is no daily series per ad group).
+  const now = useMemo(() => derive(adGroup ? adGroupBase(data, adGroup.id, range) : accountBase(data, range, ids)), [data, range, ids, adGroup]);
+  const prev = useMemo(() => derive(adGroup ? adGroupBase(data, adGroup.id, previousRange(range)) : accountBase(data, previousRange(range), ids)), [data, range, ids, adGroup]);
   const points = useMemo(() => dailySeries(data, range, ids), [data, range, ids]);
 
   if (!data.campaigns.length) {
@@ -73,12 +75,18 @@ function ScopeOverview() {
   return (
     <div className="space-y-4">
       <ViewHeader
-        title={campaign ? campaign.name : "Overview"}
-        subtitle={campaign ? `${CAMPAIGN_TYPES[campaign.type].label} campaign · ${BIDDING[campaign.bidding.type].label}` : `${data.account.name} · all campaigns`}
+        title={adGroup ? adGroup.name : campaign ? campaign.name : "Overview"}
+        subtitle={
+          adGroup && campaign
+            ? `Ad group in ${campaign.name}`
+            : campaign
+              ? `${CAMPAIGN_TYPES[campaign.type].label} campaign · ${BIDDING[campaign.bidding.type].label}`
+              : `${data.account.name} · all campaigns`
+        }
       />
 
       {campaign && <ExperimentNote campaignId={campaign.id} />}
-      {campaign && <CampaignSummary />}
+      {adGroup ? <AdGroupSummary /> : campaign && <CampaignSummary />}
 
       <Card className="overflow-hidden">
         <div className="grid grid-cols-2 border-b border-border/60 md:grid-cols-4">
@@ -118,6 +126,7 @@ function ScopeOverview() {
           })}
         </div>
         <div className="p-4">
+          {adGroup && <p className="mb-2 text-[11px] text-muted-foreground">Daily chart: the whole campaign. The numbers above are this ad group&apos;s.</p>}
           <GaChart points={points} primary={chart[0]} secondary={chart[1]} currency={currency} />
         </div>
       </Card>
@@ -235,11 +244,43 @@ function CampaignSummary() {
   );
 }
 
-function TopSearchTerms() {
-  const { data, range, currency, campaign } = useGa();
+/** Inside an ad group: what it is and holds, with a link to its settings. */
+function AdGroupSummary() {
+  const { data, adGroup, currency } = useGa();
   const setView = useGoogleAds((s) => s.setView);
+  if (!adGroup) return null;
+  const keywords = data.keywords.filter((k) => k.adGroupId === adGroup.id && k.status !== "REMOVED").length;
+  const ads = data.ads.filter((a) => a.adGroupId === adGroup.id && a.status !== "REMOVED").length;
+  const facts = [
+    ["Status", adGroup.status === "ENABLED" ? "Enabled" : adGroup.status === "PAUSED" ? "Paused" : "Removed"],
+    ["Default max. CPC", adGroup.defaultCpcBid ? money(adGroup.defaultCpcBid, currency) : "—"],
+    ["Keywords", String(keywords)],
+    ["Ads", String(ads)],
+  ];
+  return (
+    <Card className="flex flex-wrap items-center gap-x-8 gap-y-3 p-4">
+      {facts.map(([k, v]) => (
+        <div key={k}>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{k}</p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold">
+            {k === "Status" && <StatusDot status={adGroup.status} />} {v}
+          </p>
+        </div>
+      ))}
+      <button type="button" onClick={() => setView("adGroupSettings")} className="ml-auto text-[11px] font-semibold text-[#400095] hover:underline dark:text-violet-300">
+        Ad group settings
+      </button>
+    </Card>
+  );
+}
+
+function TopSearchTerms() {
+  const { data, range, currency, campaign, adGroup } = useGa();
+  const setView = useGoogleAds((s) => s.setView);
+  // Campaign types whose searches Google reports as search terms.
+  const hasTerms = !campaign || ["SEARCH", "SHOPPING", "PERFORMANCE_MAX"].includes(campaign.type);
   const terms = data.searchTerms
-    .filter((t) => !campaign || t.campaignId === campaign.id)
+    .filter((t) => (!campaign || t.campaignId === campaign.id) && (!adGroup || t.adGroupId === adGroup.id))
     .map((t) => ({ t, m: derive(searchTermBase(data, t.id, range)) }))
     .sort((a, b) => b.m.cost - a.m.cost)
     .slice(0, 8);
@@ -262,7 +303,9 @@ function TopSearchTerms() {
           ))}
         </div>
       ) : (
-        <p className="px-4 py-8 text-center text-xs text-muted-foreground">No search terms for this campaign type.</p>
+        <p className="px-4 py-8 text-center text-xs text-muted-foreground">
+          {hasTerms ? "No search terms in this period: the ads got no clicks." : "No search terms for this campaign type."}
+        </p>
       )}
     </Card>
   );
