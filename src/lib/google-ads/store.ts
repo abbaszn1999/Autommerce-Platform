@@ -222,7 +222,7 @@ function viewForScope(view: GaView, scope: GaScope, type?: CampaignType): GaView
     return allowed.includes(view) ? view : "assetGroupAssets";
   }
   if (assetGroupOnly.includes(view)) return scope.campaignId ? "adGroups" : "campaigns";
-  const accountOnly: GaView[] = ["campaigns", "conversions", "library", "products", "rules", "keywordPlanner", "experiments", "links", "accountSettings", "documents", "profile", "connections", "trends"];
+  const accountOnly: GaView[] = ["campaigns", "conversions", "library", "products", "rules", "competitorAds", "experiments", "links", "accountSettings", "documents", "profile", "connections", "trends"];
   if (scope.adGroupId) {
     // Inside an ad group only that type's own pages exist; anything else goes to its home page.
     const home: GaView = isSearch ? "keywords" : "ads";

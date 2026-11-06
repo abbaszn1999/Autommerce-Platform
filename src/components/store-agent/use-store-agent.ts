@@ -5,7 +5,6 @@ import { emptyReply, reduceReply, type ReplyState } from "@/lib/store-agent/bloc
 import { announceDoc } from "@/lib/store-agent/doc-links";
 import { requestLabel } from "@/lib/store-agent/mentions";
 import type { AgentDomain, ModelParam, StoreAgentEvent } from "@/lib/store-agent/protocol";
-import { toast } from "sonner";
 import {
   ApiError,
   PLAN_TAB_PREFIX,
@@ -484,18 +483,13 @@ function applyEvent(chatId: string, event: StoreAgentEvent) {
 }
 
 /**
- * Tell the user when a chat needs them or is done and they are looking
- * elsewhere: a toast when on another chat or page, a system notification
- * when the browser tab is in the background.
+ * Tell the user when a chat needs them or is done while the browser tab is in
+ * the background (a system notification). No toast inside the page: the chat
+ * tabs already show it.
  */
 function notifyUser(chatId: string, label: string) {
-  const state = get();
-  const title = state.chats.find((c) => c.id === chatId)?.title || "Store Agent";
+  const title = get().chats.find((c) => c.id === chatId)?.title || "Store Agent";
   const hidden = typeof document !== "undefined" && document.hidden;
-  const onThisChat = state.activeChatId === chatId && typeof window !== "undefined" && window.location.pathname.endsWith("/store-assistant");
-  if (!hidden && !onThisChat) {
-    toast(label, { description: title, action: { label: "Open", onClick: () => void openChat(chatId) } });
-  }
   if (hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
     try {
       const n = new Notification(label, { body: title, tag: `store-agent-${chatId}` });

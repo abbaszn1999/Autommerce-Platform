@@ -42,7 +42,7 @@ import { MerchantConnectDialog } from "./ga-merchant";
 import { ReportsView } from "./views/reports";
 import { RulesView } from "./views/rules";
 import { ContentExclusionsView, ContentView, DemographicsView } from "./views/targeting";
-import { ExperimentsView, KeywordPlannerView, PlannerView } from "./views/tools";
+import { CompetitorAdsView, ExperimentsView, PlannerView } from "./views/tools";
 import { DocumentsView } from "./views/documents";
 import { ProfileView } from "./views/profile";
 import { DocTabs } from "./docs/doc-tabs";
@@ -72,7 +72,7 @@ const VIEWS: Record<GaView, () => React.ReactNode> = {
   productGroups: ProductGroupsView,
   reports: ReportsView,
   rules: RulesView,
-  keywordPlanner: KeywordPlannerView,
+  competitorAds: CompetitorAdsView,
   experiments: ExperimentsView,
   planner: PlannerView,
   content: ContentView,

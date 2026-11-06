@@ -19,10 +19,10 @@ import {
   MapPin,
   PanelsTopLeft,
   Plug,
-  Radar,
   Search,
   Settings2,
   ShoppingBag,
+  Swords,
   Target,
   Telescope,
   Users,
@@ -99,8 +99,8 @@ export function GaNav() {
       title: "Targeting & queries",
       items: [
         tabItem("keywords", KeyRound),
-        // Google's search volumes and ideas for the whole account (live accounts only).
-        { view: "keywordPlanner", label: "Keyword Planner", icon: Radar, hidden: !live || inCampaign },
+        // The keywords a competitor pays for (live accounts only; billed at cost).
+        { view: "competitorAds", label: "Competitor ads", icon: Swords, hidden: !live || inCampaign },
         tabItem("searches", Search),
         tabItem("audiences", Users),
         tabItem("audienceSignalsPmax", Users),

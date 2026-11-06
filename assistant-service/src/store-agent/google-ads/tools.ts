@@ -328,6 +328,34 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
       },
     },
 
+    competitor_ads: {
+      description:
+        "A competitor's paid search keywords in one country: the searches its Google ads appeared on this month, each with monthly searches, cost per click (USD), " +
+        "ad position, the ad text and landing page, and whether the user's account already has the keyword. Source: SE Ranking's estimates from Google's results, " +
+        "not the competitor's account. It costs the workspace credits at cost (about 0.2 credits per 1,000 keywords) unless this month's copy already has the site: " +
+        "use quoteOnly first when the user did not ask for the lookup themselves. Free product listings are removed. A site that only runs Performance Max, " +
+        "Shopping or video ads shows few or no keywords here.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          domain: { type: "string", description: "The competitor's site, e.g. competitor.com (subdomains included)." },
+          country: { type: "string", description: "One country name or two-letter code, e.g. Lebanon or LB. Default to the market the user asked about or the profile's main market." },
+          pages: { type: "number", description: "1,000 keywords per page (1–5, default 1). Ask for more only when the first page says more are available and the user wants them." },
+          quoteOnly: { type: "boolean", description: "Only say what the lookup would cost now; nothing is charged." },
+        },
+        required: ["domain", "country"],
+      },
+      execute: async (args) => {
+        try {
+          const res = await call<{ ok: boolean; error?: string; analysis?: unknown; quote?: unknown }>("competitor_ads", args);
+          if (!res.ok) return failure(res.error ?? "Competitor data did not answer.");
+          return text(res.quote ? JSON.stringify(res.quote) : await compact(ctx, res.analysis, "competitor-ads"));
+        } catch (error) {
+          return failure((error as Error).message);
+        }
+      },
+    },
+
     save_plan: {
       description:
         "Save a plan to the Documents page, where the owner reviews it and applies its steps (one by one or all together), with undo. " +

@@ -27,6 +27,7 @@ export type AdminCreditOperation =
   | "gallery_ai"
   | "visualizer_description"
   | "visualizer_images"
+  | "competitor_ads"
   | "credit_topup"
   | "monthly_reset";
 

@@ -23,7 +23,8 @@ export type AdsAction =
   | "doc_report"
   | "doc_read"
   | "keywords"
-  | "keyword_forecast";
+  | "keyword_forecast"
+  | "competitor_ads";
 
 export async function callAdsPlatform<T>(
   platform: AdsPlatform,

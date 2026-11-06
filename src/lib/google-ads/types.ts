@@ -878,7 +878,7 @@ export type GaView =
   | "productGroups"
   | "reports"
   | "rules"
-  | "keywordPlanner"
+  | "competitorAds"
   | "experiments"
   | "planner"
   | "content"

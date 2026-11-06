@@ -14,9 +14,11 @@ import { rangeFor } from "@/lib/google-ads/metrics";
 import { PROFILE_SOURCES, ProfileEditError, fieldLabel, formatValue, missingRequired, profileForAgent, type ProfileEdit, type ProfileSource } from "@/lib/business-profile";
 import { editProfile, loadProfile } from "@/lib/business-profile.server";
 import { DocInputError, parsePlanInput, parseReportInput } from "@/lib/google-ads/live-docs";
-import { KeywordInputError, rowsForAgent } from "@/lib/google-ads/keyword-planner";
+import { KeywordInputError, regionNameIndex, rowsForAgent } from "@/lib/google-ads/keyword-planner";
 import { keywordForecast, keywordResearch } from "@/lib/google-ads/keyword-planner.server";
 import { docConnections, getDoc, savePlan, saveReport } from "@/lib/google-ads/live-docs.server";
+import { CompetitorInputError, analysisForAgent, parseTarget } from "@/lib/google-ads/competitor-ads";
+import { CompetitorCreditsError, CompetitorUnavailableError, quoteAnalysis, runAnalysis } from "@/lib/google-ads/competitor-ads.server";
 import type { MutateOp } from "@/lib/google-ads/types";
 
 export const runtime = "nodejs";
@@ -39,6 +41,7 @@ const ACTIONS = new Set([
   "doc_read",
   "keywords",
   "keyword_forecast",
+  "competitor_ads",
 ]);
 const UUID = /^[0-9a-f-]{36}$/i;
 const MAX_BODY = 200_000;
@@ -81,6 +84,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (action.startsWith("merchant")) return await merchantAction(action, body, { admin, workspaceId, chatId });
     if (action === "profile" || action === "profile_update") return await profileAction(action, body, { admin, workspaceId, chatId }, caller.userId);
     if (action.startsWith("doc_")) return await docAction(action, body, { admin, workspaceId, chatId }, caller.userId);
+    if (action === "competitor_ads") return await competitorAction(body, { admin, workspaceId, chatId }, caller.userId);
     const row = await loadConnection(admin, workspaceId, "ads");
     if (!row?.composio_connected_account_id || !row.account_id) return NextResponse.json({ error: "not_connected" }, { status: 409 });
     const customerId = row.account_id;
@@ -236,6 +240,30 @@ async function docAction(action: string, body: Record<string, unknown>, { admin,
     return NextResponse.json({ ok: true, document: { id: doc.id, kind: doc.kind, title: doc.title, version: doc.version, steps: doc.steps?.total } });
   } catch (err) {
     if (err instanceof DocInputError) return NextResponse.json({ ok: false, error: err.message });
+    throw err;
+  }
+}
+
+let nameToCode: ((name: string) => string | undefined) | null = null;
+
+/**
+ * A competitor's paid search keywords (SE Ranking's list). "quote" says what it
+ * would cost; a lookup charges the workspace our cost for what had to be bought.
+ */
+async function competitorAction(body: Record<string, unknown>, { admin, workspaceId }: Ctx, userId: string) {
+  try {
+    const target = parseTarget({ domain: body.domain, country: body.country }, (nameToCode ??= regionNameIndex()));
+    const pages = Number(body.pages) || 1;
+    if (body.quoteOnly === true) {
+      const quote = await quoteAnalysis(admin, target, pages);
+      return NextResponse.json({ ok: true, quote: { ...target, credits: quote.credits, note: quote.credits ? "Charged at cost to the workspace when run." : "Free: this month's copy already has it." } });
+    }
+    const analysis = await runAnalysis({ admin, workspaceId, userId, target, pages });
+    return NextResponse.json({ ok: true, analysis: analysisForAgent(analysis) });
+  } catch (err) {
+    if (err instanceof CompetitorInputError) return NextResponse.json({ ok: false, error: err.message });
+    if (err instanceof CompetitorCreditsError) return NextResponse.json({ ok: false, error: `${err.message} The user can top up credits, then ask again.` });
+    if (err instanceof CompetitorUnavailableError) return NextResponse.json({ ok: false, error: "Competitor data is not available right now. Nothing was charged; try again later." });
     throw err;
   }
 }

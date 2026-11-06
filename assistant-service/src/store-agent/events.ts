@@ -87,6 +87,12 @@ export function describeTool(name: string, args: Args): Described {
     }
     case "keyword_forecast":
       return { kind: "store_read", title: "Forecasting keywords", detail: Number(args.dailyBudget) ? `${args.dailyBudget} a day` : undefined };
+    case "competitor_ads":
+      return {
+        kind: "store_read",
+        title: args.quoteOnly === true ? "Pricing a competitor lookup" : "Looking up a competitor's ads",
+        detail: clip([args.domain, args.country].filter((v) => typeof v === "string" && v).join(" · "), 120) || undefined,
+      };
     case "save_plan":
       return { kind: "plan", title: args.documentId ? "Revising the plan" : "Writing the plan", detail: clip(str(args.title), 140) || undefined };
     case "save_report":
@@ -242,6 +248,16 @@ export function summarizeResult(name: string, result: unknown): { ok: boolean; s
     case "read_document":
     case "keyword_forecast":
       return { ok: true };
+    case "competitor_ads":
+      if (/saved to google-ads\//.test(text)) return { ok: true, summary: "large result saved to a file" };
+      try {
+        const parsed = JSON.parse(text) as { paidKeywords?: number; credits?: number };
+        if (typeof parsed.credits === "number") return { ok: true, summary: parsed.credits ? `${parsed.credits} credits` : "free" };
+        const n = parsed.paidKeywords ?? 0;
+        return { ok: true, summary: `${n} paid keyword${n === 1 ? "" : "s"}` };
+      } catch {
+        return { ok: true };
+      }
     case "keyword_research":
       if (/saved to google-ads\//.test(text)) return { ok: true, summary: "large result saved to a file" };
       try {

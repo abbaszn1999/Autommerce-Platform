@@ -1,115 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useTheme } from "next-themes";
 import { CartesianGrid, Line, LineChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Beaker, Bot, Calculator, FlaskConical, Search } from "lucide-react";
+import { Beaker, Calculator, FlaskConical, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { GEO_TARGETS, LANGUAGES } from "@/lib/google-ads/constants";
-import { forecastCampaign, keywordIdeas, type KeywordIdea } from "@/lib/google-ads/analytics";
+import { forecastCampaign } from "@/lib/google-ads/analytics";
 import { money, num } from "@/lib/google-ads/metrics";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
-import type { MatchType } from "@/lib/google-ads/types";
-import { Input } from "@/components/ui/input";
-import { BulkButton, GaTable, type GaColumn } from "../ga-table";
-import { ACCENT_BTN, Card, Delta, EmptyState, Field, Pill, SelectBox, ViewHeader } from "../ga-ui";
+import { ACCENT_BTN, Card, Delta, EmptyState, Pill, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
 import { useGoogleAds } from "@/lib/google-ads/store";
-import { LiveKeywordPlannerView } from "./keyword-planner-live";
+import { LiveCompetitorAdsView } from "./competitor-ads-live";
 
-// ─── Keyword Planner ───────────────────────────────────────────────────────
+// ─── Competitor ads ────────────────────────────────────────────────────────
 
-/** Live accounts use Google's Keyword Planner; the demo keeps its sample ideas. */
-export function KeywordPlannerView() {
+/** Real competitor data costs credits, so it is only on live accounts. */
+export function CompetitorAdsView() {
   const live = useGoogleAds((s) => s.mode === "live");
-  return live ? <LiveKeywordPlannerView /> : <DemoKeywordPlannerView />;
-}
-
-function DemoKeywordPlannerView() {
-  const { data } = useGa();
-  const [seed, setSeed] = useState("running shoes");
-  const [location, setLocation] = useState("Saudi Arabia");
-  const [language, setLanguage] = useState("English");
-  const [query, setQuery] = useState({ seed: "running shoes", location: "Saudi Arabia", language: "English" });
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const groups = data.adGroups.filter((g) => g.type === "SEARCH_STANDARD" && g.status !== "REMOVED");
-  const [target, setTarget] = useState(groups[0]?.id ?? "");
-  const [match, setMatch] = useState<MatchType>("PHRASE");
-  const ideas = useMemo(() => keywordIdeas(query.seed, query), [query]);
-
-  const add = (texts: string[]) => {
-    // View-only dashboard: the agent adds them and shows the change in the chat for approval.
-    const group = data.adGroups.find((g) => g.id === target);
-    if (!group) return;
-    const existing = new Set(data.keywords.filter((k) => k.adGroupId === target).map((k) => `${k.matchType}:${k.text}`));
-    const fresh = texts.filter((t) => !existing.has(`${match}:${t}`));
-    if (!fresh.length) return;
-    runAgentTurn(`Add these ${match.toLowerCase()} match keywords to the ad group "${group.name}": ${fresh.join(", ")}`);
-    setSelected(new Set());
-  };
-
-  const columns: GaColumn<KeywordIdea>[] = [
-    { id: "text", header: "Keyword", label: "Keyword", sortValue: (k) => k.text, render: (k) => <span className="font-semibold">{k.text}</span> },
-    {
-      id: "volume",
-      header: "Avg. monthly searches",
-      label: "Avg. monthly searches",
-      align: "right",
-      sortValue: (k) => k.volume,
-      render: (k) => {
-        const max = Math.max(...k.trend);
-        return (
-          <span className="flex items-center justify-end gap-2">
-            <span className="flex h-5 items-end gap-px">
-              {k.trend.map((v, i) => (
-                <span key={i} className="w-1 rounded-sm bg-[#400095]/60 dark:bg-violet-400/60" style={{ height: `${Math.max(10, (v / max) * 100)}%` }} />
-              ))}
-            </span>
-            <span className="w-14 tabular-nums">{num(k.volume, { compact: true })}</span>
-          </span>
-        );
-      },
-    },
-    { id: "competition", header: "Competition", label: "Competition", sortValue: (k) => k.competition, render: (k) => <Pill tone={k.competition === "HIGH" ? "bad" : k.competition === "MEDIUM" ? "warn" : "good"}>{k.competition.toLowerCase()}</Pill> },
-    { id: "low", header: "Top of page bid (low)", label: "Top of page bid (low)", align: "right", sortValue: (k) => k.bidLow, render: (k) => money(k.bidLow, "USD", { decimals: 2 }) },
-    { id: "high", header: "Top of page bid (high)", label: "Top of page bid (high)", align: "right", sortValue: (k) => k.bidHigh, render: (k) => money(k.bidHigh, "USD", { decimals: 2 }) },
-  ];
-
-  return (
-    <div className="space-y-4">
-      <ViewHeader title="Keyword Planner" subtitle="Find keywords, see how often people search for them and what a click costs." />
-      <Card className="grid gap-3 p-4 sm:grid-cols-[1fr_200px_150px_auto] sm:items-end">
-        <Field label="Products or services">
-          <Input value={seed} onChange={(e) => setSeed(e.target.value)} onKeyDown={(e) => e.key === "Enter" && setQuery({ seed, location, language })} placeholder="e.g. trail running shoes" />
-        </Field>
-        <Field label="Location">
-          <SelectBox value={location} onChange={setLocation} options={GEO_TARGETS.filter((g) => g.kind === "Country").map((g) => ({ value: g.name, label: g.name }))} />
-        </Field>
-        <Field label="Language">
-          <SelectBox value={language} onChange={setLanguage} options={LANGUAGES.map((l) => ({ value: l, label: l }))} />
-        </Field>
-        <button type="button" onClick={() => setQuery({ seed, location, language })} className={cn("inline-flex h-9 items-center gap-1.5 rounded-lg px-4 text-xs font-semibold", ACCENT_BTN)}>
-          <Search className="h-3.5 w-3.5" /> Get results
-        </button>
-      </Card>
-      {groups.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-muted-foreground">Add selected to</span>
-          <SelectBox value={target} onChange={setTarget} options={groups.map((g) => ({ value: g.id, label: `${data.campaigns.find((c) => c.id === g.campaignId)?.name} › ${g.name}` }))} className="w-80" />
-          <SelectBox value={match} onChange={setMatch} options={[{ value: "BROAD", label: "Broad match" }, { value: "PHRASE", label: "Phrase match" }, { value: "EXACT", label: "Exact match" }]} className="w-36" />
-        </div>
-      )}
-      <GaTable
-        rows={ideas}
-        columns={columns}
-        rowKey={(k) => k.text}
-        exportName="keyword-ideas"
-        selectable
-        selected={selected}
-        onSelectedChange={setSelected}
-        defaultSort={{ id: "volume", dir: "desc" }}
-        bulkActions={(ids) => <BulkButton onClick={() => add(ids)}><Bot className="h-3 w-3" /> Ask agent to add {ids.length} to ad group</BulkButton>}
-      />
+  return live ? (
+    <LiveCompetitorAdsView />
+  ) : (
+    <div className="space-y-5">
+      <ViewHeader title="Competitor ads" subtitle="The searches a competitor pays Google to show up on, with their ads." />
+      <EmptyState icon={Search} title="Connect your Google Ads account" body="Competitor ads uses real market data, so it is available once your own account is connected." />
     </div>
   );
 }

@@ -24,6 +24,7 @@ export const CREDIT_OPERATION_LABELS: Record<AdminCreditOperation, string> = {
   gallery_ai: "Products Gallery",
   visualizer_description: "Products Visualizer",
   visualizer_images: "Products Visualizer",
+  competitor_ads: "Competitor ads",
   credit_topup: "Credit Top-up",
   monthly_reset: "Monthly Reset",
 };
