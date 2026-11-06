@@ -1,0 +1,281 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="brand.css">
+<style>
+body { background: var(--paper); color: var(--text); }
+.glow { position:absolute; width:1000px; height:1000px; left:-320px; top:-400px; background: radial-gradient(closest-side, rgba(247,109,1,.2), transparent 70%); }
+.glow2 { position:absolute; width:1000px; height:1000px; right:-380px; bottom:-120px; background: radial-gradient(closest-side, rgba(107,53,141,.24), transparent 70%); }
+.grid { position:absolute; inset:0; background-image: linear-gradient(rgba(23,23,23,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(23,23,23,.035) 1px, transparent 1px); background-size: 54px 54px; }
+.bigA { position:absolute; width:1250px; right:-560px; top:-330px; opacity:.09; }
+.pill { display:inline-flex; align-items:center; gap:10px; padding:10px 18px; border:1px solid rgba(23,23,23,.14); border-radius:999px; background:rgba(255,255,255,.7); font-size:13px; }
+.pill i { width:8px; height:8px; border-radius:50%; background: var(--orange); display:block; }
+.brandbar .name { color: var(--text); }
+#hl { position:absolute; left:72px; top:146px; font-weight:800; font-size:86px; line-height:.98; letter-spacing:-0.055em; }
+#hl .ln { display:block; overflow:hidden; padding-bottom:8px; }
+#hl .ln span { display:block; }
+
+#stageWrap { position:absolute; left:72px; top:378px; width:936px; }
+#stageGlow { position:absolute; inset:-50px; background: radial-gradient(closest-side, rgba(247,109,1,.26), rgba(64,0,149,.18) 60%, transparent 78%); filter: blur(12px); }
+#stage { position:relative; width:936px; border-radius:26px; overflow:hidden; background:#fff; border:1px solid rgba(23,23,23,.12); box-shadow: 0 50px 90px -40px rgba(64,0,149,.5), 0 18px 40px -22px rgba(23,23,23,.35); isolation:isolate; }
+#chrome { height:42px; display:flex; align-items:center; gap:14px; padding:0 18px; background:#faf9f7; border-bottom:1px solid rgba(23,23,23,.08); }
+#chrome .dots { display:flex; gap:7px; } #chrome .dots i { width:11px; height:11px; border-radius:50%; background:#dcdbe0; display:block; }
+#chrome .url { flex:1; height:26px; border-radius:13px; background:#fff; border:1px solid rgba(23,23,23,.08); display:flex; align-items:center; padding:0 14px; font-size:12px; color:#6b6a72; font-family:'Geist Mono',monospace; }
+#chrome .rec { display:flex; align-items:center; gap:8px; font-size:11px; color:#6b6a72; }
+#chrome .rec i { width:9px; height:9px; border-radius:50%; background:#d92d20; display:block; }
+#vp { position:relative; width:936px; height:600px; overflow:hidden; background:#fff; }
+#cam { position:absolute; left:0; top:0; width:1600px; height:1000px; transform-origin:0 0; will-change:transform; }
+#cam img.s { position:absolute; left:0; top:0; width:1600px; height:1000px; display:block; opacity:0; }
+#doneClip { position:absolute; left:0; top:0; width:1600px; height:1000px; overflow:hidden; }
+#doneClip img { position:absolute; left:0; top:0; width:1600px; height:1000px; }
+#scan { position:absolute; left:505px; width:1095px; height:4px; margin-top:-2px; background:#ffd9a8; box-shadow:0 0 22px 6px rgba(247,109,1,.85); opacity:0; border-radius:2px; }
+#cursor { position:absolute; left:0; top:0; width:0; height:0; z-index:50; }
+#cursor svg { position:absolute; left:-3px; top:-2px; width:30px; height:38px; filter: drop-shadow(0 4px 6px rgba(0,0,0,.35)); }
+.ripple { position:absolute; width:20px; height:20px; margin:-10px 0 0 -10px; border-radius:50%; border:3px solid #F76D01; background:rgba(247,109,1,.22); opacity:0; }
+
+#steps { position:absolute; left:72px; top:1086px; width:936px; display:grid; grid-template-columns:repeat(4,1fr); gap:18px; }
+.step { position:relative; padding-top:16px; }
+.step .rail { position:absolute; left:0; right:0; top:0; height:3px; background:rgba(23,23,23,.1); border-radius:2px; overflow:hidden; }
+.step .rail b { position:absolute; left:0; top:0; bottom:0; width:0; background: var(--signature); display:block; }
+.step .n { font-family:'Geist Mono',monospace; font-size:12px; letter-spacing:.12em; color:#9a99a3; }
+.step .t { font-size:22px; font-weight:700; letter-spacing:-0.025em; margin-top:4px; color:#9a99a3; }
+.step .d { font-size:14px; line-height:1.4; color:#55545c; margin-top:6px; height:40px; opacity:0; }
+
+#stats { position:absolute; left:72px; top:1204px; width:936px; display:flex; gap:14px; opacity:0; }
+.stat { flex:1; padding:14px 18px; border-radius:18px; background:#fff; border:1px solid rgba(23,23,23,.1); box-shadow:0 18px 36px -24px rgba(64,0,149,.35); }
+.stat .v { font-size:32px; font-weight:800; letter-spacing:-0.04em; line-height:1; }
+.stat .k { font-size:11px; color:#6b6a72; margin-top:8px; }
+.foot-note { position:absolute; left:72px; bottom:22px; font-size:11px; color:#9a99a3; }
+
+#end { position:absolute; inset:0; background:var(--ink); color:#fff; clip-path: inset(100% 0 0 0); z-index:100; overflow:hidden; }
+#end .bg1 { position:absolute; width:1100px; height:1100px; right:-420px; top:-200px; background: radial-gradient(closest-side, rgba(107,53,141,.55), transparent 70%); }
+#end .bg2 { position:absolute; width:1000px; height:1000px; left:-420px; bottom:-380px; background: radial-gradient(closest-side, rgba(247,109,1,.38), transparent 70%); }
+#end .giant { position:absolute; width:1300px; left:-420px; top:300px; opacity:.07; }
+#end .big { position:absolute; left:72px; top:470px; font-size:112px; font-weight:800; letter-spacing:-0.06em; line-height:.96; }
+#end .big span.ln { display:block; overflow:hidden; padding-bottom:8px; }
+#end .big span.ln > span { display:block; }
+#end .sm { position:absolute; left:72px; top:760px; width:820px; font-size:30px; line-height:1.4; color:rgba(255,255,255,.72); letter-spacing:-0.01em; }
+#end .cta { position:absolute; left:72px; bottom:250px; font-size:32px; padding:26px 42px; }
+#end .url { position:absolute; left:72px; bottom:196px; color:rgba(255,255,255,.65); }
+#end .lock { position:absolute; left:72px; top:64px; display:flex; align-items:center; gap:14px; }
+#end .lock img { width:46px; height:39px; object-fit:contain; }
+#end .lock span { font-weight:800; font-size:25px; letter-spacing:-0.02em; }
+</style></head>
+<body>
+<div class="frame" id="root">
+  <div class="glow"></div><div class="glow2"></div><div class="grid"></div>
+  <img class="bigA" src="assets/autommerce-natural.png">
+
+  <div class="brandbar" id="bar">
+    <div class="lockup"><img src="assets/autommerce-natural.png"><span class="name">Autommerce</span></div>
+    <div class="pill mono"><i></i>Catalog Intelligence</div>
+  </div>
+
+  <div id="hl">
+    <span class="ln"><span>Supplier sheet in.</span></span>
+    <span class="ln"><span class="warm-text">Store-ready data out.</span></span>
+  </div>
+
+  <div id="stageWrap">
+    <div id="stageGlow"></div>
+    <div id="stage">
+      <div id="chrome">
+        <div class="dots"><i></i><i></i><i></i></div>
+        <div class="url">platform.autommerce.com / catalog-intelligence</div>
+        <div class="rec mono"><i id="recdot"></i>Screen recording</div>
+      </div>
+      <div id="vp">
+        <div id="cam">
+          <img class="s" data-n="u0" src="assets/u0.jpg">
+          <img class="s" data-n="n1" src="assets/n1.jpg">
+          <img class="s" data-n="n2" src="assets/n2.jpg">
+          <img class="s" data-n="n3" src="assets/n3.jpg">
+          <img class="s" data-n="n4" src="assets/n4.jpg">
+          <img class="s" data-n="n5" src="assets/n5.jpg">
+          <img class="s" data-n="u2" src="assets/u2.jpg">
+          <img class="s" data-n="r0" src="assets/r0.jpg">
+          <img class="s" data-n="w0" src="assets/w0.jpg">
+          <img class="s" data-n="w1" src="assets/w1.jpg">
+          <img class="s" data-n="w2" src="assets/w2.jpg">
+          <img class="s" data-n="e0" src="assets/e0.jpg">
+          <img class="s" data-n="e1" src="assets/e1.jpg">
+          <div id="doneClip"><img src="assets/done.jpg"></div>
+          <div id="scan"></div>
+          <div id="cursor">
+            <div class="ripple" id="rip"></div>
+            <svg viewBox="0 0 30 38"><path d="M3 2 L3 29 L10 23 L15 35 L20 33 L15 21 L24 21 Z" fill="#fff" stroke="#111" stroke-width="2.2" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="steps">
+    <div class="step"><div class="rail"><b></b></div><div class="n">01</div><div class="t">Upload</div><div class="d">Any supplier sheet: .xlsx, .xls or .csv.</div></div>
+    <div class="step"><div class="rail"><b></b></div><div class="n">02</div><div class="t">Review</div><div class="d">Matches checked before anything runs: 0 existing, 6 new.</div></div>
+    <div class="step"><div class="rail"><b></b></div><div class="n">03</div><div class="t">Choose outputs</div><div class="d">Pick the AI columns and the data they read from.</div></div>
+    <div class="step"><div class="rail"><b></b></div><div class="n">04</div><div class="t">Enrich</div><div class="d">Titles, descriptions, specs and FAQs, row by row.</div></div>
+  </div>
+
+  <div id="stats">
+    <div class="stat"><div class="v" id="s1">6</div><div class="k mono">SKUs in</div></div>
+    <div class="stat"><div class="v" id="s2">4</div><div class="k mono">AI columns out</div></div>
+    <div class="stat"><div class="v"><span id="s3">33</span><span style="font-size:20px;letter-spacing:-0.02em"> sec</span></div><div class="k mono">Recorded run · 6 rows</div></div>
+  </div>
+
+  <div class="foot-note mono">Product screen recording · demo workspace · sample supplier sheet</div>
+
+  <div id="end">
+    <div class="bg1"></div><div class="bg2"></div>
+    <img class="giant" src="assets/autommerce-white.png">
+    <div class="lock"><img src="assets/autommerce-white.png"><span>Autommerce</span></div>
+    <div class="big">
+      <span class="ln"><span>Stop retyping</span></span>
+      <span class="ln"><span class="warm-text">your catalog.</span></span>
+    </div>
+    <div class="sm" id="endsm">Catalog Intelligence turns raw supplier sheets into store-ready titles, descriptions and specs.</div>
+    <div class="cta" id="endcta">Book a meeting <span class="arrow">&rarr;</span></div>
+    <div class="url mono" id="endurl">autommerce.com/contact</div>
+  </div>
+</div>
+
+<script>
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const eo3=x=>1-Math.pow(1-clamp(x),3);
+const eo5=x=>1-Math.pow(1-clamp(x),5);
+const eio=x=>{x=clamp(x);return x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2};
+const seg=(t,a,b)=>clamp((t-a)/(b-a));
+const lerp=(a,b,k)=>a+(b-a)*k;
+
+const SCREENS=[['u0',0],['n1',2.0],['n2',2.2],['n3',2.4],['n4',2.6],['n5',2.8],['u2',3.5,0.02],['r0',5.25],['w0',6.65],['w1',7.45],['w2',8.5],['e0',9.5],['e1',9.8]];
+const FADE=0.14;
+const imgs={}; document.querySelectorAll('#cam img.s').forEach(i=>imgs[i.dataset.n]=i);
+
+// camera keyframes: [t, x0, y0, W]. viewport is 936x600.
+const CAM=[
+ [0.0, 213,52,1387],[1.2, 213,52,1387],[2.0, 258,420,840],[3.45, 258,420,840],
+ [3.5, 258,58,840],[4.7, 225,350,930],[5.2, 225,350,930],
+ [5.25, 250,70,1350],[5.7, 250,70,1350],[6.1, 250,330,1000],[6.35, 250,330,1000],[6.62, 900,540,700],
+ [6.65, 175,60,1100],[8.7, 175,60,1100],[9.4, 175,316,1000],[9.6, 175,316,1000],
+ [10.3, 400,90,1100],[11.0, 400,90,1100],[12.5, 600,135,820],[13.5, 600,135,820]
+];
+function camAt(t){
+  if(t<=CAM[0][0]) return CAM[0].slice(1);
+  for(let i=0;i<CAM.length-1;i++){
+    const a=CAM[i], b=CAM[i+1];
+    if(t>=a[0] && t<=b[0]){
+      const k=(b[0]-a[0])<0.08 ? (t>=b[0]?1:0) : eio((t-a[0])/(b[0]-a[0]));
+      const wa=Math.log(a[3]), wb=Math.log(b[3]);
+      return [lerp(a[1],b[1],k), lerp(a[2],b[2],k), Math.exp(lerp(wa,wb,k))];
+    }
+  }
+  return CAM[CAM.length-1].slice(1);
+}
+
+// cursor keyframes in screen css coords: [t, x, y]
+const CUR=[
+ [1.2,1000,300],[2.0,720,563],[3.45,735,568],
+ [3.5,735,206],[5.0,687,913],
+ [5.25,687,913],[6.5,1458,753],
+ [6.65,1458,753],[7.4,514,158],[7.9,514,158],
+ [8.1,247,325],[8.25,247,361],[8.4,247,397],[8.55,247,433],
+ [9.45,335,920],[10.2,900,700]
+];
+const CLICKS=[2.05,5.05,6.55,7.45,8.12,8.27,8.42,8.57,9.5];
+function curAt(t){
+  if(t<=CUR[0][0]) return [CUR[0][1],CUR[0][2]];
+  for(let i=0;i<CUR.length-1;i++){
+    const a=CUR[i], b=CUR[i+1];
+    if(t>=a[0] && t<=b[0]){
+      if(b[0]-a[0]<0.08) return t>=b[0]?[b[1],b[2]]:[a[1],a[2]];
+      const k=eio((t-a[0])/(b[0]-a[0]));
+      return [lerp(a[1],b[1],k), lerp(a[2],b[2],k)];
+    }
+  }
+  const l=CUR[CUR.length-1]; return [l[1],l[2]];
+}
+
+const STEPS=[[0.9,5.2],[5.25,6.6],[6.65,9.45],[9.5,13.3]];
+const stepEls=[...document.querySelectorAll('.step')];
+const END=13.4;
+const DONE_A=10.6, STRIDE=0.2, ROWDUR=0.3;
+const ROWY=[160,224,288,352,416,480,544]; // reveal edge after each row
+
+function render(t){
+  // screens
+  let top=0;
+  SCREENS.forEach(([n,s,f],i)=>{ imgs[n].style.opacity = i===0?1: eo3(seg(t,s,s+(f||FADE))); });
+
+  // done reveal
+  const dc=document.getElementById('doneClip');
+  let edge=0;
+  if(t>=DONE_A){
+    let y=ROWY[0];
+    for(let r=0;r<6;r++){ const k=eio(seg(t,DONE_A+r*STRIDE,DONE_A+r*STRIDE+ROWDUR)); y=lerp(y,y+0,0); if(k>0) edge=lerp(ROWY[r],ROWY[r+1],k); if(k>=1) edge=ROWY[r+1]; }
+  }
+  const fullAt=DONE_A+5*STRIDE+ROWDUR+0.05;
+  const full=eo3(seg(t,fullAt,fullAt+0.25));
+  if(t<DONE_A){ dc.style.clipPath='inset(0 0 100% 0)'; }
+  else if(full>0){ dc.style.clipPath='inset(0 0 0 0)'; dc.style.opacity=1; }
+  else { dc.style.clipPath=`inset(0 0 ${1000-edge-0}px 0)`; }
+  const sc=document.getElementById('scan');
+  sc.style.top=edge+'px'; sc.style.opacity = (t>=DONE_A && full===0 && edge>0 && edge<544)? 0.95 : (t>=DONE_A && full===0 ? 0.0 : 0);
+  // for rows revealed below edge mid-state, hide scan between rows
+
+  // camera
+  const [cx,cy,cw]=camAt(t);
+  const s=936/cw;
+  const cam=document.getElementById('cam');
+  cam.style.transform=`translate(${-cx*s}px,${-cy*s}px) scale(${s})`;
+
+  // cursor
+  const cur=document.getElementById('cursor');
+  const [px,py]=curAt(t);
+  const curVis = eo3(seg(t,1.2,1.5))*(1-eo3(seg(t,10.1,10.5)));
+  cur.style.opacity=curVis;
+  cur.style.transform=`translate(${px}px,${py}px) scale(${1/s*0.95})`;
+  // ripple
+  let rk=0, rpos=null;
+  for(const c of CLICKS){ const k=(t-c)/0.45; if(k>=0&&k<=1){ rk=k; rpos=c; } }
+  const rip=document.getElementById('rip');
+  if(rk>0){ rip.style.opacity=(1-rk)*0.95; rip.style.transform=`scale(${1+rk*3.2})`; } else rip.style.opacity=0;
+
+  // rec dot
+  document.getElementById('recdot').style.opacity = (Math.floor(t*2)%2===0)?1:0.25;
+
+  // headline
+  [...document.querySelectorAll('#hl .ln > span')].forEach((el,i)=>{ const k=eo5(seg(t,0.1+i*0.18,0.8+i*0.18)); el.style.transform=`translateY(${(1-k)*105}%)`; });
+  const stg=document.getElementById('stageWrap'); const sk=eo5(seg(t,0.45,1.3));
+  stg.style.opacity=sk; stg.style.transform=`translateY(${(1-sk)*60}px)`;
+  const bar=document.getElementById('bar'); bar.style.opacity=eo3(seg(t,0,0.5));
+
+  // steps
+  const stEl=document.getElementById('steps');
+  stEl.style.opacity=eo3(seg(t,0.7,1.2));
+  stepEls.forEach((el,i)=>{
+    const [a,b]=STEPS[i]; const act=t>=a&&t<b; const done=t>=b;
+    const k=eo3(seg(t,a,a+0.3));
+    el.querySelector('.t').style.color = act? '#171717' : (done?'#55545c':'#9a99a3');
+    el.querySelector('.n').style.color = (act||done)? '#F76D01':'#9a99a3';
+    el.querySelector('.d').style.opacity = act? k : 0;
+    el.querySelector('.rail b').style.width = act? (100*seg(t,a,b))+'%' : (done?'100%':'0%');
+  });
+
+  // stats
+  const st=document.getElementById('stats'); const stk=eo5(seg(t,11.9,12.6));
+  st.style.opacity=stk; st.style.transform=`translateY(${(1-stk)*24}px)`;
+  const cu=eo3(seg(t,11.9,12.9));
+  document.getElementById('s1').textContent=Math.round(6*cu);
+  document.getElementById('s2').textContent=Math.round(4*cu);
+  document.getElementById('s3').textContent=Math.round(33*cu);
+
+  // end card
+  const ek=eio(seg(t,END,END+0.75));
+  document.getElementById('end').style.clipPath=`inset(${(1-ek)*100}% 0 0 0)`;
+  [...document.querySelectorAll('#end .big .ln > span')].forEach((el,i)=>{ const k=eo5(seg(t,END+0.5+i*0.15,END+1.2+i*0.15)); el.style.transform=`translateY(${(1-k)*105}%)`; });
+  const sm=document.getElementById('endsm'); const k1=eo5(seg(t,END+1.0,END+1.7)); sm.style.opacity=k1; sm.style.transform=`translateY(${(1-k1)*30}px)`;
+  const ec=document.getElementById('endcta'); const k2=eo5(seg(t,END+1.3,END+2.0)); ec.style.opacity=k2; ec.style.transform=`translateY(${(1-k2)*36}px) scale(${.96+.04*k2})`;
+  document.getElementById('endurl').style.opacity=k2;
+}
+window.render=render; render(0);
+</script>
+</body></html>

@@ -1,0 +1,76 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../brand.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1350px;overflow:hidden}
+body{font-family:'Geist',system-ui,sans-serif;-webkit-font-smoothing:antialiased;position:relative}
+.mono{font-family:'Geist Mono',ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase}
+.o{color:#F76D01}
+.warm{background:linear-gradient(135deg,#F76D01,#C40000);-webkit-background-clip:text;background-clip:text;color:transparent}
+.grad{background:linear-gradient(100deg,#F76D01 0%,#E0322A 45%,#B24AE0 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.abs{position:absolute}
+.ink{background:#0B0A10;color:#fff}
+.paper{background:#F8F6F3;color:#0B0A10}
+.glow{position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none}
+.bar{position:absolute;left:72px;right:72px;top:64px;height:46px;display:flex;align-items:center;justify-content:space-between;z-index:5}
+.lock{display:flex;align-items:center;gap:14px}
+.lock img{width:44px;height:38px;object-fit:contain}
+.lock b{font-size:24px;font-weight:800;letter-spacing:-.02em}
+.lock small{display:block;font-size:11px;margin-top:3px;opacity:.6}
+.lock .by{font-size:11px;opacity:.6;margin-left:4px}
+.chip{display:inline-flex;align-items:center;gap:10px;padding:11px 18px;border-radius:999px;font-size:12.5px}
+.ink .chip{border:1px solid rgba(255,255,255,.22);color:rgba(255,255,255,.85)}
+.paper .chip{border:1px solid rgba(11,10,16,.14);background:#fff;color:#0B0A10}
+.chip i{width:7px;height:7px;border-radius:50%;background:#F76D01;display:block}
+.count{font-size:14px}
+.count b{color:#F76D01;font-weight:500}
+h1{font-weight:800;letter-spacing:-.052em;line-height:.98}
+.cta{display:inline-flex;align-items:center;gap:14px;padding:22px 36px;border-radius:999px;font-weight:700;font-size:27px;letter-spacing:-.01em;color:#fff;background:linear-gradient(135deg,#F76D01,#C40000);box-shadow:0 18px 44px -16px rgba(247,109,1,.65)}
+.foot{position:absolute;left:72px;right:72px;bottom:56px;height:50px;display:flex;align-items:center;justify-content:space-between;z-index:5}
+.prog{display:flex;gap:6px;width:520px}
+.prog i{flex:1;height:4px;border-radius:2px;display:block}
+.ink .prog i{background:rgba(255,255,255,.2)}
+.paper .prog i{background:rgba(11,10,16,.12)}
+.prog i.on{background:linear-gradient(90deg,#F76D01,#C40000)!important}
+.swipe{font-size:14px;display:flex;align-items:center;gap:12px}
+.swipe .arr{width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#F76D01,#C40000);color:#fff;display:flex;align-items:center;justify-content:center;font-size:23px;letter-spacing:0}
+.note{font-size:12px;opacity:.55}
+
+.phone{position:absolute;filter:drop-shadow(0 40px 60px rgba(0,0,0,.55))}
+.phone img{display:block;width:100%;border-radius:11.5% / 5.9%}
+.kick{display:flex;align-items:center;gap:14px;font-size:14px;color:#F76D01;margin-bottom:24px}
+.kick i{width:44px;height:2px;background:#F76D01;display:block}
+.body{font-size:27px;line-height:1.4;color:rgba(255,255,255,.78);letter-spacing:-.012em}
+.label{position:absolute;padding:12px 18px;border-radius:999px;background:rgba(11,10,16,.82);border:1px solid rgba(255,255,255,.18);font-size:12px;color:#fff;backdrop-filter:blur(8px)}
+.label i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#F76D01;margin-right:10px;vertical-align:middle}
+
+.main{position:absolute;left:72px;right:72px;top:182px}
+.tl{position:absolute;left:72px;right:72px;top:640px}
+.tl .ln{position:relative;height:4px;background:rgba(255,255,255,.14);border-radius:2px;margin:60px 0 0}
+.tl .ln i{position:absolute;top:-10px;width:24px;height:24px;border-radius:50%;background:#0B0A10;border:4px solid #F76D01}
+.tl .ln em{position:absolute;left:0;top:0;height:4px;border-radius:2px;background:linear-gradient(90deg,#F76D01,#C40000)}
+.tl .lb{position:relative;height:230px}
+.tl .lb div{position:absolute;top:34px;width:300px}
+.tl .lb b{display:block;font-size:44px;font-weight:800;letter-spacing:-.04em}
+.tl .lb span{display:block;margin-top:8px;font-size:21px;line-height:1.35;color:rgba(255,255,255,.75)}
+.two{position:absolute;left:72px;right:72px;top:640px;display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.two .c{border-radius:24px;padding:34px;background:#15131D;border:1px solid rgba(255,255,255,.1)}
+.two .c.off{background:transparent;border:1px dashed rgba(255,255,255,.22)}
+.two small{display:block;font-size:13px;color:#F76D01;margin-bottom:20px}
+.two .c.off small{color:rgba(255,255,255,.5)}
+.two p{font-size:25px;padding:12px 0;border-top:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between}
+.two p em{font-style:normal;color:rgba(255,255,255,.5);font-family:'Geist Mono',monospace;font-size:18px}
+.code{display:flex;gap:14px;margin-top:6px}
+.code span{width:88px;height:110px;border-radius:18px;background:#15131D;border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:52px;font-weight:700;font-family:'Geist Mono',monospace}
+.code span:last-child{border-color:#F76D01}
+.agree{margin-top:34px;display:flex;align-items:center;gap:18px;font-size:24px;color:rgba(255,255,255,.85)}
+.agree i{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#F76D01,#C40000);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:22px}
+.li{margin-top:40px}
+.li div{display:grid;grid-template-columns:54px 1fr;padding:20px 0;border-top:1px solid rgba(255,255,255,.12);font-size:26px;letter-spacing:-.015em}
+.li b{font-family:'Geist Mono',monospace;font-size:15px;color:#F76D01;font-weight:500;padding-top:6px}
+.phone img{border-radius:0}
+</style></head><body class="ink"><div class="glow" style="width:700px;height:700px;right:-260px;top:-240px;background:rgba(107,53,141,.55)"></div><div class="glow" style="width:620px;height:620px;left:-300px;bottom:-240px;background:rgba(247,109,1,.22)"></div><div class="bar"><div class="lock"><img src="../assets/persona_logo.png"><b>Persona AI</b><span class="by mono">by Autommerce</span></div><div class="count mono"><b>01</b> / 06</div></div>
+<div class="main"><div class="kick mono"><i></i>Shopper privacy</div>
+<h1 style="font-size:100px">What happens<br>to the shopper's<br><span class="grad">photo?</span></h1>
+<div class="body" style="margin-top:30px;width:560px">The first question retailers ask us. Here is the plain answer, step by&nbsp;step.</div></div>
+<div class="phone" style="left:650px;top:600px;width:330px;transform:rotate(4deg)"><img src="../assets/ph_choose.png"></div>
+<div class="foot"><div class="prog"><i class="on"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></div><div class="swipe mono">Swipe<div class="arr">&rarr;</div></div></div></body></html>
