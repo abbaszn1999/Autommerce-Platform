@@ -154,6 +154,9 @@ export function isFreeListing(url: unknown): boolean {
 export function cleanHeadline(raw: unknown, domain: string): string {
   let t = s(raw).replace(/^(sponsored|ad|إعلان|annonce|anzeige|anuncio)\s*[·:]?\s*(?=\S)/i, "");
   t = t.replace(/https?:\/\/\S*$/i, "").trim();
+  // The site's address printed after the headline: "AYOUB COMPUTERSayoubcomputers.com" → "AYOUB COMPUTERS".
+  const tail = [`www.${domain}/`, `www.${domain}`, `${domain}/`, domain].find((d) => t.toLowerCase().endsWith(d));
+  if (tail && t.length > tail.length) t = t.slice(0, -tail.length).replace(/[\s|·-]+$/, "");
   // A trailing repeat: "…AYOUB COMPUTERSAYOUB COMPUTERS" → "…AYOUB COMPUTERS".
   for (let len = Math.floor(t.length / 2); len >= 3; len--) {
     if (t.slice(-len) === t.slice(-2 * len, -len)) {

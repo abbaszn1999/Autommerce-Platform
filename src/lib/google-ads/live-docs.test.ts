@@ -4,6 +4,12 @@ import { DocInputError, canApply, changesNothing, parsePlanInput, parseReportInp
 const pause = { kind: "status.set", entity: "KEYWORD", ids: ["1~2"], status: "PAUSED" };
 
 describe("parsePlanInput", () => {
+  it("only lets a Merchant Center step update products", () => {
+    const step = (kind: string) => ({ title: "Plan", steps: [{ title: "Fix", target: "merchant", edits: [{ kind, productId: "x" }] }] });
+    expect(() => parsePlanInput(step("product.restore"))).toThrow(/only update products/);
+    expect(parsePlanInput(step("product.update")).content.steps[0]!.target).toBe("merchant");
+  });
+
   it("numbers the steps and keeps their edits, target and risk", () => {
     const plan = parsePlanInput({
       title: " Cut waste ",

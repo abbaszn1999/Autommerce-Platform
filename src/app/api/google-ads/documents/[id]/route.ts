@@ -57,7 +57,8 @@ export async function POST(request: NextRequest, { params }: Params) {
       return checks ? NextResponse.json({ ok: true, checks }) : NextResponse.json({ error: "not_found" }, { status: 404 });
     }
     const stepId = typeof body?.stepId === "string" ? body.stepId : "";
-    const outcome = action === "apply" ? await applyStep(admin, conns, user.id, id, stepId) : await undoStep(admin, conns, user.id, id, stepId);
+    const seenVersion = typeof body?.version === "number" ? body.version : undefined;
+    const outcome = action === "apply" ? await applyStep(admin, conns, user.id, id, stepId, seenVersion) : await undoStep(admin, conns, user.id, id, stepId);
     if (!outcome) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json(outcome, { status: outcome.ok ? 200 : 422 });
   } catch (err) {

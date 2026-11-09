@@ -7,7 +7,10 @@
 // - every id must exist in this customer's current state (another account's ids never match);
 // - nothing Google can't bring back: no REMOVED status, no campaign/ad group/ad removal.
 //   The only removals are negatives, and keywords this app created (undo of a create);
-// - budgets and bids may not jump by more than MAX_RAISE in one change;
+// - budgets and bids may not jump by more than MAX_RAISE in one change, and a
+//   target ROAS may not fall by more than that (a lower target spends more);
+// - a change may not take the daily budgets above the business profile's monthly cap;
+// - undo puts back what was there, so these limits don't apply to it;
 // - amounts are rounded to the currency's billable unit, as Google requires.
 
 import type { Bidding, EntityStatus, Keyword, MatchType, MutateOp, NegativeKeyword } from "./types";
@@ -31,7 +34,20 @@ export type BeforeState = {
   campaignNegatives: Record<string, { text: string; matchType: MatchType }>;
   /** Keyword ids earlier changes in this workspace created: only these may be removed. */
   createdKeywordIds: Set<string>;
+  /** The account's budgets, when the business profile has a monthly cap and the change could spend more. */
+  spend?: SpendState;
 };
+
+export type SpendState = {
+  /** The business profile's monthly budget cap, in the account currency. */
+  monthlyCap: number;
+  /** Daily amount of every budget in use. */
+  budgets: Record<string, number>;
+  campaigns: Record<string, { budgetId: string; enabled: boolean }>;
+};
+
+/** Average days in a month, for turning daily budgets into a monthly figure. */
+const DAYS_PER_MONTH = 30.4;
 
 /** Which created resource each operation's result belongs to, so the server can read back new ids. */
 export type CreatedRef = { index: number; kind: "keyword" | "adGroupNegative" | "campaignNegative"; ref: string };
@@ -48,6 +64,7 @@ export class LivePlanError extends Error {}
 
 const ID = /^\d{1,20}$/;
 const PAIR = /^\d{1,20}~\d{1,20}$/;
+const TURNS_ON = "This turns on a paused campaign: it starts spending its budget again.";
 
 export function toMicros(amount: number, unitMicros: number): string {
   const unit = unitMicros > 0 ? unitMicros : 10_000;
@@ -71,8 +88,32 @@ const text = (s: unknown, max: number, what: string) => {
   return t;
 };
 
-export function planLiveChange(customerId: string, ops: MutateOp[], before: BeforeState): LivePlan {
+/** Sum of the daily budgets of enabled campaigns (a shared budget counts once), now and after these ops. */
+export function dailySpend(ops: MutateOp[], spend: SpendState): { now: number; after: number } {
+  const total = (budgets: Record<string, number>, enabled: Set<string>) =>
+    [...new Set([...enabled].map((id) => spend.campaigns[id]?.budgetId).filter((id): id is string => !!id))].reduce((sum, id) => sum + (budgets[id] ?? 0), 0);
+  const enabledNow = new Set(Object.entries(spend.campaigns).filter(([, c]) => c.enabled).map(([id]) => id));
+  const budgets = { ...spend.budgets };
+  const enabled = new Set(enabledNow);
+  for (const op of ops) {
+    if (op.kind === "budget.update") budgets[op.budgetId] = op.amount;
+    if (op.kind === "status.set" && op.entity === "CAMPAIGN") {
+      for (const id of op.ids) {
+        if (op.status === "ENABLED") enabled.add(id);
+        else enabled.delete(id);
+      }
+    }
+  }
+  return { now: total(spend.budgets, enabledNow), after: total(budgets, enabled) };
+}
+
+export function planLiveChange(customerId: string, ops: MutateOp[], before: BeforeState, opts: { undo?: boolean } = {}): LivePlan {
   if (!/^\d{10}$/.test(customerId)) throw new LivePlanError("Bad customer id.");
+  const guard = (previous: number | undefined, after: number, what: string) => {
+    if (!opts.undo) guardRaise(previous, after, what);
+  };
+  // An undo sends null for a value that was not set before the change.
+  const cleared = (value: unknown) => !!opts.undo && value === null;
   const rn = (collection: string, id: string) => `customers/${customerId}/${collection}/${id}`;
   const operations: Record<string, unknown>[] = [];
   const inverse: MutateOp[] = [];
@@ -96,6 +137,7 @@ export function planLiveChange(customerId: string, ops: MutateOp[], before: Befo
             if (!c) throw new LivePlanError(`Campaign ${id} isn't in this account.`);
             update("campaign_operation", { resourceName: rn("campaigns", id), status: op.status }, ["status"]);
             previous.set(c.status, [...(previous.get(c.status) ?? []), id]);
+            if (!opts.undo && op.status === "ENABLED" && c.status === "PAUSED" && !warnings.includes(TURNS_ON)) warnings.push(TURNS_ON);
           } else if (op.entity === "AD_GROUP") {
             const g = ID.test(id) ? before.adGroups[id] : undefined;
             if (!g) throw new LivePlanError(`Ad group ${id} isn't in this account.`);
@@ -129,7 +171,7 @@ export function planLiveChange(customerId: string, ops: MutateOp[], before: Befo
         const b = ID.test(op.budgetId) ? before.budgets[op.budgetId] : undefined;
         if (!b) throw new LivePlanError(`Budget ${op.budgetId} isn't in this account.`);
         const amount = money(op.amount, "The daily budget");
-        guardRaise(b.amount, amount, "The daily budget");
+        guard(b.amount, amount, "The daily budget");
         if (b.shared) warnings.push("This is a shared budget: every campaign that uses it changes too.");
         update("campaign_budget_operation", { resourceName: rn("campaignBudgets", op.budgetId), amountMicros: toMicros(amount, before.billableUnitMicros) }, ["amount_micros"]);
         inverse.unshift({ kind: "budget.update", budgetId: op.budgetId, amount: b.amount });
@@ -149,24 +191,36 @@ export function planLiveChange(customerId: string, ops: MutateOp[], before: Befo
           undo.name = c.name;
         }
         if (op.patch.bidding) {
-          const bid = op.patch.bidding;
+          const bid = op.patch.bidding as { type?: string; targetCpa?: number | null; targetRoas?: number | null };
           const strategy = biddingField(c.biddingType);
           if (!strategy || (bid.type && bid.type !== strategyType(c.biddingType)))
             throw new LivePlanError("Changing the bid strategy type can't be sent to Google Ads yet.");
+          // Only the target this change touches goes in the undo; null clears one that was not set.
+          const undoBid: Record<string, unknown> = { type: strategyType(c.biddingType)! };
           if (bid.targetCpa !== undefined) {
             if (strategy.cpa === undefined) throw new LivePlanError("This bid strategy has no target CPA.");
-            const v = money(bid.targetCpa, "The target CPA");
-            guardRaise(c.targetCpa, v, "The target CPA");
-            resource[strategy.cpa] = { targetCpaMicros: toMicros(v, before.billableUnitMicros) };
+            if (cleared(bid.targetCpa)) resource[strategy.cpa] = {};
+            else {
+              const v = money(bid.targetCpa, "The target CPA");
+              guard(c.targetCpa, v, "The target CPA");
+              resource[strategy.cpa] = { targetCpaMicros: toMicros(v, before.billableUnitMicros) };
+            }
             mask.push(`${snake(strategy.cpa)}.target_cpa_micros`);
+            undoBid.targetCpa = c.targetCpa ?? null;
           }
           if (bid.targetRoas !== undefined) {
             if (strategy.roas === undefined) throw new LivePlanError("This bid strategy has no target ROAS.");
-            const v = money(bid.targetRoas, "The target ROAS");
-            resource[strategy.roas] = { targetRoas: v };
+            if (cleared(bid.targetRoas)) resource[strategy.roas] = {};
+            else {
+              const v = money(bid.targetRoas, "The target ROAS");
+              if (!opts.undo && c.targetRoas && v < c.targetRoas / MAX_RAISE)
+                throw new LivePlanError(`The target ROAS would fall from ${c.targetRoas} to ${v}, which raises spending. Cuts beyond ${MAX_RAISE}× must be made in smaller steps.`);
+              resource[strategy.roas] = { targetRoas: v };
+            }
             mask.push(`${snake(strategy.roas)}.target_roas`);
+            undoBid.targetRoas = c.targetRoas ?? null;
           }
-          undo.bidding = { type: strategyType(c.biddingType)!, targetCpa: c.targetCpa, targetRoas: c.targetRoas };
+          undo.bidding = undoBid as unknown as Bidding;
         }
         if (!mask.length) break;
         update("campaign_operation", resource, mask);
@@ -188,18 +242,22 @@ export function planLiveChange(customerId: string, ops: MutateOp[], before: Befo
           undo.name = g.name;
         }
         if (op.patch.defaultCpcBid !== undefined) {
-          const v = money(op.patch.defaultCpcBid, "The default bid");
-          guardRaise(g.cpcBid, v, "The default bid");
-          resource.cpcBidMicros = toMicros(v, before.billableUnitMicros);
+          if (!cleared(op.patch.defaultCpcBid)) {
+            const v = money(op.patch.defaultCpcBid, "The default bid");
+            guard(g.cpcBid, v, "The default bid");
+            resource.cpcBidMicros = toMicros(v, before.billableUnitMicros);
+          }
           mask.push("cpc_bid_micros");
-          undo.defaultCpcBid = g.cpcBid;
+          undo.defaultCpcBid = g.cpcBid ?? null;
         }
         if (op.patch.targetCpa !== undefined) {
-          const v = money(op.patch.targetCpa, "The ad group target CPA");
-          guardRaise(g.targetCpa, v, "The ad group target CPA");
-          resource.targetCpaMicros = toMicros(v, before.billableUnitMicros);
+          if (!cleared(op.patch.targetCpa)) {
+            const v = money(op.patch.targetCpa, "The ad group target CPA");
+            guard(g.targetCpa, v, "The ad group target CPA");
+            resource.targetCpaMicros = toMicros(v, before.billableUnitMicros);
+          }
           mask.push("target_cpa_micros");
-          undo.targetCpa = g.targetCpa;
+          undo.targetCpa = g.targetCpa ?? null;
         }
         if (!mask.length) break;
         update("ad_group_operation", resource, mask);
@@ -219,6 +277,7 @@ export function planLiveChange(customerId: string, ops: MutateOp[], before: Befo
             ([id, c]) => id.startsWith(`${k.adGroupId}~`) && !c.negative && c.text.toLowerCase() === words.toLowerCase() && c.matchType === k.matchType
           );
           if (exists) throw new LivePlanError(`"${words}" (${k.matchType.toLowerCase()}) is already in this ad group.`);
+          if (k.cpcBid !== undefined) guard(g.cpcBid, money(k.cpcBid, `The bid for "${words}"`), `The bid for "${words}" against the ad group's default bid`);
           created.push({ index: operations.length, kind: "keyword", ref: k.id });
           operations.push({
             ad_group_criterion_operation: {
@@ -242,13 +301,16 @@ export function planLiveChange(customerId: string, ops: MutateOp[], before: Befo
           throw new LivePlanError("Google Ads can't change a keyword's match type. Add the keyword again with the new match type and pause the old one.");
         const resource: Record<string, unknown> = { resourceName: rn("adGroupCriteria", op.keywordId) };
         const mask: string[] = [];
-        const undo: Partial<Pick<Keyword, "cpcBid" | "finalUrl">> = {};
+        const undo: Partial<Pick<Keyword, "finalUrl">> & { cpcBid?: number | null } = {};
         if (op.patch.cpcBid !== undefined) {
-          const v = money(op.patch.cpcBid, "The keyword bid");
-          guardRaise(k.cpcBid, v, "The keyword bid");
-          resource.cpcBidMicros = toMicros(v, before.billableUnitMicros);
+          if (!cleared(op.patch.cpcBid)) {
+            const v = money(op.patch.cpcBid, "The keyword bid");
+            // A keyword with no bid of its own uses its ad group's.
+            guard(k.cpcBid ?? before.adGroups[op.keywordId.split("~")[0]!]?.cpcBid, v, "The keyword bid");
+            resource.cpcBidMicros = toMicros(v, before.billableUnitMicros);
+          }
           mask.push("cpc_bid_micros");
-          undo.cpcBid = k.cpcBid;
+          undo.cpcBid = k.cpcBid ?? null;
         }
         if (op.patch.finalUrl !== undefined) {
           resource.finalUrls = op.patch.finalUrl ? [url(op.patch.finalUrl)] : [];
@@ -257,7 +319,7 @@ export function planLiveChange(customerId: string, ops: MutateOp[], before: Befo
         }
         if (!mask.length) break;
         update("ad_group_criterion_operation", resource, mask);
-        inverse.unshift({ kind: "keyword.update", keywordId: op.keywordId, patch: undo });
+        inverse.unshift({ kind: "keyword.update", keywordId: op.keywordId, patch: undo as Partial<Keyword> });
         break;
       }
 
@@ -305,6 +367,12 @@ export function planLiveChange(customerId: string, ops: MutateOp[], before: Befo
 
   if (!operations.length) throw new LivePlanError("This change doesn't change anything in Google Ads.");
   if (operations.length > MAX_OPERATIONS) throw new LivePlanError(`One change can hold at most ${MAX_OPERATIONS} edits. Split it up.`);
+  if (!opts.undo && before.spend) {
+    const { now, after } = dailySpend(ops, before.spend);
+    const monthly = Math.round(after * DAYS_PER_MONTH * 100) / 100;
+    if (after > now && monthly > before.spend.monthlyCap)
+      throw new LivePlanError(`This would bring the daily budgets to ${after} (about ${monthly} a month), above the monthly budget cap of ${before.spend.monthlyCap} in the Business profile. Spend less, or raise the cap there.`);
+  }
   return { operations, inverse, created, warnings };
 }
 

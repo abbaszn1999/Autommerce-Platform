@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LivePlanError, inverseForCreated, planLiveChange, resultNames, toMicros, type BeforeState } from "./live-mutate";
+import { LivePlanError, dailySpend, inverseForCreated, planLiveChange, resultNames, toMicros, type BeforeState } from "./live-mutate";
 import { googleMessage } from "./live-mutate.server";
 import type { MutateOp } from "./types";
 
@@ -160,6 +160,69 @@ describe("planLiveChange", () => {
 
   it("rejects a bad customer id outright", () => {
     expect(() => planLiveChange("123", [], before())).toThrow(LivePlanError);
+  });
+});
+
+describe("spending limits", () => {
+  it("caps a new keyword's bid and a bid with no value of its own against the ad group's", () => {
+    const kw = { id: "n1", adGroupId: "10", text: "new one", matchType: "EXACT", status: "ENABLED", policy: "APPROVED", cpcBid: 9 } as never;
+    refused([{ kind: "keyword.create", keywords: [kw] }], /smaller steps/);
+    const b = before();
+    b.criteria["10~5001"]!.cpcBid = undefined;
+    refused([{ kind: "keyword.update", keywordId: "10~5001", patch: { cpcBid: 9 } }], /smaller steps/, b);
+  });
+
+  it("refuses a target ROAS cut that would raise spending too far", () => {
+    refused([{ kind: "campaign.update", campaignId: "222", patch: { bidding: { type: "TARGET_ROAS", targetRoas: 1 } } }], /target ROAS would fall/);
+  });
+
+  it("warns when a paused campaign is turned on", () => {
+    expect(plan([{ kind: "status.set", entity: "CAMPAIGN", ids: ["111"], status: "ENABLED" }]).warnings.join(" ")).toMatch(/starts spending/);
+  });
+
+  const spend = { monthlyCap: 2000, budgets: { "900": 20, "901": 50 }, campaigns: { "111": { budgetId: "900", enabled: false }, "222": { budgetId: "901", enabled: true } } };
+
+  it("keeps daily budgets under the business profile's monthly cap", () => {
+    refused([{ kind: "budget.update", budgetId: "901", amount: 100 }], /above the monthly budget cap/, before({ spend }));
+    refused([{ kind: "status.set", entity: "CAMPAIGN", ids: ["111"], status: "ENABLED" }], /above the monthly budget cap/, before({ spend: { ...spend, monthlyCap: 1600 } }));
+    expect(plan([{ kind: "budget.update", budgetId: "901", amount: 60 }], before({ spend })).operations).toHaveLength(1);
+    expect(dailySpend([{ kind: "status.set", entity: "CAMPAIGN", ids: ["222"], status: "PAUSED" }], spend)).toEqual({ now: 50, after: 0 });
+  });
+
+  it("lets a cut through even when the account is already over the cap", () => {
+    expect(plan([{ kind: "budget.update", budgetId: "901", amount: 49 }], before({ spend: { ...spend, monthlyCap: 100 } })).operations).toHaveLength(1);
+  });
+});
+
+describe("undo", () => {
+  const undo = (ops: MutateOp[], b = before()) => planLiveChange(CID, ops, b, { undo: true });
+
+  it("isn't held back by the raise limit or the monthly cap", () => {
+    const b = before({ spend: { monthlyCap: 100, budgets: { "900": 20 }, campaigns: { "111": { budgetId: "900", enabled: true } } } });
+    expect(undo([{ kind: "budget.update", budgetId: "900", amount: 300 }], b).operations).toHaveLength(1);
+  });
+
+  it("clears a keyword bid that wasn't set before", () => {
+    const b = before();
+    b.criteria["10~5001"]!.cpcBid = undefined;
+    const change = plan([{ kind: "keyword.update", keywordId: "10~5001", patch: { cpcBid: 3 } }], b);
+    const inverse = JSON.parse(JSON.stringify(change.inverse)) as MutateOp[];
+    expect(inverse).toEqual([{ kind: "keyword.update", keywordId: "10~5001", patch: { cpcBid: null } }]);
+    expect(undo(inverse).operations).toEqual([{ ad_group_criterion_operation: { update: { resourceName: `customers/${CID}/adGroupCriteria/10~5001` }, updateMask: "cpc_bid_micros" } }]);
+  });
+
+  it("puts back only the target the change touched, and clears one that was not set", () => {
+    const b = before();
+    b.campaigns["111"]!.targetCpa = undefined;
+    const change = plan([{ kind: "campaign.update", campaignId: "111", patch: { name: "New", bidding: { type: "MAXIMIZE_CONVERSIONS", targetCpa: 12 } } }], b);
+    const inverse = JSON.parse(JSON.stringify(change.inverse)) as MutateOp[];
+    const op = undo(inverse).operations[0] as { campaign_operation: { update: Record<string, unknown>; updateMask: string } };
+    expect(op.campaign_operation.updateMask).toBe("name,maximize_conversions.target_cpa_micros");
+    expect(op.campaign_operation.update.maximizeConversions).toEqual({});
+  });
+
+  it("never lets a normal change send null", () => {
+    refused([{ kind: "keyword.update", keywordId: "10~5001", patch: { cpcBid: null as unknown as number } }], /positive amount/);
   });
 });
 

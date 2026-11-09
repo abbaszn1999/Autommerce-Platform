@@ -11,9 +11,10 @@ import { runReport } from "@/lib/google-ads/live-reports.server";
 import { MerchantPlanError, merchantOverview, type MerchantOp } from "@/lib/google-ads/merchant-live";
 import { applyMerchantChange, loadMerchantSnapshot, previewMerchantChange } from "@/lib/google-ads/merchant.server";
 import { rangeFor } from "@/lib/google-ads/metrics";
-import { PROFILE_SOURCES, ProfileEditError, fieldLabel, formatValue, missingRequired, profileForAgent, type ProfileEdit, type ProfileSource } from "@/lib/business-profile";
+import { PROFILE_SOURCES, ProfileEditError, fieldLabel, formatValue, isProfileField, missingRequired, profileForAgent, userStatedValue, type ProfileEdit, type ProfileSource } from "@/lib/business-profile";
 import { editProfile, loadProfile } from "@/lib/business-profile.server";
 import { DocInputError, parsePlanInput, parseReportInput } from "@/lib/google-ads/live-docs";
+import { approvalBinding, type ApprovalTarget } from "@/lib/google-ads/approval-binding";
 import { KeywordInputError, regionNameIndex, rowsForAgent } from "@/lib/google-ads/keyword-planner";
 import { keywordForecast, keywordResearch } from "@/lib/google-ads/keyword-planner.server";
 import { docConnections, getDoc, savePlan, saveReport } from "@/lib/google-ads/live-docs.server";
@@ -163,7 +164,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
 
     // apply: only a change a person approved in this chat.
-    const approved = await approvedChange(admin, body, { workspaceId, chatId });
+    const approved = await approvedChange(admin, body, { workspaceId, chatId }, "ads", ops);
     if (approved instanceof NextResponse) return approved;
     const { approvalId, title, decidedBy } = approved;
     const result = await applyLiveChange({ admin, row, userId: decidedBy, input: { clientChangeId: approvalId, title, source: "AGENT", ops } });
@@ -178,19 +179,20 @@ export async function POST(request: NextRequest, { params }: Params) {
 
 type Ctx = { admin: ReturnType<typeof createAdminClient>; workspaceId: string; chatId: string };
 
-/** The approval a person gave in this chat for this change, or the response refusing it. */
-async function approvedChange(admin: Ctx["admin"], body: Record<string, unknown>, { workspaceId, chatId }: Omit<Ctx, "admin">) {
+/** The approval a person gave in this chat for exactly these edits, or the response refusing it. */
+async function approvedChange(admin: Ctx["admin"], body: Record<string, unknown>, { workspaceId, chatId }: Omit<Ctx, "admin">, target: ApprovalTarget, ops: unknown[]) {
   const approvalId = typeof body.approvalId === "string" ? body.approvalId : "";
   const title = typeof body.title === "string" ? body.title.trim().slice(0, 300) : "";
   if (!UUID.test(approvalId) || !title) return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   const { data: approval } = await admin
     .from("store_agent_approvals")
-    .select("id, status, decided_by")
+    .select("id, status, decided_by, preview")
     .eq("id", approvalId)
     .eq("chat_id", chatId)
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (!approval || approval.status !== "approved" || !approval.decided_by) return NextResponse.json({ error: "not_approved" }, { status: 403 });
+  if ((approval.preview as { binding?: string } | null)?.binding !== approvalBinding(target, ops)) return NextResponse.json({ error: "not_approved" }, { status: 403 });
   return { approvalId, title, decidedBy: String(approval.decided_by) };
 }
 
@@ -203,16 +205,30 @@ async function profileAction(action: string, body: Record<string, unknown>, { ad
   const currency = (await loadConnection(admin, workspaceId, "ads"))?.account_currency ?? "";
   if (action === "profile") return NextResponse.json({ ok: true, profile: profileForAgent(await loadProfile(admin, workspaceId), currency) });
   try {
-    const edits = Array.isArray(body.edits) ? (body.edits as ProfileEdit[]) : [];
-    if (!edits.length || !edits.every((e) => e && typeof e === "object")) return NextResponse.json({ ok: false, error: "Give at least one { field, value } edit." });
+    const all = Array.isArray(body.edits) ? (body.edits as ProfileEdit[]) : [];
+    if (!all.length || !all.every((e) => e && typeof e === "object")) return NextResponse.json({ ok: false, error: "Give at least one { field, value } edit." });
     const stated = body.statedByUser === true;
+    // "The user said so" is the agent's word: numbers that steer spending must be in what the user wrote here.
+    let edits = all;
+    const unproven: ProfileEdit[] = [];
+    if (stated) {
+      const { data } = await admin.from("store_agent_messages").select("content").eq("chat_id", chatId).eq("role", "user").order("created_at", { ascending: false }).limit(5);
+      const messages = ((data ?? []) as { content: string | null }[]).map((m) => m.content ?? "");
+      edits = all.filter((e) => {
+        const ok = !isProfileField(e.field) || userStatedValue(e.field, e.value, messages);
+        if (!ok) unproven.push(e);
+        return ok;
+      });
+    }
+    const notSaid = unproven.map((e) => ({ field: e.field, label: fieldLabel(e.field), reason: "the user has not written this number in the chat; ask them, or they can set it on the Business profile page" }));
+    if (!edits.length) return NextResponse.json({ ok: true, saved: [], status: "confirmed", skipped: notSaid, missingRequired: [] });
     const source = PROFILE_SOURCES.includes(body.source as ProfileSource) && body.source !== "owner" && body.source !== "chat" ? (body.source as ProfileSource) : "website";
     const result = await editProfile(admin, workspaceId, edits, stated ? { source: "chat", status: "confirmed" } : { source, status: "suggested" }, { userId, chatId });
     return NextResponse.json({
       ok: true,
       saved: result.changes.map((c) => ({ field: c.field, label: fieldLabel(c.field), before: formatValue(c.field, c.before, currency), after: formatValue(c.field, c.after, currency) })),
       status: stated ? "confirmed" : "suggested",
-      skipped: result.skipped.map((s) => ({ field: s.field, label: fieldLabel(s.field), reason: s.reason })),
+      skipped: [...result.skipped.map((s) => ({ field: s.field, label: fieldLabel(s.field), reason: s.reason })), ...notSaid],
       missingRequired: missingRequired(result.profile.values),
     });
   } catch (err) {
@@ -294,7 +310,7 @@ async function merchantAction(action: string, body: Record<string, unknown>, { a
     }
   }
 
-  const approved = await approvedChange(admin, body, { workspaceId, chatId });
+  const approved = await approvedChange(admin, body, { workspaceId, chatId }, "merchant", ops);
   if (approved instanceof NextResponse) return approved;
   const { approvalId, title, decidedBy } = approved;
   const result = await applyMerchantChange({ admin, row, userId: decidedBy, input: { clientChangeId: approvalId, title, source: "AGENT", ops } });

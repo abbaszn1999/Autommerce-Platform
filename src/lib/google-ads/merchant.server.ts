@@ -194,7 +194,9 @@ export async function applyMerchantChange(opts: {
     .eq("workspace_id", row.workspace_id)
     .eq("client_change_id", input.clientChangeId)
     .maybeSingle<ChangeRow>();
-  if (existing) return asResult(existing);
+  // An undo that failed can be tried again, under the same id: the failed attempt stays in the history.
+  if (existing && "undoOf" in input && existing.status === "failed") await admin.from("google_ads_changes").update({ client_change_id: `${input.clientChangeId}:failed:${existing.id}` }).eq("id", existing.id);
+  else if (existing) return asResult(existing);
 
   let ops: MerchantOp[];
   let title: string;

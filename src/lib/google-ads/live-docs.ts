@@ -129,11 +129,13 @@ export function parsePlanInput(raw: Record<string, unknown>): PlanInput {
     if (!ops.length) throw new DocInputError(`Step ${i + 1} ("${stepTitle}") has no edits. Every step must be a change the owner can apply; put advice in the overview or notes.`);
     if (ops.length > DOC_LIMITS.opsPerStep) throw new DocInputError(`Step ${i + 1} has more than ${DOC_LIMITS.opsPerStep} edits; split it.`);
     if (!ops.every((o) => o && typeof o === "object" && typeof (o as { kind?: unknown }).kind === "string")) throw new DocInputError(`Step ${i + 1} has an edit without a kind.`);
+    const target = oneOf(step.target, ["ads", "merchant"] as const, "ads");
+    if (target === "merchant" && !ops.every((o) => (o as { kind?: unknown }).kind === "product.update")) throw new DocInputError(`Step ${i + 1}: a Merchant Center step can only update products.`);
     return {
       id: `s${i + 1}`,
       title: stepTitle,
       why: str(step.why ?? step.reason, 1500),
-      target: oneOf(step.target, ["ads", "merchant"] as const, "ads"),
+      target,
       ops: ops as Record<string, unknown>[],
       risk: oneOf(step.risk, ["low", "medium", "high"] as const, "low"),
       expected: str(step.expected, 300),

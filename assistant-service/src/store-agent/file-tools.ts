@@ -20,6 +20,19 @@ const TEXT_EXT = /\.(md|txt|csv|tsv|json|jsonl|html|xml|svg|yaml|yml|js|mjs|ts|c
 const text = (value: string) => ({ content: [{ type: "text" as const, text: value }] });
 const failure = (value: string) => ({ content: [{ type: "text" as const, text: value }], isError: true as const });
 
+/**
+ * A file or folder whose name starts with a dot, anywhere in the path. The
+ * Cursor SDK runs commands from a project's .cursor/hooks.json and loads servers
+ * from .cursor/mcp.json, so the agent must never reach those, and .cursor/rules
+ * holds its instructions.
+ */
+export const isHiddenPath = (relative: string) => relative.split(/[\\/]/).some((part) => part.startsWith(".") && part !== "." && part !== "..");
+
+/** Project settings in a chat folder that the SDK would load: removed before every run. */
+export async function clearProjectConfig(cwd: string): Promise<void> {
+  await Promise.all([".cursor", ".claude", ".mcp.json", ".cursorrules", ".cursorignore"].map((name) => fs.rm(path.join(cwd, name), { recursive: true, force: true })));
+}
+
 /** Resolve inside the folder, following symlinks, so nothing escapes it. */
 export async function resolveConfined(root: string, relative: unknown, opts: { mustExist: boolean }): Promise<string> {
   if (typeof relative !== "string" || !relative.trim()) throw new Error("A path is required.");
@@ -31,6 +44,7 @@ export async function resolveConfined(root: string, relative: unknown, opts: { m
     return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
   };
   if (!inside(target)) throw new Error("That path is outside your folder.");
+  if (isHiddenPath(path.relative(realRoot, target))) throw new Error("Hidden files and folders (names starting with a dot) can't be used.");
   try {
     const real = await fs.realpath(target);
     if (!inside(real)) throw new Error("That path is outside your folder.");

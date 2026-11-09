@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signServiceRequest } from "@/lib/assistant/service-client";
 import { verifyAgentRequest } from "./agent-auth.server";
-import { GAQL_MAX_ROWS, describeLiveChange, guardGaql } from "./agent-support";
+import { GAQL_MAX_ROWS, GaqlGuardError, describeLiveChange, guardGaql } from "./agent-support";
 import type { BeforeState } from "./live-mutate";
 
 const SECRET = "x".repeat(40);
@@ -44,6 +44,11 @@ describe("verifyAgentRequest", () => {
 });
 
 describe("guardGaql", () => {
+  it("keeps the account's users and their emails out of reach", () => {
+    expect(() => guardGaql("SELECT change_event.user_email FROM change_event")).toThrow(GaqlGuardError);
+    expect(() => guardGaql("SELECT customer_user_access.email_address FROM customer_user_access")).toThrow(GaqlGuardError);
+  });
+
   it("keeps reads to one SELECT and caps the rows", () => {
     expect(guardGaql("SELECT campaign.id FROM campaign")).toBe(`SELECT campaign.id FROM campaign LIMIT ${GAQL_MAX_ROWS}`);
     expect(guardGaql("SELECT campaign.id FROM campaign LIMIT 10;")).toBe("SELECT campaign.id FROM campaign LIMIT 10");

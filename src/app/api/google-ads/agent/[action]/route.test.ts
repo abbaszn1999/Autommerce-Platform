@@ -40,8 +40,10 @@ vi.mock("@/lib/supabase-admin", () => ({
         select: () => chain,
         eq: () => chain,
         update: () => chain,
+        order: () => chain,
+        limit: () => chain,
         maybeSingle: async () => ({ data: tables[table] ?? null }),
-        then: (resolve: (v: unknown) => void) => resolve({ data: null, error: null }),
+        then: (resolve: (v: unknown) => void) => resolve({ data: Array.isArray(tables[table]) ? tables[table] : null, error: null }),
       };
       return chain;
     },
@@ -49,6 +51,7 @@ vi.mock("@/lib/supabase-admin", () => ({
 }));
 
 const { POST } = await import("./route");
+const { approvalBinding } = await import("@/lib/google-ads/approval-binding");
 
 const WS = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const CHAT = "cccccccc-bbbb-cccc-dddd-eeeeeeeeeeee";
@@ -63,7 +66,8 @@ beforeEach(() => {
   load.mockReset().mockResolvedValue({ workspace_id: WS, kind: "ads", composio_connected_account_id: "ca", account_id: "2046362164", account_currency: "USD" });
   tables.workspace_members = { role: "admin" };
   tables.store_agent_chats = { id: CHAT };
-  tables.store_agent_approvals = { id: APPROVAL, status: "approved", decided_by: "u1" };
+  tables.store_agent_approvals = { id: APPROVAL, status: "approved", decided_by: "u1", preview: { binding: approvalBinding("ads", ops) } };
+  tables.store_agent_messages = [{ content: "our margin is about 40% and the cap is 5,000" }];
   loadProfile.mockReset().mockResolvedValue({ values: {}, meta: {}, updatedAt: null, revision: null });
 });
 
@@ -91,6 +95,12 @@ describe("POST /api/google-ads/agent/[action]", () => {
       tables.store_agent_approvals = approval;
       expect((await post("apply", { workspaceId: WS, chatId: CHAT, approvalId: APPROVAL, title: "t", ops })).status).toBe(403);
     }
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it("refuses edits other than the ones on the approved card", async () => {
+    const other = [{ kind: "budget.update", budgetId: "900", amount: 300 }];
+    expect((await post("apply", { workspaceId: WS, chatId: CHAT, approvalId: APPROVAL, title: "t", ops: other })).status).toBe(403);
     expect(apply).not.toHaveBeenCalled();
   });
 
@@ -145,6 +155,12 @@ describe("POST /api/google-ads/agent/[action]", () => {
       expect(editProfile).toHaveBeenCalledWith(expect.anything(), WS, [{ field: "margin", value: 40 }], { source: "chat", status: "confirmed" }, { userId: "u1", chatId: CHAT });
     });
 
+    it("won't save a number as stated unless the user wrote it in this chat", async () => {
+      const res = await post("profile_update", { workspaceId: WS, chatId: CHAT, edits: [{ field: "monthlyBudgetCap", value: 90000 }], statedByUser: true });
+      expect(await res.json()).toMatchObject({ ok: true, saved: [], skipped: [{ field: "monthlyBudgetCap" }] });
+      expect(editProfile).not.toHaveBeenCalled();
+    });
+
     it("saves the agent's own findings only as suggestions, never as the owner", async () => {
       for (const source of ["merchant", "owner", "chat", undefined]) {
         await post("profile_update", { workspaceId: WS, chatId: CHAT, edits: [{ field: "brandVoice", value: "Calm." }], statedByUser: false, source });
@@ -194,7 +210,14 @@ describe("POST /api/google-ads/agent/[action]", () => {
       expect(merchantApply).not.toHaveBeenCalled();
     });
 
+    it("refuses a Google Ads approval for a Merchant Center change", async () => {
+      tables.store_agent_approvals = { id: APPROVAL, status: "approved", decided_by: "u1", preview: { binding: approvalBinding("ads", productOps) } };
+      expect((await post("merchant_apply", { workspaceId: WS, chatId: CHAT, approvalId: APPROVAL, title: "t", ops: productOps })).status).toBe(403);
+      expect(merchantApply).not.toHaveBeenCalled();
+    });
+
     it("applies an approved fix under the approval's id", async () => {
+      tables.store_agent_approvals = { id: APPROVAL, status: "approved", decided_by: "u1", preview: { binding: approvalBinding("merchant", productOps) } };
       const res = await post("merchant_apply", { workspaceId: WS, chatId: CHAT, approvalId: APPROVAL, title: "Better title", ops: productOps });
       expect(res.status).toBe(200);
       expect(merchantApply.mock.calls[0]![0]).toMatchObject({ userId: "u1", input: { clientChangeId: APPROVAL, source: "AGENT", ops: productOps } });

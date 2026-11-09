@@ -82,6 +82,14 @@ describe("cleanHeadline", () => {
     );
   });
 
+  it("drops the site's address glued to the end", () => {
+    expect(cleanHeadline("AYOUB COMPUTERSayoubcomputers.com", "ayoubcomputers.com")).toBe("AYOUB COMPUTERS");
+    expect(cleanHeadline("AYOUB COMPUTERS - ayoubcomputers.com", "ayoubcomputers.com")).toBe("AYOUB COMPUTERS");
+    expect(cleanHeadline("Decathlon Lebanondecathlon.com.lb", "decathlon.com.lb")).toBe("Decathlon Lebanon");
+    // Another site's address is part of the headline: kept.
+    expect(cleanHeadline("Compare with amazon.com", "ayoubcomputers.com")).toBe("Compare with amazon.com");
+  });
+
   it("leaves a clean headline alone", () => {
     expect(cleanHeadline('Samsung 65" Qled 4K Q70D Tizen Os Smart Tv - Qa65Q70Dauxtw | Ayoub Computers', "ayoubcomputers.com")).toBe(
       'Samsung 65" Qled 4K Q70D Tizen Os Smart Tv - Qa65Q70Dauxtw | Ayoub Computers'

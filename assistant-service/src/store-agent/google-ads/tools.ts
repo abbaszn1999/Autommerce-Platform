@@ -4,6 +4,7 @@
 // after approval. The platform checks that approval again before applying.
 
 import type { SDKCustomTool } from "@cursor/sdk";
+import { approvalBinding } from "../../../../src/lib/google-ads/approval-binding";
 import type { ApprovalPreview } from "../../../../src/lib/store-agent/protocol";
 import { INLINE_RESULT_BYTES, byteLength } from "../sdk-output";
 import { failure, setChatStatus, stamp, text, writeChatFile, type ToolContext } from "../tool-helpers";
@@ -13,8 +14,8 @@ type PreviewItem = ApprovalPreview["items"][number];
 type PreviewResult = { ok: true; items: PreviewItem[]; warnings: string[]; operations: number } | { ok: false; error: string };
 type ApplyResult = { status: "applied"; id: string; inverse: unknown[]; warnings: string[] } | { status: "failed"; id: string; error: string };
 
-/** Items shown on the card itself; the rest are counted. */
-const CARD_ITEMS = 12;
+/** Items on the card: as many as one change can hold, so nothing is approved unseen. */
+const CARD_ITEMS = 200;
 
 /** Big reads go to a file in the chat folder instead of the model's context. */
 async function compact(ctx: ToolContext, payload: unknown, name: string): Promise<string> {
@@ -56,7 +57,7 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
     if (!preview.ok) return failure(`This change can't be made: ${preview.error}`);
 
     // 2. The card. These changes always wait for a person, whatever auto-run is set to.
-    const outcome = await waitForAdsApproval(ctx, { title, reason, items: preview.items, warnings: preview.warnings, label });
+    const outcome = await waitForAdsApproval(ctx, { title, reason, items: preview.items, warnings: preview.warnings, label, binding: approvalBinding(target, ops) });
     if (!outcome.ok) return failure(outcome.message);
 
     // 3. Apply. The platform checks the approval again and reads the current state from Google.
@@ -334,12 +335,16 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
         "ad position, the ad text and landing page, and whether the user's account already has the keyword. Source: SE Ranking's estimates from Google's results, " +
         "not the competitor's account. It costs the workspace credits at cost (about 0.2 credits per 1,000 keywords) unless this month's copy already has the site: " +
         "use quoteOnly first when the user did not ask for the lookup themselves. Free product listings are removed. A site that only runs Performance Max, " +
-        "Shopping or video ads shows few or no keywords here.",
+        "Shopping or video ads shows few or no keywords here. It returns paid search keywords ONLY: never organic keywords, backlinks, traffic or anything else, " +
+        "whatever parameters are sent, so do not run it for those requests.",
       inputSchema: {
         type: "object",
         properties: {
           domain: { type: "string", description: "The competitor's site, e.g. competitor.com (subdomains included)." },
-          country: { type: "string", description: "One country name or two-letter code, e.g. Lebanon or LB. Default to the market the user asked about or the profile's main market." },
+          country: {
+            type: "string",
+            description: "One country name or two-letter code, e.g. Lebanon or LB: the one the user named, else the profile's main market. When neither exists, ask; never guess one.",
+          },
           pages: { type: "number", description: "1,000 keywords per page (1–5, default 1). Ask for more only when the first page says more are available and the user wants them." },
           quoteOnly: { type: "boolean", description: "Only say what the lookup would cost now; nothing is charged." },
         },
@@ -495,7 +500,7 @@ type AdsApproval = { ok: true; approvalId: string } | { ok: false; message: stri
  */
 async function waitForAdsApproval(
   ctx: ToolContext,
-  change: { title: string; reason: string; items: PreviewItem[]; warnings: string[]; label: string }
+  change: { title: string; reason: string; items: PreviewItem[]; warnings: string[]; label: string; binding: string }
 ): Promise<AdsApproval> {
   const preview: ApprovalPreview = { items: change.items.slice(0, CARD_ITEMS), more: Math.max(0, change.items.length - CARD_ITEMS) };
   const summary = [change.title, change.reason, ...change.warnings.map((w) => `⚠ ${w}`)].join("\n\n").slice(0, 2000);
@@ -508,7 +513,8 @@ async function waitForAdsApproval(
       kind: "write",
       summary,
       operations: [change.label],
-      preview,
+      // The platform recomputes the binding before applying.
+      preview: { ...preview, binding: change.binding },
     })
     .select("id")
     .single();

@@ -268,7 +268,7 @@ export async function saveReport(ctx: SaveContext, documentId: string | undefine
 export type StepOutcome = { ok: true; doc: LiveDoc } | { ok: false; error: string; doc: LiveDoc };
 
 /** Apply one step of a plan. Repeating the same attempt returns its first result. */
-export async function applyStep(admin: SupabaseClient, conns: DocConnections, userId: string, docId: string, stepId: string): Promise<StepOutcome | null> {
+export async function applyStep(admin: SupabaseClient, conns: DocConnections, userId: string, docId: string, stepId: string, seenVersion?: number): Promise<StepOutcome | null> {
   const workspaceId = conns.ads.workspace_id;
   const customerId = conns.ads.account_id!;
   const row = await loadRow(admin, workspaceId, customerId, docId);
@@ -277,6 +277,8 @@ export async function applyStep(admin: SupabaseClient, conns: DocConnections, us
   const step = (row.content as PlanContent).steps.find((s) => s.id === stepId);
   if (!step) return null;
   const before = toDoc(row, await changesFor(admin, workspaceId, [docId]));
+  // Step ids are positions, so a revised plan's "step 1" can be different edits from the one on the owner's screen.
+  if (seenVersion !== undefined && seenVersion !== before.version) return { ok: false, error: "This plan was revised since you opened it. Review the new version, then apply it.", doc: before };
   const state = before.stepStates?.[stepId];
   if (!canApply(state)) return { ok: false, error: state?.status === "applying" ? "This step is being applied." : "This step is already applied.", doc: before };
 

@@ -86,6 +86,8 @@ export function guardGaql(query: string): string {
   if (q.includes(";")) throw new GaqlGuardError("Send one query at a time.");
   if (q.length > 8000) throw new GaqlGuardError("The query is too long.");
   if (!/\sfrom\s+[a-z_]+/i.test(q)) throw new GaqlGuardError("The query needs a FROM resource.");
+  // Who works in the account is not needed to manage it, and must not reach a chat or a web request.
+  if (/\b(user_email|customer_user_access(_invitation)?)\b/i.test(q)) throw new GaqlGuardError("Reading the account's users and their email addresses is not allowed.");
   const limit = /\slimit\s+(\d+)\s*$/i.exec(q);
   if (!limit) return `${q} LIMIT ${GAQL_MAX_ROWS}`;
   return Number(limit[1]) > GAQL_MAX_ROWS ? q.replace(/\slimit\s+\d+\s*$/i, ` LIMIT ${GAQL_MAX_ROWS}`) : q;

@@ -23,7 +23,7 @@ import { loadProfile } from "../../../src/lib/business-profile.server";
 import { mentionContext, type MentionContext } from "./mentions";
 import { createDocumentTool } from "./document-tool";
 import { createExcelTool } from "./excel-tool";
-import { createFileTools } from "./file-tools";
+import { clearProjectConfig, createFileTools } from "./file-tools";
 import { ChatFiles } from "./files";
 import { veraRule } from "./instructions";
 import type { StoreAgentRegistry, StoreAgentRun } from "./run";
@@ -539,6 +539,7 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
       }
     }
 
+    await clearProjectConfig(cwd);
     await fs.mkdir(path.join(cwd, ".cursor", "rules"), { recursive: true });
     const adsAccount = isAds ? await loadAdsAccount(db, req.workspaceId) : null;
     const business = await loadBusinessContext(db, req.workspaceId, adsAccount?.currency ?? "", log);

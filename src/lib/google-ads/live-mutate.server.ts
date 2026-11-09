@@ -7,7 +7,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ConnectionHttpError, batchMutate, searchGaql, type ConnectionRow } from "./connection.server";
 import { forgetLiveAccount } from "./live-report.server";
 import { forgetReports } from "./live-reports.server";
-import { LivePlanError, inverseForCreated, planLiveChange, resultNames, type BeforeState } from "./live-mutate";
+import { loadProfile } from "../business-profile.server";
+import { LivePlanError, inverseForCreated, planLiveChange, resultNames, type BeforeState, type SpendState } from "./live-mutate";
 import type { GaqlRow } from "./live-report";
 import type { EntityStatus, MatchType, MutateOp } from "./types";
 
@@ -39,6 +40,22 @@ export function googleMessage(detail: string | undefined): string {
 const status = (v: unknown): EntityStatus => (v === "PAUSED" ? "PAUSED" : v === "REMOVED" ? "REMOVED" : "ENABLED");
 const micros = (v: unknown) => (v == null || v === "" || Number(v) === 0 ? undefined : Number(v) / 1_000_000);
 const inList = (ids: Iterable<string>) => [...ids].filter((id) => ID.test(id)).join(", ");
+
+/** The account's budgets, when a monthly cap is set and these ops could spend more; otherwise nothing to check. */
+async function loadSpend(admin: SupabaseClient, row: ConnectionRow, customerId: string, ops: MutateOp[]): Promise<SpendState | undefined> {
+  if (!ops.some((op) => op.kind === "budget.update" || (op.kind === "status.set" && op.entity === "CAMPAIGN" && op.status === "ENABLED"))) return undefined;
+  const monthlyCap = (await loadProfile(admin, row.workspace_id)).values.monthlyBudgetCap;
+  if (typeof monthlyCap !== "number" || monthlyCap <= 0) return undefined;
+  const rows = await searchGaql<GaqlRow>(row, customerId, "SELECT campaign.id, campaign.status, campaign_budget.id, campaign_budget.amount_micros FROM campaign WHERE campaign.status != 'REMOVED'");
+  const spend: SpendState = { monthlyCap, budgets: {}, campaigns: {} };
+  for (const r of rows) {
+    const budgetId = String(r.campaignBudget?.id ?? "");
+    if (!budgetId) continue;
+    spend.budgets[budgetId] = Number(r.campaignBudget?.amountMicros ?? 0) / 1_000_000;
+    spend.campaigns[String(r.campaign?.id)] = { budgetId, enabled: r.campaign?.status === "ENABLED" };
+  }
+  return spend;
+}
 
 /** Read, from Google, the current state of everything a change touches. */
 export async function fetchBefore(admin: SupabaseClient, row: ConnectionRow, customerId: string, ops: MutateOp[]): Promise<BeforeState> {
@@ -78,7 +95,7 @@ export async function fetchBefore(admin: SupabaseClient, row: ConnectionRow, cus
   const budgetCampaigns = budgetNames.length
     ? q(`SELECT campaign.id, campaign.name, campaign.status, campaign.campaign_budget, campaign.bidding_strategy_type FROM campaign WHERE campaign.campaign_budget IN (${budgetNames.join(", ")}) AND campaign.status != 'REMOVED'`)
     : none;
-  const [unit, cRows, bRows, gRows, kRows, aRows, nRows, created, bcRows] = await Promise.all([
+  const [unit, cRows, bRows, gRows, kRows, aRows, nRows, created, bcRows, spend] = await Promise.all([
     q(`SELECT currency_constant.billable_unit_micros FROM currency_constant WHERE currency_constant.code = '${currency}'`),
     campaignIds
       ? q(`SELECT campaign.id, campaign.name, campaign.status, campaign.campaign_budget, campaign.bidding_strategy_type, campaign.target_cpa.target_cpa_micros,
@@ -101,6 +118,7 @@ export async function fetchBefore(admin: SupabaseClient, row: ConnectionRow, cus
       : none,
     admin.from("google_ads_changes").select("created_ids").eq("workspace_id", row.workspace_id).eq("customer_id", customerId).eq("status", "applied"),
     budgetCampaigns,
+    loadSpend(admin, row, customerId, ops),
   ]);
 
   const before: BeforeState = {
@@ -112,6 +130,7 @@ export async function fetchBefore(admin: SupabaseClient, row: ConnectionRow, cus
     ads: {},
     campaignNegatives: {},
     createdKeywordIds: new Set((created.data ?? []).flatMap((r) => (Array.isArray(r.created_ids) ? (r.created_ids as string[]) : []))),
+    ...(spend ? { spend } : {}),
   };
   if (created.error) throw new ConnectionHttpError(500, "load_failed");
   for (const r of [...bcRows, ...cRows]) {
@@ -178,7 +197,9 @@ export async function applyLiveChange(opts: {
     .eq("workspace_id", row.workspace_id)
     .eq("client_change_id", input.clientChangeId)
     .maybeSingle<ChangeRow>();
-  if (existing) return asResult(existing);
+  // An undo that failed can be tried again, under the same id: the failed attempt stays in the history.
+  if (existing && "undoOf" in input && existing.status === "failed") await admin.from("google_ads_changes").update({ client_change_id: `${input.clientChangeId}:failed:${existing.id}` }).eq("id", existing.id);
+  else if (existing) return asResult(existing);
 
   let ops: MutateOp[];
   let title: string;
@@ -233,7 +254,7 @@ export async function applyLiveChange(opts: {
 
   try {
     const before = await fetchBefore(admin, row, customerId, ops);
-    const plan = planLiveChange(customerId, ops, before);
+    const plan = planLiveChange(customerId, ops, before, { undo: !!undoOf });
     await finish(admin, claimed.id, { google_operations: plan.operations, warnings: plan.warnings });
     await batchMutate(row, customerId, plan.operations, { validateOnly: true });
     const response = await batchMutate(row, customerId, plan.operations, { validateOnly: false });

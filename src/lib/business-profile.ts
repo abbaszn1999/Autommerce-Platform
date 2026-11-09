@@ -208,6 +208,30 @@ export function sameValue(a: unknown, b: unknown): boolean {
 }
 
 export type ProfileEdit = { field: ProfileField; value: unknown };
+
+/**
+ * Whether what the user wrote really contains the number the agent wants to
+ * save as stated by them. Margins, targets and the budget cap steer spending, so
+ * text the agent read elsewhere must not be able to set them. Other kinds of
+ * field are not checked: an answer can be phrased in any language.
+ */
+export function userStatedValue(field: ProfileField, value: unknown, messages: string[]): boolean {
+  const kind = def(field).kind;
+  if (kind !== "percent" && kind !== "ratio" && kind !== "money") return true;
+  const target = normalizeValue(field, value);
+  // Clearing one of these removes a guardrail: that is done on the Business profile page.
+  if (typeof target !== "number") return false;
+  const digits = messages
+    .join(" ")
+    .toLowerCase()
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06f0-\u06f9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/\u066b/g, ".")
+    .replace(/(\d)[,\u066c](?=\d{3}\b)/g, "$1");
+  const said = [...digits.matchAll(/(\d+(?:\.\d+)?)\s*(k\b|\u0623\u0644\u0641|\u0622\u0644\u0627\u0641)?/g)].map((m) => Number(m[1]) * (m[2] ? 1000 : 1));
+  const forms = kind === "money" ? [target] : [target, target * 100];
+  return said.some((n) => forms.some((f) => Math.abs(n - f) < 0.005));
+}
 export type ProfileChange = { field: ProfileField; before: ProfileValue | null; after: ProfileValue | null; beforeMeta: FieldMeta | null; afterMeta: FieldMeta | null };
 
 /**

@@ -147,7 +147,7 @@ export async function runDocStep(docId: string, stepId: string, action: "apply" 
   if (get().busy[key]) return { ok: false, error: "Already running." };
   set((s) => ({ busy: { ...s.busy, [key]: action } }));
   try {
-    const res = await post<{ ok: boolean; error?: string; doc: LiveDoc }>(docId, { action, stepId });
+    const res = await post<{ ok: boolean; error?: string; doc: LiveDoc }>(docId, { action, stepId, version: get().docs[docId]?.version });
     if (res.doc) storeDoc(res.doc);
     return res.ok ? { ok: true } : { ok: false, error: res.error };
   } catch (error) {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  userStatedValue,
   ProfileEditError,
   completeness,
   missingRequired,
@@ -49,6 +50,26 @@ describe("normalizeValue", () => {
       { name: "Namshi", url: "https://namshi.com" },
     ]);
     expect(normalizeValue("palette", [{ name: "Violet", hex: "#400095", role: "Primary" }])).toEqual([{ name: "Violet", hex: "#400095", role: "Primary" }]);
+  });
+});
+
+describe("userStatedValue", () => {
+  it("finds the number however the user wrote it", () => {
+    expect(userStatedValue("margin", 40, ["our margin is 40%"])).toBe(true);
+    expect(userStatedValue("margin", 0.4, ["\u0627\u0644\u0647\u0627\u0645\u0634 \u0664\u0660"])).toBe(true);
+    expect(userStatedValue("targetRoas", 4, ["aim for 400%"])).toBe(true);
+    expect(userStatedValue("monthlyBudgetCap", 5000, ["cap it at 5,000 a month"])).toBe(true);
+    expect(userStatedValue("monthlyBudgetCap", 5000, ["keep it under 5k"])).toBe(true);
+  });
+
+  it("refuses a number the user never wrote, or clearing a guardrail", () => {
+    expect(userStatedValue("monthlyBudgetCap", 90000, ["cap it at 5,000"])).toBe(false);
+    expect(userStatedValue("margin", 70, ["hello"])).toBe(false);
+    expect(userStatedValue("monthlyBudgetCap", null, ["remove the cap"])).toBe(false);
+  });
+
+  it("doesn't check fields that aren't numbers", () => {
+    expect(userStatedValue("brandVoice", "Calm.", [])).toBe(true);
   });
 });
 
