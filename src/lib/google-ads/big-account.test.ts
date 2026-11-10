@@ -71,6 +71,6 @@ describe("the monthly budget cap is required to spend more", () => {
 
 describe("report frames", () => {
   it("give a page that fills its window a comfortable height", () => {
-    expect(reportDocument("<p>x</p>", false)).toContain(`innerHeight<${FILL_HEIGHT}){h=${FILL_HEIGHT};}`);
+    expect(reportDocument("<p>x</p>", false)).toContain(`innerHeight<${FILL_HEIGHT}?${FILL_HEIGHT}:innerHeight`);
   });
 });

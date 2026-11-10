@@ -56,17 +56,22 @@ export function reportHtmlProblem(html: string): string | null {
 
 /**
  * Runs before the report's own scripts: no navigation, no popups, and the page's height for the frame around it.
- * A page laid out to fill its window (height: 100%) always measures exactly the frame's height, so it could
- * never grow: when it fills a small frame exactly, it is given a comfortable height instead.
+ * Height rules (FILL_SLACK px of tolerance for paddings):
+ * - content clearly shorter than the window: that is its natural height, remembered and reported;
+ * - content reaching the window: it either overflows (report its height) or is laid out to fill the
+ *   window (height: 100%), which measures the window itself: it never shrinks then, and a small window
+ *   is grown to FILL_HEIGHT. A remembered natural height wins while the content hasn't grown past it,
+ *   so the frame never swings between two heights.
  */
 export const FILL_HEIGHT = 480;
+const FILL_SLACK = 12;
 const GUARD = `<script>(function(){
 var stop=function(e){try{e.preventDefault();}catch(_){}};
 try{if(window.navigation){navigation.addEventListener("navigate",stop);}}catch(_){}
 document.addEventListener("click",function(e){var a=e.target&&e.target.closest&&e.target.closest("a[href]");if(a){e.preventDefault();}},true);
 document.addEventListener("submit",stop,true);
 try{window.open=function(){return null;};}catch(_){}
-var last=0;var send=function(){var b=document.body;var cs=b?getComputedStyle(b):null;var h=b?Math.ceil(b.scrollHeight+parseFloat(cs.marginTop||0)+parseFloat(cs.marginBottom||0)):0;if(h>=innerHeight-2&&innerHeight<${FILL_HEIGHT}){h=${FILL_HEIGHT};}if(h!==last){last=h;parent.postMessage({autommerceReportHeight:h},"*");}};
+var last=0;var natural=0;var send=function(){var b=document.body;var cs=b?getComputedStyle(b):null;var h=b?Math.ceil(b.scrollHeight+parseFloat(cs.marginTop||0)+parseFloat(cs.marginBottom||0)):0;if(h<innerHeight-${FILL_SLACK}){natural=h;}else if(natural&&h<=natural+${FILL_SLACK}){h=natural;}else{natural=0;h=Math.max(h,innerHeight<${FILL_HEIGHT}?${FILL_HEIGHT}:innerHeight);}if(h!==last){last=h;parent.postMessage({autommerceReportHeight:h},"*");}};
 addEventListener("load",send);if(window.ResizeObserver){new ResizeObserver(send).observe(document.documentElement);addEventListener("DOMContentLoaded",function(){new ResizeObserver(send).observe(document.body);});}setTimeout(send,50);setTimeout(send,600);
 })();</script>`;
 
