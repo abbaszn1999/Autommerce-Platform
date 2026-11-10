@@ -36,18 +36,26 @@ describe("callGoogleLens", () => {
       visual_matches: [{ link: "https://www.walmart.com/ip/toy/1", title: "Toy", price: "$20*", stock_information: "In stock" }],
     });
     vi.stubGlobal("fetch", fetchMock);
-    const result = await callGoogleLens("https://cdn.test/p.jpg", "products");
+    const result = await callGoogleLens("https://cdn.test/p.jpg", "visual_matches");
     expect(result.matches).toEqual([
       { link: "https://www.walmart.com/ip/toy/1", title: "Toy", price: "$20*", inStock: "In stock" },
     ]);
     const requested = new URL(String(fetchMock.mock.calls[0]![0]));
-    expect(requested.searchParams.get("search_type")).toBe("products");
+    expect(requested.searchParams.get("search_type")).toBe("visual_matches");
     expect(requested.searchParams.has("link")).toBe(false);
+    expect(requested.searchParams.has("country")).toBe(false);
 
     const exactFetch = reply({ search_metadata: { status: "Success" }, exact_matches: [] });
     vi.stubGlobal("fetch", exactFetch);
     await callGoogleLens("https://cdn.test/p.jpg", "exact_matches");
     expect(new URL(String(exactFetch.mock.calls[0]![0])).searchParams.get("link")).toBe("resolved");
+  });
+
+  it("sends the country as a lowercase two-letter code only when one is given", async () => {
+    const fetchMock = reply({ search_metadata: { status: "Success" }, exact_matches: [] });
+    vi.stubGlobal("fetch", fetchMock);
+    await callGoogleLens("https://cdn.test/p.jpg", "exact_matches", "LB");
+    expect(new URL(String(fetchMock.mock.calls[0]![0])).searchParams.get("country")).toBe("lb");
   });
 
   it("returns resolved exact matches", async () => {

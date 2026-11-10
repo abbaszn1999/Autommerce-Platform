@@ -6,7 +6,7 @@
  */
 import { requestSearchApi } from "../image-finder/exact/searchapi";
 
-export type LensSearchType = "exact_matches" | "visual_matches" | "products";
+export type LensSearchType = "exact_matches" | "visual_matches";
 
 export interface LensMatch {
   link: string;
@@ -46,14 +46,18 @@ const LENS_NO_RESULTS_ERROR = /didn't return any results/i;
  * Calls the Google Lens engine once. Exact matches come back as encrypted
  * Google redirects unless `link=resolved` is set; resolving costs no extra
  * search (measured live: one search either way, about the same latency), so it
- * is always on for them. Visual and product matches are already direct links.
+ * is always on for them. Visual matches are already direct links.
+ *
+ * `country` is an optional two-letter code (e.g. "lb") that sets where the
+ * search runs from; without it SearchApi uses US.
  *
  * Returns only for a billed call; the caller records that cost immediately,
  * even when no page matched.
  */
 export async function callGoogleLens(
   imageUrl: string,
-  searchType: LensSearchType
+  searchType: LensSearchType,
+  country?: string
 ): Promise<GoogleLensResult> {
   const params = new URLSearchParams({
     engine: "google_lens",
@@ -61,6 +65,7 @@ export async function callGoogleLens(
     url: imageUrl,
   });
   if (searchType === "exact_matches") params.set("link", "resolved");
+  if (country) params.set("country", country.toLowerCase());
   const { data, httpStatus, elapsedMs } = await requestSearchApi<LensApiResponse>(
     params,
     "Google Lens",

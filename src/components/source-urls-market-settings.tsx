@@ -18,6 +18,10 @@ export function SourceUrlsMarketSettings(props: {
   market: string | undefined;
   disabled?: boolean;
   onMarketChange: (market: string) => void;
+  /** Hint under the list when a country is picked (default: the Source URLs search). */
+  pickedHint?: (countryName: string) => string;
+  /** Hint under the list with "Any country" (default: the Source URLs search). */
+  anyHint?: string;
 }) {
   const marketId = useId();
   // Empty and the older "auto" setting both mean: no location.
@@ -25,8 +29,8 @@ export function SourceUrlsMarketSettings(props: {
   const marketValue = resolved ? resolved.code : MARKET_ANY;
 
   const marketHint = resolved
-    ? `The search runs as a shopper in ${resolved.name} would see it.`
-    : "No location is sent. Google uses its default. Pick a country if the shops sell in one.";
+    ? (props.pickedHint?.(resolved.name) ?? `The search runs as a shopper in ${resolved.name} would see it.`)
+    : (props.anyHint ?? "No location is sent. Google uses its default. Pick a country if the shops sell in one.");
 
   return (
     <div className="space-y-1">
