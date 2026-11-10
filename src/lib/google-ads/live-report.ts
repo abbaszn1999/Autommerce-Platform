@@ -62,6 +62,26 @@ export type LiveRows = {
 /** Search terms come back as the top rows only; this many means there may be more. */
 export const SEARCH_TERMS_LIMIT = 500;
 
+/**
+ * Lists a browser can hold for one account. A bigger account shows the items that
+ * spent the most (then the most clicks and impressions), and says how many there are.
+ * Account, campaign and ad group numbers come from Google's own totals, so they stay whole.
+ */
+export const LIST_LIMITS = { keywords: 20_000, ads: 5_000, negatives: 20_000 } as const;
+
+function keepTop<T extends { id: string }>(items: T[], limit: number, metrics: Record<string, BaseMetrics>): { kept: T[]; dropped: Set<string> } {
+  if (items.length <= limit) return { kept: items, dropped: new Set() };
+  const score = (id: string) => {
+    const m = metrics[id];
+    return m ? [m.cost, m.clicks, m.impressions] : [0, 0, 0];
+  };
+  const ranked = [...items].sort((a, b) => {
+    const [x, y] = [score(a.id), score(b.id)];
+    return y[0]! - x[0]! || y[1]! - x[1]! || y[2]! - x[2]!;
+  });
+  return { kept: ranked.slice(0, limit), dropped: new Set(ranked.slice(limit).map((i) => i.id)) };
+}
+
 const micros = (v: unknown) => (v == null || v === "" ? 0 : Number(v) / 1_000_000);
 const optMicros = (v: unknown) => (v == null || v === "" || Number(v) === 0 ? undefined : Number(v) / 1_000_000);
 const num = (v: unknown) => (v == null || v === "" ? 0 : Number(v) || 0);
@@ -398,9 +418,10 @@ export function buildLiveAccount(account: GoogleAccount, rows: LiveRows, range: 
   const inAccount = <T extends { campaignId: string }>(list: T[]) => list.filter((x) => campaignIds.has(x.campaignId));
   const assetGroups = inAccount(mapAssetGroups(rows));
   const assetGroupIds = new Set(assetGroups.map((g) => g.id));
+  const campaignOfGroup = new Map(assetGroups.map((g) => [g.id, g.campaignId]));
   const assetGroupChildren = (rows.assetGroupMetrics ?? [])
     .filter((r) => assetGroupIds.has(str(r.assetGroup?.id)))
-    .map((r) => ({ id: str(r.assetGroup.id), parent: assetGroups.find((g) => g.id === str(r.assetGroup.id))!.campaignId, m: metricsOf(r) }));
+    .map((r) => ({ id: str(r.assetGroup.id), parent: campaignOfGroup.get(str(r.assetGroup.id))!, m: metricsOf(r) }));
   const { audiences, audienceTargets } = mapAudiences(rows);
   const library = mapLibrary(rows, BIDDING);
 
@@ -410,6 +431,19 @@ export function buildLiveAccount(account: GoogleAccount, rows: LiveRows, range: 
   for (const r of [...(rows.placementMetrics ?? []), ...(rows.topicMetrics ?? [])]) exact[`${str(r.adGroup?.id)}-${str(r.adGroupCriterion?.criterionId)}`] = metricsOf(r);
   for (const r of rows.productGroupMetrics ?? []) exact[str(r.adGroupCriterion?.criterionId)] = metricsOf(r);
   const weights = { ...weightsFrom(assetGroupChildren), ...weightsFrom(adGroupChildren), ...weightsFrom(keywordChildren), ...weightsFrom(adChildren) };
+  // Big accounts: only the lists' top items go to the browser (totals come from Google and stay whole).
+  const keptKeywords = keepTop(keywords, LIST_LIMITS.keywords, exact);
+  const keptAds = keepTop(ads, LIST_LIMITS.ads, exact);
+  const keptNegatives = negatives.length > LIST_LIMITS.negatives ? negatives.slice(0, LIST_LIMITS.negatives) : negatives;
+  for (const id of [...keptKeywords.dropped, ...keptAds.dropped]) {
+    delete exact[id];
+    delete weights[id];
+  }
+  const listsCapped = {
+    ...(keptKeywords.dropped.size ? { keywords: { shown: keptKeywords.kept.length, total: keywords.length } } : {}),
+    ...(keptAds.dropped.size ? { ads: { shown: keptAds.kept.length, total: ads.length } } : {}),
+    ...(keptNegatives.length < negatives.length ? { negatives: { shown: keptNegatives.length, total: negatives.length } } : {}),
+  };
   const termWeights = weightsFrom(termChildren);
   for (const t of searchTerms) Object.assign(t, termWeights[t.id] ?? { share: 0, efficiency: 0 });
 
@@ -427,9 +461,10 @@ export function buildLiveAccount(account: GoogleAccount, rows: LiveRows, range: 
     campaigns: applyTargeting(campaigns, rows),
     budgets,
     adGroups,
-    keywords,
-    negatives,
-    ads,
+    keywords: keptKeywords.kept,
+    negatives: keptNegatives,
+    ads: keptAds.kept,
+    ...(Object.keys(listsCapped).length ? { listsCapped } : {}),
     searchTerms,
     searchTermsCapped: rows.searchTerms.length >= SEARCH_TERMS_LIMIT,
     accountDaily: rows.customerDaily ? dailyOf(rows.customerDaily) : undefined,

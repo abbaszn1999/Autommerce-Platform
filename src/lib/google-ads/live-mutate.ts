@@ -40,6 +40,8 @@ export type BeforeState = {
   spend?: SpendState;
   /** What creating things needs: images, asset groups, targeting, what this app created. */
   create?: CreateState;
+  /** The business profile has no monthly budget cap: nothing that raises spending may be sent. */
+  capMissing?: boolean;
 };
 
 export type SpendState = {
@@ -394,6 +396,16 @@ export function planLiveChange(customerId: string, ops: MutateOp[], before: Befo
 
   if (!operations.length) throw new LivePlanError("This change doesn't change anything in Google Ads.");
   if (operations.length > MAX_OPERATIONS) throw new LivePlanError(`One change can hold at most ${MAX_OPERATIONS} edits. Split it up.`);
+  // Real money: a change that spends more needs the owner's monthly cap to be checked against.
+  if (!opts.undo && before.capMissing) {
+    const raises = ops.some(
+      (op) =>
+        (op.kind === "budget.update" && op.amount > (before.budgets[op.budgetId]?.amount ?? 0)) ||
+        (op.kind === "status.set" && op.entity === "CAMPAIGN" && op.status === "ENABLED" && op.ids.some((id) => before.campaigns[id]?.status !== "ENABLED"))
+    );
+    if (raises)
+      throw new LivePlanError("This raises spending, and the Business profile has no monthly budget cap yet. Ask the owner for the cap and save it first (update_business_profile), then propose the change again.");
+  }
   if (!opts.undo && before.spend) {
     const { now, after } = dailySpend(ops, before.spend);
     const monthly = Math.round(after * DAYS_PER_MONTH * 100) / 100;

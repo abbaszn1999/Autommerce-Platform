@@ -2,7 +2,7 @@
 // for a short while so opening the page again doesn't spend the daily API quota.
 
 import { addDays, rangeDays } from "./metrics";
-import { ConnectionHttpError, searchGaql, type ConnectionRow } from "./connection.server";
+import { ConnectionHttpError, searchGaql, searchGaqlAll, type ConnectionRow } from "./connection.server";
 import { LIVE_QUERIES } from "./live-queries";
 import { buildLiveAccount, type GaqlRow, type LiveRows } from "./live-report";
 import { forgetSegments } from "./live-segments.server";
@@ -12,12 +12,29 @@ import type { AccountData } from "./types";
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const CACHE_MAX = 100;
+/**
+ * Memory the cached accounts may use, counted in rows (a big account is ~400,000).
+ * The server has little memory: a few big accounts, or many small ones, never more.
+ */
+// 200,000 suits the 512 MB server (a big account is then read fresh, not kept); raise it with GOOGLE_ADS_CACHE_ROWS on a bigger server.
+const CACHE_ROWS = Number(process.env.GOOGLE_ADS_CACHE_ROWS) > 0 ? Number(process.env.GOOGLE_ADS_CACHE_ROWS) : 200_000;
+
+type Weighted = { at: number; weight: number };
+/** Keeps a cache under CACHE_ROWS rows in total, dropping the oldest entries first. */
+function fit<T extends Weighted>(cache: Map<string, T>, key: string, entry: T, others: Map<string, Weighted>) {
+  cache.delete(key);
+  const total = () => [...cache.values(), ...others.values()].reduce((n, e) => n + e.weight, 0);
+  while (cache.size && (cache.size >= CACHE_MAX || total() + entry.weight > CACHE_ROWS)) cache.delete(cache.keys().next().value!);
+  // One account bigger than the whole budget is served, not kept.
+  if (entry.weight <= CACHE_ROWS) cache.set(key, entry);
+}
+const rowsIn = (rows: Record<string, unknown[] | undefined>) => Object.values(rows).reduce((n, r) => n + (Array.isArray(r) ? r.length : 0), 0);
 /** Campaign days always kept: the longest preset (90) plus the period it is compared with. */
 const DAILY_DAYS = 180;
 
-const cache = new Map<string, { at: number; data: AccountData }>();
+const cache = new Map<string, { at: number; data: AccountData; weight: number }>();
 /** What doesn't depend on dates: kept separately, so changing the range doesn't load it again. */
-const structureCache = new Map<string, { at: number; rows: Partial<LiveRows> }>();
+const structureCache = new Map<string, { at: number; rows: Partial<LiveRows>; weight: number }>();
 
 /** Without these the page has nothing true to show, so a failure stops the load. */
 const REQUIRED = new Set<string>(["customer", "campaigns", "campaignDaily"]);
@@ -41,11 +58,15 @@ async function inBatches<T, R>(items: T[], run: (item: T) => Promise<R>): Promis
 /** Runs the queries together. An optional one that fails is listed and comes back empty. */
 async function runQueries(row: ConnectionRow, customerId: string, queries: Record<string, string>) {
   const names = Object.keys(queries);
-  const settled = await inBatches(names, (n) => searchGaql<GaqlRow>(row, customerId, queries[n]));
+  const settled = await inBatches(names, (n) => searchGaqlAll<GaqlRow>(row, customerId, queries[n]));
   const rows: Record<string, GaqlRow[]> = {};
   const failed: string[] = [];
+  const tooLong: string[] = [];
   settled.forEach((result, i) => {
-    if (result.status === "fulfilled") rows[names[i]] = result.value;
+    if (result.status === "fulfilled") {
+      rows[names[i]] = result.value.rows;
+      if (result.value.more) tooLong.push(names[i]);
+    }
     else if (REQUIRED.has(names[i])) throw result.reason;
     else {
       console.error("[google-ads/data] query failed:", names[i], (result.reason as { detail?: string }).detail ?? (result.reason as Error).message);
@@ -53,7 +74,7 @@ async function runQueries(row: ConnectionRow, customerId: string, queries: Recor
       failed.push(names[i]);
     }
   });
-  return { rows, failed };
+  return { rows, failed, tooLong };
 }
 
 /** Names for the locations and languages campaigns target. */
@@ -68,8 +89,8 @@ async function targetNames(row: ConnectionRow, customerId: string, rows: Partial
 async function loadStructure(row: ConnectionRow, customerId: string, force?: boolean) {
   const key = `${row.workspace_id}:${customerId}`;
   const hit = structureCache.get(key);
-  if (!force && hit && Date.now() - hit.at < CACHE_TTL_MS) return { rows: hit.rows, failed: [] as string[] };
-  const { rows, failed } = await runQueries(row, customerId, {
+  if (!force && hit && Date.now() - hit.at < CACHE_TTL_MS) return { rows: hit.rows, failed: [] as string[], tooLong: [] as string[] };
+  const { rows, failed, tooLong } = await runQueries(row, customerId, {
     customer: LIVE_QUERIES.customer(),
     campaigns: LIVE_QUERIES.campaigns(),
     budgets: LIVE_QUERIES.budgets(),
@@ -89,11 +110,8 @@ async function loadStructure(row: ConnectionRow, customerId: string, force?: boo
   const names = await runQueries(row, customerId, await targetNames(row, customerId, rows));
   const all = { ...rows, ...names.rows } as Partial<LiveRows>;
   const allFailed = [...failed, ...names.failed];
-  if (!allFailed.length) {
-    if (structureCache.size >= CACHE_MAX) structureCache.delete(structureCache.keys().next().value!);
-    structureCache.set(key, { at: Date.now(), rows: all });
-  }
-  return { rows: all, failed: allFailed };
+  if (!allFailed.length) fit(structureCache, key, { at: Date.now(), rows: all, weight: rowsIn(all as Record<string, unknown[]>) }, cache);
+  return { rows: all, failed: allFailed, tooLong };
 }
 
 export type LiveRange = { start: string; end: string };
@@ -145,13 +163,12 @@ export async function loadLiveAccount(row: ConnectionRow, range: LiveRange, opts
     range
   );
   if (failed.length) data.unavailable = failed;
+  const tooLong = [...structure.tooLong, ...dated.tooLong];
+  if (tooLong.length) data.listsCapped = { ...data.listsCapped, queries: tooLong };
 
   const at = Date.now();
   // A partial answer is shown once, then asked for again.
-  if (!failed.length) {
-    if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!);
-    cache.set(key, { at, data });
-  }
+  if (!failed.length) fit(cache, key, { at, data, weight: data.keywords.length + data.ads.length + data.adGroups.length + Object.keys(data.exact?.byId ?? {}).length + Object.values(data.daily).reduce((n, d) => n + d.length, 0) }, structureCache);
   return { data, fetchedAt: new Date(at).toISOString() };
 }
 

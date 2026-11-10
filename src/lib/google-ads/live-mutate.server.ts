@@ -50,10 +50,10 @@ const micros = (v: unknown) => (v == null || v === "" || Number(v) === 0 ? undef
 const inList = (ids: Iterable<string>) => [...ids].filter((id) => ID.test(id)).join(", ");
 
 /** The account's budgets, when a monthly cap is set and these ops could spend more; otherwise nothing to check. */
-async function loadSpend(admin: SupabaseClient, row: ConnectionRow, customerId: string, ops: MutateOp[]): Promise<SpendState | undefined> {
+async function loadSpend(admin: SupabaseClient, row: ConnectionRow, customerId: string, ops: MutateOp[]): Promise<SpendState | "no-cap" | undefined> {
   if (!ops.some((op) => op.kind === "budget.update" || op.kind === "campaign.new" || (op.kind === "status.set" && op.entity === "CAMPAIGN" && op.status === "ENABLED"))) return undefined;
   const monthlyCap = (await loadProfile(admin, row.workspace_id)).values.monthlyBudgetCap;
-  if (typeof monthlyCap !== "number" || monthlyCap <= 0) return undefined;
+  if (typeof monthlyCap !== "number" || monthlyCap <= 0) return "no-cap";
   const rows = await searchGaql<GaqlRow>(row, customerId, "SELECT campaign.id, campaign.status, campaign_budget.id, campaign_budget.amount_micros FROM campaign WHERE campaign.status != 'REMOVED'");
   const spend: SpendState = { monthlyCap, budgets: {}, campaigns: {} };
   for (const r of rows) {
@@ -146,7 +146,7 @@ export async function fetchBefore(admin: SupabaseClient, row: ConnectionRow, cus
     ads: {},
     campaignNegatives: {},
     createdKeywordIds: new Set((created.data ?? []).flatMap((r) => (Array.isArray(r.created_ids) ? (r.created_ids as string[]) : []))),
-    ...(spend ? { spend } : {}),
+    ...(spend === "no-cap" ? { capMissing: true } : spend ? { spend } : {}),
   };
   if (created.error) throw new ConnectionHttpError(500, "load_failed");
   for (const r of [...bcRows, ...cRows]) {

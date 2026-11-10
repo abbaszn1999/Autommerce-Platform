@@ -332,6 +332,23 @@ export async function batchMutate(
  * Run a GAQL query on one customer and return every row (follows page tokens).
  * The customer id always comes from our database, never from the browser or the model.
  */
+/** Rows of a query and whether Google had more than the pages read (10 pages of 10,000 rows by default). */
+export async function searchGaqlAll<T = Record<string, unknown>>(row: ConnectionRow, customerId: string, query: string, maxPages = 10): Promise<{ rows: T[]; more: boolean }> {
+  const rows: T[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < maxPages; page++) {
+    const data = await execute<{ results?: T[]; next_page_token?: string | null; nextPageToken?: string | null }>(row, "GOOGLEADS_SEARCH_GAQL", {
+      customer_id: customerId,
+      query,
+      ...(pageToken ? { page_token: pageToken } : {}),
+    });
+    rows.push(...(data.results ?? []));
+    pageToken = data.next_page_token ?? data.nextPageToken ?? undefined;
+    if (!pageToken) return { rows, more: false };
+  }
+  return { rows, more: true };
+}
+
 export async function searchGaql<T = Record<string, unknown>>(row: ConnectionRow, customerId: string, query: string, maxPages = 10): Promise<T[]> {
   const rows: T[] = [];
   let pageToken: string | undefined;

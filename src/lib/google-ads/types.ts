@@ -768,6 +768,8 @@ export type AccountData = {
   unavailable?: string[];
   /** Live accounts: the search terms are the top ones only, not all of them. */
   searchTermsCapped?: boolean;
+  /** Live accounts too big to send whole: how many of each list are shown, out of how many. Totals are not affected. */
+  listsCapped?: { keywords?: { shown: number; total: number }; ads?: { shown: number; total: number }; negatives?: { shown: number; total: number }; queries?: string[] };
   account: GoogleAccount;
   campaigns: Campaign[];
   budgets: CampaignBudget[];

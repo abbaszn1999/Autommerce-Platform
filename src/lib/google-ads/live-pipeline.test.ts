@@ -49,14 +49,18 @@ function answer(q: string): Row[] {
   return [];
 }
 
-vi.mock("./connection.server", () => ({
-  ConnectionHttpError: class extends Error {},
-  searchGaql: vi.fn(async (_row: unknown, _customer: string, q: string) => {
+vi.mock("./connection.server", () => {
+  const searchGaql = vi.fn(async (_row: unknown, _customer: string, q: string) => {
     calls.push(q);
     if (failing?.test(q)) throw Object.assign(new Error("google refused"), { detail: "QUOTA" });
     return answer(q);
-  }),
-}));
+  });
+  return {
+    ConnectionHttpError: class extends Error {},
+    searchGaql,
+    searchGaqlAll: async (row: unknown, customer: string, q: string) => ({ rows: await searchGaql(row, customer, q), more: false }),
+  };
+});
 
 const { forgetLiveAccount, loadLiveAccount } = await import("./live-report.server");
 const { loadSegment } = await import("./live-segments.server");

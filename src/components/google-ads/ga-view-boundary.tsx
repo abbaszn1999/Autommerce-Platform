@@ -56,6 +56,26 @@ export function GaSyncBanner() {
         </button>
       </div>
     );
+  const capped = acc?.data.listsCapped;
+  if (sync?.status === "ready" && capped) {
+    const n = (v: number) => v.toLocaleString("en");
+    const parts = [
+      capped.keywords && `the ${n(capped.keywords.shown)} keywords that spent the most (of ${n(capped.keywords.total)})`,
+      capped.ads && `the ${n(capped.ads.shown)} ads that spent the most (of ${n(capped.ads.total)})`,
+      capped.negatives && `${n(capped.negatives.shown)} of ${n(capped.negatives.total)} negative keywords`,
+    ].filter(Boolean);
+    return (
+      <div role="status" className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/5 px-3 py-2 text-xs text-muted-foreground">
+        <AlertTriangle className="h-3.5 w-3.5 text-sky-600" />
+        <span className="min-w-0 flex-1">
+          <span className="font-semibold text-foreground">A large account.</span>{" "}
+          {parts.length ? `Lists show ${parts.join(", ")}. ` : ""}
+          {capped.queries?.length ? `Google returned more than 100,000 rows for ${capped.queries.map((q) => UNAVAILABLE_LABELS[q] ?? q).join(", ")}; the rest isn't listed. ` : ""}
+          Account, campaign and ad group totals include everything. Vera reads the full account.
+        </span>
+      </div>
+    );
+  }
   if (!sync || sync.status === "ready") return null;
   if (sync.status === "loading") {
     return (
