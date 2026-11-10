@@ -3,7 +3,8 @@
  * (cursor.com/docs/models, read 2026-10-26), in USD per million tokens.
  *
  * Used to show a live cost while a run streams and to bill when Cursor does
- * not report the run's real cost. When it does, the billed figure wins.
+ * not report the run's real cost (agent.getUsage, enabled per account). When
+ * it does, the billed figure wins.
  *
  * Customers pay the exact model cost: 10 credits = $1, no margin.
  */

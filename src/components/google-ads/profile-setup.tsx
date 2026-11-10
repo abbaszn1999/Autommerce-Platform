@@ -197,6 +197,8 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
   const [judgeBy, setJudgeBy] = useState<"margin" | "roas">("margin");
   const [margin, setMargin] = useState("");
   const [roas, setRoas] = useState("");
+  /** A target ROAS saved earlier comes first for Vera; switching to the margin asks whether to remove it. */
+  const [dropOldRoas, setDropOldRoas] = useState(false);
   const [cap, setCap] = useState("");
   const [brandTerms, setBrandTerms] = useState<string[]>([]);
   const [neverAdvertise, setNeverAdvertise] = useState<string[]>([]);
@@ -247,6 +249,7 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
     }),
     [businessName, website, margin, roas, cap]
   );
+  const savedRoas = typeof loaded?.values.targetRoas === "number" ? loaded.values.targetRoas : null;
   const marginValue = checks.margin.ok && typeof checks.margin.value === "number" ? checks.margin.value : null;
   const roasValue = checks.targetRoas.ok && typeof checks.targetRoas.value === "number" ? checks.targetRoas.value : null;
   const capValue = checks.monthlyBudgetCap.ok && typeof checks.monthlyBudgetCap.value === "number" ? checks.monthlyBudgetCap.value : null;
@@ -280,7 +283,9 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
       } else if (step === 1) {
         await save([
           { field: "goal", value: goal },
-          judgeBy === "margin" ? { field: "margin", value: `${margin}%` } : { field: "targetRoas", value: roas },
+          ...(judgeBy === "margin"
+            ? [{ field: "margin" as const, value: `${margin}%` }, ...(dropOldRoas && savedRoas !== null ? [{ field: "targetRoas" as const, value: null }] : [])]
+            : [{ field: "targetRoas" as const, value: roas }]),
           { field: "monthlyBudgetCap", value: cap },
         ]);
       } else {
@@ -472,6 +477,14 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
                         </div>
                         {judgeBy === "margin" ? (
                           <>
+                            {savedRoas !== null && (
+                              <label className="flex items-start gap-2 text-[12px] text-muted-foreground">
+                                <input type="checkbox" checked={dropOldRoas} onChange={(e) => setDropOldRoas(e.target.checked)} className="mt-0.5" />
+                                <span>
+                                  Your saved target ROAS ({savedRoas}×) still comes first for Vera. Remove it so she judges by the margin.
+                                </span>
+                              </label>
+                            )}
                             <NumberInput value={margin} onChange={setMargin} suffix="%" placeholder="40" />
                             {margin && !checks.margin.ok ? (
                               <Help tone="error">Between 1% and 95%: what&apos;s left of a sale after the product&apos;s cost, before ads.</Help>
@@ -485,6 +498,9 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
                           </>
                         ) : (
                           <>
+                            {typeof loaded?.values.margin === "number" && (
+                              <Help>Your saved margin ({Math.round(loaded.values.margin * 1000) / 10}%) stays in the profile; Vera judges by this target first.</Help>
+                            )}
                             <NumberInput value={roas} onChange={setRoas} suffix="×" placeholder="4" />
                             {roas && !checks.targetRoas.ok ? (
                               <Help tone="error">Between 0.2 and 40 (4 means 400%).</Help>

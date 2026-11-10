@@ -4,10 +4,10 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, Bot, CheckCircle2, ChevronRight, Clock, ShoppingBag, Split, Wand2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { groupMetrics, productMetrics, productsInGroup } from "@/lib/google-ads/analytics";
-import { money } from "@/lib/google-ads/metrics";
+import { EMPTY_BASE, addBase, derive, money } from "@/lib/google-ads/metrics";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import { useGoogleAds } from "@/lib/google-ads/store";
-import type { ListingDimension, ListingGroup, Product } from "@/lib/google-ads/types";
+import type { BaseMetrics, ListingDimension, ListingGroup, Product } from "@/lib/google-ads/types";
 import { metricColumns } from "../ga-columns";
 import { BulkButton, GaTable, type GaColumn } from "../ga-table";
 import { Card, EmptyState, ImageTile, Pill, Segmented, ViewHeader } from "../ga-ui";
@@ -266,6 +266,9 @@ export function ProductGroupsView() {
   const metrics = useMemo(() => productMetrics(data, range), [data, range]);
   const nodes = data.listingGroups.filter((g) => g.campaignId === campaign?.id);
   const manual = campaign?.bidding.type === "MANUAL_CPC";
+  // Live accounts: Google reports numbers on the last level of the tree; the levels above add them up.
+  // The feed isn't loaded on this page, so there is no product count to show.
+  const live = !!data.exact;
 
   if (!campaign || campaign.type !== "SHOPPING") {
     return (
@@ -277,6 +280,11 @@ export function ProductGroupsView() {
   }
 
   const childrenOf = (id?: string) => nodes.filter((n) => n.parentId === id);
+  const treeBase = (id: string): BaseMetrics => {
+    const kids = childrenOf(id);
+    return kids.length ? kids.reduce((s, k) => addBase(s, treeBase(k.id)), EMPTY_BASE) : data.exact?.byId[id] ?? EMPTY_BASE;
+  };
+  const treeMetrics = (id: string) => derive(treeBase(id));
   const rows: { node: ListingGroup; depth: number }[] = [];
   const walk = (id: string | undefined, depth: number) => {
     for (const n of childrenOf(id)) {
@@ -291,12 +299,12 @@ export function ProductGroupsView() {
       id: "group",
       header: "Product group",
       render: ({ node, depth }) => {
-        const count = productsInGroup(data, node.id).length;
+        const count = live ? null : productsInGroup(data, node.id).length;
         return (
           <span className="flex items-center gap-1.5" style={{ paddingLeft: depth * 20 }}>
             {childrenOf(node.id).length ? <ChevronRight className="h-3 w-3 rotate-90 text-muted-foreground" /> : <span className="w-3" />}
             <span className={cn("font-semibold", node.excluded && "text-muted-foreground line-through")}>{node.value}</span>
-            <span className="text-[10px] text-muted-foreground">{dimensionLabel(node.dimension)} · {count} products</span>
+            <span className="text-[10px] text-muted-foreground">{dimensionLabel(node.dimension)}{count === null ? "" : ` · ${count} products`}</span>
           </span>
         );
       },
@@ -306,9 +314,9 @@ export function ProductGroupsView() {
       header: "Max. CPC",
       align: "right",
       render: ({ node }) =>
-        node.excluded ? <Pill tone="bad">Excluded</Pill> : childrenOf(node.id).length ? <span className="text-muted-foreground">—</span> : manual ? money(node.bid ?? 0.6, currency) : <span className="text-muted-foreground">Smart Bidding</span>,
+        node.excluded ? <Pill tone="bad">Excluded</Pill> : childrenOf(node.id).length ? <span className="text-muted-foreground">—</span> : manual ? (node.bid != null ? money(node.bid, currency) : live ? <span className="text-muted-foreground">Ad group default</span> : money(0.6, currency)) : <span className="text-muted-foreground">Smart Bidding</span>,
     },
-    ...metricColumns<{ node: ListingGroup; depth: number }>(({ node }) => (node.excluded ? groupMetrics(data, "__none__", metrics) : groupMetrics(data, node.id, metrics)), currency, { keys: ["impressions", "clicks", "cost", "conversions", "conversionsValue", "roas"] }),
+    ...metricColumns<{ node: ListingGroup; depth: number }>(({ node }) => (node.excluded ? groupMetrics(data, "__none__", metrics) : live ? treeMetrics(node.id) : groupMetrics(data, node.id, metrics)), currency, { keys: ["impressions", "clicks", "cost", "conversions", "conversionsValue", "roas"] }),
     {
       id: "actions",
       header: "",

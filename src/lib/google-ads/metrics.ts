@@ -30,6 +30,16 @@ export function isoDay(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Today's date on the account's clock: Google Ads days follow the account's time zone. */
+export function todayIn(timeZone?: string | null, now = new Date()): string {
+  if (!timeZone) return isoDay(now);
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  } catch {
+    return isoDay(now);
+  }
+}
+
 export function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -143,6 +153,8 @@ export function adGroupBase(data: AccountData, adGroupId: string, range: DateRan
 }
 
 export function assetGroupBase(data: AccountData, assetGroupId: string, range: DateRange): BaseMetrics {
+  const exact = exactFor(data, assetGroupId, range);
+  if (exact) return exact;
   const group = data.assetGroups.find((g) => g.id === assetGroupId);
   if (!group) return EMPTY_BASE;
   const siblings = data.assetGroups.filter((g) => g.campaignId === group.campaignId && g.status !== "REMOVED");
@@ -184,6 +196,20 @@ export function searchTermBase(data: AccountData, termId: string, range: DateRan
 export function accountBase(data: AccountData, range: DateRange, campaignIds?: string[]): BaseMetrics {
   const ids = campaignIds ?? data.campaigns.map((c) => c.id);
   return ids.reduce((sum, id) => addBase(sum, campaignBase(data, id, range)), EMPTY_BASE);
+}
+
+/** The whole account as Google totals it, removed campaigns included. */
+export function accountTotal(data: AccountData, range: DateRange): BaseMetrics {
+  return data.accountDaily ? sumDaily(data.accountDaily, range) : accountBase(data, range);
+}
+
+/** Daily account totals for the chart, on the same basis as accountTotal. */
+export function accountSeries(data: AccountData, range: DateRange): (Metrics & { date: string })[] {
+  if (!data.accountDaily) return dailySeries(data, range);
+  const byDate = new Map(data.accountDaily.map((p) => [p.date, p]));
+  const out: (Metrics & { date: string })[] = [];
+  for (let d = range.start; d <= range.end; d = addDays(d, 1)) out.push({ date: d, ...derive(byDate.get(d) ?? EMPTY_BASE) });
+  return out;
 }
 
 /** Daily totals across the given campaigns, for charts. */

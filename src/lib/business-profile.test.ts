@@ -9,8 +9,7 @@ import {
   profileBrief,
   profileForAgent,
   sameValue,
-  type BusinessProfileData,
-} from "./business-profile";
+  type BusinessProfileData, PROFILE_UNREADABLE } from "./business-profile";
 
 const empty = (): BusinessProfileData => ({ values: {}, meta: {}, updatedAt: null });
 const owner = { source: "owner", status: "confirmed" } as const;
@@ -22,6 +21,11 @@ describe("normalizeValue", () => {
     expect(normalizeValue("margin", 40)).toBe(0.4);
     expect(normalizeValue("margin", "40%")).toBe(0.4);
     expect(normalizeValue("margin", 0.35)).toBe(0.35);
+    // The page and the setup screen send the box text with a % sign: it is always a percentage.
+    expect(normalizeValue("margin", "1%")).toBe(0.01);
+    expect(normalizeValue("margin", 1)).toBe(0.01);
+    expect(normalizeValue("margin", "12.5%")).toBe(0.125);
+    expect(() => normalizeValue("margin", "0.5%")).toThrow(/between 1% and 95%/);
     expect(normalizeValue("targetRoas", 4)).toBe(4);
     expect(normalizeValue("targetRoas", "400%")).toBe(4);
     expect(normalizeValue("targetRoas", "4x")).toBe(4);
@@ -155,5 +159,20 @@ describe("what the agents read", () => {
     expect(sameValue([{ name: "Noon", url: "" }], [{ url: "", name: "Noon" }])).toBe(true);
     expect(sameValue(null, undefined)).toBe(true);
     expect(sameValue(["a"], ["b"])).toBe(false);
+  });
+});
+
+describe("profileBrief", () => {
+  it("gives long texts whole, up to the longest a text field allows", () => {
+    const voice = "Warm, plain and short. ".repeat(60).trim();
+    expect(voice.length).toBeGreaterThan(1300);
+    const brief = profileBrief({ values: { brandVoice: voice }, meta: {}, updatedAt: null });
+    expect(brief).toContain(voice);
+    expect(brief).not.toContain("full text: business_profile");
+  });
+
+  it("has a notice for a profile that couldn't be read, which never says empty", () => {
+    expect(PROFILE_UNREADABLE).toContain("NOT empty");
+    expect(PROFILE_UNREADABLE).not.toMatch(/nothing filled/);
   });
 });

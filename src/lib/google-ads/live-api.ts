@@ -1,6 +1,7 @@
 // Browser calls to /api/google-ads/connection and /api/google-ads/data. The store
 // uses these in live mode; demo mode never touches the network.
 
+import type { LiveSegment, SegmentCell } from "./live-segments";
 import type { MerchantSnapshot } from "./merchant-live";
 import type { AccountData, MutateOp } from "./types";
 
@@ -13,6 +14,8 @@ export type LiveConnection = {
   accountName: string | null;
   currency: string | null;
   timeZone: string | null;
+  /** Whose Google sign-in the workspace uses, and whether they are still on the team. */
+  connectedBy?: { name: string; onTeam: boolean } | null;
 };
 
 export type LiveConnections = { configured: false } | { configured: true; ads: LiveConnection; merchant: LiveConnection };
@@ -58,6 +61,9 @@ export const LIVE_ERRORS: Record<string, string> = {
   invalid_change: "This change couldn't be read. Nothing was sent.",
   too_large: "This change is too large to send at once. Split it up.",
   invalid_range: "That date range can't be loaded.",
+  invalid_segment: "That report can't be loaded.",
+  disconnect_failed: "Google's sign-in couldn't be removed right now, so nothing was disconnected. Try again in a moment.",
+  not_found: "Google Ads isn't available for this account yet.",
 };
 
 export class LiveApiError extends Error {}
@@ -113,6 +119,10 @@ export const liveApi = {
     call<{ data: AccountData; fetchedAt: string }>(
       `/api/google-ads/data?${qs({ workspaceId, start: range.start, end: range.end, ...(force ? { refresh: "1" } : {}) })}`
     ),
+
+  /** One breakdown of the account (device, hour, age…), as Google reports it. */
+  segment: (workspaceId: string, segment: LiveSegment, range: { start: string; end: string }) =>
+    call<{ cells: SegmentCell[]; fetchedAt: string }>(`/api/google-ads/segments?${qs({ workspaceId, segment, start: range.start, end: range.end })}`),
 
   /** Products, their status and issues in the chosen Merchant Center account. */
   merchant: (workspaceId: string, force: boolean) =>

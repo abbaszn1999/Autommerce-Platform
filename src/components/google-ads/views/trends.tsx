@@ -9,6 +9,7 @@ import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import type { MetricKey } from "@/lib/google-ads/types";
 import { Card, Segmented, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
+import { SegmentNotice, hasNotice, useSegmentRows } from "../use-segment";
 
 const METRIC_OPTIONS: { value: MetricKey; label: string }[] = [
   { value: "conversions", label: "Conversions" },
@@ -40,10 +41,11 @@ export function TrendsView() {
   const { data, range, currency } = useGa();
   const [metric, setMetric] = useState<MetricKey>("conversions");
   const weekdays = useMemo(() => segmentRows(data, range, "dayOfWeek"), [data, range]);
-  const hours = useMemo(() => segmentRows(data, range, "hour"), [data, range]);
-  const devices = useMemo(() => segmentRows(data, range, "device"), [data, range]);
-  const networks = useMemo(() => segmentRows(data, range, "network"), [data, range]);
-  const bestOf = (rows: SegmentRow[]) => rows.reduce((b, r) => (r.metrics[metric] > (b?.metrics[metric] ?? -1) ? r : b), rows[0]);
+  const hours = useSegmentRows("hour");
+  const devices = useSegmentRows("device");
+  const networks = useSegmentRows("network");
+  // Nothing is "best" when every value is zero.
+  const bestOf = (rows: SegmentRow[]) => rows.filter((r) => r.metrics[metric] > 0).reduce<SegmentRow | undefined>((b, r) => (!b || r.metrics[metric] > b.metrics[metric] ? r : b), undefined);
 
   return (
     <div className="space-y-4">
@@ -62,8 +64,8 @@ export function TrendsView() {
       <div className="grid gap-4 lg:grid-cols-3">
         {[
           { label: "Best day", row: bestOf(weekdays) },
-          { label: "Best hour", row: bestOf(hours) },
-          { label: "Best device", row: bestOf(devices) },
+          { label: "Best hour", row: bestOf(hours.rows) },
+          { label: "Best device", row: bestOf(devices.rows) },
         ].map(({ label, row }) => (
           <Card key={label} className="p-4">
             <p className="text-[11px] font-semibold text-muted-foreground">{label}</p>
@@ -80,15 +82,15 @@ export function TrendsView() {
         </Card>
         <Card className="space-y-3 p-4">
           <p className="text-sm font-bold">Device</p>
-          <Bars rows={devices} metric={metric} currency={currency} />
+          {hasNotice(devices, devices.empty) ? <SegmentNotice load={devices} empty={devices.empty} /> : <Bars rows={devices.rows} metric={metric} currency={currency} />}
           <p className="pt-2 text-sm font-bold">Network</p>
-          <Bars rows={networks} metric={metric} currency={currency} />
+          {hasNotice(networks, networks.empty) ? <SegmentNotice load={networks} empty={networks.empty} /> : <Bars rows={networks.rows} metric={metric} currency={currency} />}
         </Card>
       </div>
 
       <Card className="space-y-3 p-4">
         <p className="text-sm font-bold">Hour of day</p>
-        <Bars rows={hours} metric={metric} currency={currency} compact />
+        {hasNotice(hours, hours.empty) ? <SegmentNotice load={hours} empty={hours.empty} /> : <Bars rows={hours.rows} metric={metric} currency={currency} compact />}
       </Card>
     </div>
   );

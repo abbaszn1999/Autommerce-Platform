@@ -519,7 +519,7 @@ export type OfflineImport = {
 
 // ─── Audiences ──────────────────────────────────────────────────────────────
 
-export type AudienceKind = "REMARKETING" | "CUSTOMER_MATCH" | "IN_MARKET" | "AFFINITY" | "CUSTOM" | "DEMOGRAPHIC";
+export type AudienceKind = "REMARKETING" | "CUSTOMER_MATCH" | "IN_MARKET" | "AFFINITY" | "CUSTOM" | "DEMOGRAPHIC" | "INTEREST";
 
 export type AudienceSegment = {
   id: string;
@@ -548,6 +548,7 @@ export type AudienceTarget = {
 // ─── Conversions ────────────────────────────────────────────────────────────
 
 export type ConversionCategory =
+  | "OTHER"
   | "PURCHASE"
   | "ADD_TO_CART"
   | "BEGIN_CHECKOUT"
@@ -561,7 +562,9 @@ export type ConversionAction = {
   id: string;
   name: string;
   category: ConversionCategory;
-  source: "WEBSITE" | "GOOGLE_ANALYTICS" | "IMPORT" | "PHONE_CALLS";
+  /** Live accounts: Google's own wording, for categories this app has no name for. */
+  categoryLabel?: string;
+  source: "WEBSITE" | "GOOGLE_ANALYTICS" | "IMPORT" | "PHONE_CALLS" | "GOOGLE";
   status: "ACTIVE" | "NO_RECENT_CONVERSIONS" | "UNVERIFIED" | "REMOVED";
   primary: boolean;
   countingType: "ONE_PER_CLICK" | "MANY_PER_CLICK";
@@ -661,6 +664,8 @@ export type CampaignBundle = {
 };
 
 export type MutateOp =
+  | import("./live-create").CreateOp
+  | import("./live-experiment").ExperimentOp
   | { kind: "campaign.create"; bundle: CampaignBundle; tempId: string }
   | { kind: "campaign.update"; campaignId: string; patch: Partial<Omit<Campaign, "id">> }
   | { kind: "campaign.remove"; campaignId: string }
@@ -757,6 +762,12 @@ export type ChangeTouched = { campaignIds: string[]; adGroupIds: string[]; asset
 // ─── Account snapshot ──────────────────────────────────────────────────────
 
 export type AccountData = {
+  /** Live accounts: Google's own daily account totals (removed campaigns included). */
+  accountDaily?: DailyPoint[];
+  /** Live accounts: parts of the snapshot Google didn't return, by query name. */
+  unavailable?: string[];
+  /** Live accounts: the search terms are the top ones only, not all of them. */
+  searchTermsCapped?: boolean;
   account: GoogleAccount;
   campaigns: Campaign[];
   budgets: CampaignBudget[];

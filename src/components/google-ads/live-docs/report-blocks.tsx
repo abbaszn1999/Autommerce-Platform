@@ -4,6 +4,7 @@ import { useTheme } from "next-themes";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
 import { Markdown } from "@/components/store-agent/markdown";
+import { ReportHtmlFrame } from "./report-html-frame";
 import { cn } from "@/lib/utils";
 import { money, num } from "@/lib/google-ads/metrics";
 import type { ReportBlock, ValueFormat } from "@/lib/google-ads/live-docs";
@@ -36,6 +37,8 @@ const TONES = {
 
 export function ReportBlockView({ block, currency }: { block: ReportBlock; currency: string }) {
   switch (block.kind) {
+    case "html":
+      return <ReportHtmlFrame html={block.html} title={block.title} />;
     case "text":
       return <Markdown text={block.md} />;
     case "callout": {

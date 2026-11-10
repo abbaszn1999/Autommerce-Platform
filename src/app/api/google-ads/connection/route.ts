@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { publicOriginFromRequest } from "@/lib/app-origin";
 import {
   connectionConfigured,
+  connectedByInfo,
   disconnect,
   errorStatus,
   isConnectionKind,
@@ -26,7 +27,9 @@ export async function GET(request: NextRequest) {
     if (!connectionConfigured()) return NextResponse.json({ configured: false });
     const { admin } = await requireConnectionAccess(workspaceId);
     const rows = await loadConnections(admin, workspaceId);
-    return NextResponse.json({ configured: true, ads: toClientConnection(rows.ads), merchant: toClientConnection(rows.merchant) });
+    const people = await connectedByInfo(admin, workspaceId, [rows.ads?.connected_by, rows.merchant?.connected_by]);
+    const withPerson = (row: typeof rows.ads) => ({ ...toClientConnection(row), connectedBy: row?.connected_by ? people.get(row.connected_by) ?? null : null });
+    return NextResponse.json({ configured: true, ads: withPerson(rows.ads), merchant: withPerson(rows.merchant) });
   } catch (err) {
     return fail(err);
   }

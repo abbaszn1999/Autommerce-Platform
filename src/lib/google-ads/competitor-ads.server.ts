@@ -291,6 +291,7 @@ export async function runAnalysis(input: {
     });
     charged = result.charged;
     if (result.billingError && !isInsufficientCredits(result.billingError)) console.error("[competitor-ads] billing failed:", result.billingError);
+    if (result.shortfall > 0) console.error(`[competitor-ads] ${result.shortfall} credits could not be charged to workspace ${workspaceId}`);
   }
 
   // Our list: free listings out, one row per keyword, the customer's account compared when connected.

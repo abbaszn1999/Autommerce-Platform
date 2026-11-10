@@ -42,7 +42,7 @@ describe("parsePlanInput", () => {
 });
 
 describe("parseReportInput", () => {
-  it("needs a verdict, ranks findings by severity and drops unknown blocks", () => {
+  it("needs a verdict and ranks findings by severity", () => {
     expect(() => parseReportInput({ title: "x", verdict: [] })).toThrow(/verdict/);
     const r = parseReportInput({
       title: "Audit",
@@ -52,16 +52,34 @@ describe("parseReportInput", () => {
         { title: "Low one", severity: "low", evidence: "e", fix: "f" },
         { title: "High one", severity: "high", evidence: "e", fix: "f" },
       ],
-      sections: [
-        { title: "Spend", blocks: [{ kind: "chart", title: "By campaign", variant: "pie", data: [{ label: "A", value: "12" }, { label: "B", value: "x" }] }, { kind: "html", html: "<script>" }] },
-        { title: "Empty", blocks: [{ kind: "unknown" }] },
-      ],
+      sections: [{ title: "Spend", blocks: [{ kind: "chart", title: "By campaign", variant: "pie", data: [{ label: "A", value: "12" }, { label: "B", value: "x" }] }] }],
     });
     expect(r.content.verdict).toHaveLength(3);
     expect(r.content.kpis).toEqual([{ label: "Cost", value: "$1,200", delta: 0.12 }]);
     expect(r.content.findings.map((f) => f.title)).toEqual(["High one", "Low one"]);
-    expect(r.content.sections).toHaveLength(1);
     expect(r.content.sections[0]!.blocks).toEqual([{ kind: "chart", title: "By campaign", variant: "bar", format: "number", data: [{ label: "A", value: 12 }] }]);
+  });
+
+  const report = (blocks: unknown[], title = "Spend") => parseReportInput({ title: "Audit", verdict: ["ok"], sections: [{ title, blocks }] });
+
+  it("never drops a block in silence: the agent is told what to fix", () => {
+    expect(() => report([{ kind: "unknown" }])).toThrow(/Section 1 \("Spend"\), block 1: unknown block kind "unknown"/);
+    expect(() => report([{ kind: "text", md: "" }])).toThrow(/text block is empty/);
+    expect(() => report([{ kind: "table", columns: [], rows: [] }])).toThrow(/no columns/);
+    expect(() => report([{ kind: "chart", data: [{ label: "x", value: "n/a" }] }])).toThrow(/no data points/);
+    expect(() => report([])).toThrow(/no blocks/);
+    expect(() => report([{ kind: "text", md: "x" }], "")).toThrow(/give the section a title/);
+  });
+
+  it("keeps an html block the agent wrote, and refuses tags that could leave the report", () => {
+    const html = '<div id="c"></div><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script><script>new Chart(c, {})</script>';
+    expect(report([{ kind: "html", title: "Hours", html }]).content.sections[0]!.blocks[0]).toEqual({ kind: "html", title: "Hours", html });
+    expect(() => report([{ kind: "html", html: '<meta http-equiv="refresh" content="0;url=https://x.example">' }])).toThrow(/http-equiv/);
+    expect(() => report([{ kind: "html", html: '<script src="https://evil.example/x.js"></script>' }])).toThrow(/script from another address/);
+    expect(() => report([{ kind: "html", html: '<iframe src="https://x.example"></iframe>' }])).toThrow(/embedded frame/);
+    expect(() => report([{ kind: "html", html: '<form action="https://x.example"></form>' }])).toThrow(/form/);
+    expect(() => report([{ kind: "html", html: '<link rel="stylesheet" href="https://x.example/a.css">' }])).toThrow(/<link>/);
+    expect(() => report([{ kind: "html", html: "x".repeat(200_001) }])).toThrow(/longer than/);
   });
 });
 

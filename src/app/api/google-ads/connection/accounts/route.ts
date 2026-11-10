@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   ConnectionHttpError,
+  adsAccountDetails,
   errorStatus,
   isConnectionKind,
   listAdsAccounts,
@@ -22,13 +23,13 @@ async function connected(workspaceId: string, kind: "ads" | "merchant", opts: { 
   return { admin, row };
 }
 
-/** Accounts the connected Google sign-in can reach. */
+/** Accounts the connected Google sign-in can reach. Owners and admins only: it lists every account that person can open. */
 export async function GET(request: NextRequest) {
   try {
     const workspaceId = request.nextUrl.searchParams.get("workspaceId") ?? "";
     const kind = request.nextUrl.searchParams.get("kind");
     if (!isConnectionKind(kind)) return NextResponse.json({ error: "invalid_kind" }, { status: 400 });
-    const { row } = await connected(workspaceId, kind);
+    const { row } = await connected(workspaceId, kind, { admin: true });
     if (kind === "merchant") return NextResponse.json({ accounts: await listMerchantAccounts(row) });
     const accounts = await listAdsAccounts(row);
     // Every request goes through the customer ID typed before sign-in. When it isn't one this sign-in can use,
@@ -61,13 +62,16 @@ export async function POST(request: NextRequest) {
         : (await listMerchantAccounts(row)).find((a) => a.merchantId === accountId);
     if (!pick) return NextResponse.json({ error: "account_not_accessible" }, { status: 403 });
 
+    // Accounts listed under a manager come without their currency and time zone.
+    const details = kind === "ads" && "currency" in pick && (!pick.currency || !pick.timeZone) ? await adsAccountDetails(row, accountId) : null;
+    const account = details ? { ...pick, ...details } : pick;
     await selectAccount(admin, row, {
       id: accountId,
-      name: pick.name,
-      currency: "currency" in pick ? pick.currency : undefined,
-      timeZone: pick.timeZone,
+      name: account.name,
+      currency: "currency" in account ? account.currency : undefined,
+      timeZone: account.timeZone,
     });
-    return NextResponse.json({ account: pick });
+    return NextResponse.json({ account });
   } catch (err) {
     return fail(err);
   }

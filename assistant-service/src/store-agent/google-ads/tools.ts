@@ -161,7 +161,10 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
       description:
         "Propose one change to the Google Ads account: one or more related edits applied together (all or nothing). " +
         "The user sees every edit before → after, already checked by Google, and must approve it; nothing changes without that. " +
-        "Edits: status.set, budget.update, campaign.update, adGroup.update, keyword.create, keyword.update, negative.create, negative.remove (formats in your rules).",
+        "Edits (formats in your rules): status.set, budget.update, campaign.update, adGroup.update, keyword.create, keyword.update, negative.create, negative.remove; " +
+        "creating: campaign.new (Search, Shopping, Performance Max, Display, Demand Gen; created paused), adGroup.new, ad.new, assetGroup.new, assetGroupAsset.add/remove, searchTheme.add, " +
+        "asset.new (sitelinks, callouts, call, snippets), audience.add, location.add, language.add, schedule.add, targeting.remove, device.set, placement.exclude, conversion.new, negativeList.new, label.new; " +
+        "experiments alone: experiment.new, experiment.end.",
       inputSchema: {
         type: "object",
         properties: {
@@ -416,7 +419,12 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
         "(each with evidence and the fix; the owner can turn any finding into a plan), and sections of blocks. " +
         "Blocks: { kind: \"text\", md } · { kind: \"callout\", tone: info|good|warn|bad, title, text } · { kind: \"table\", columns, rows, align? } · " +
         "{ kind: \"chart\", title, variant: bar|line|donut, format: money|number|percent|ratio, data: [{ label, value }] } (percent as 0–1) · " +
-        "{ kind: \"score\", score: 0–100, label, parts: [{ label, score }] }. To update a report, send it whole again with its documentId.",
+        "{ kind: \"score\", score: 0–100, label, parts: [{ label, score }] } · " +
+        "{ kind: \"html\", title, html } for anything the others can't show (a heatmap, a custom layout, an interactive chart): a whole page with its own " +
+        "CSS and JavaScript, shown in a sandboxed frame. It can't load anything from the internet except Chart.js from " +
+        "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js: put the data inline, draw with Chart.js, SVG or CSS, no external images or fonts, " +
+        "no forms, frames or links. Keep each html block under 200,000 characters and keep data tables as table blocks (they export to Excel). " +
+        "A block that can't be shown is refused with the reason: fix it and save again. To update a report, send it whole again with its documentId.",
       inputSchema: {
         type: "object",
         properties: {

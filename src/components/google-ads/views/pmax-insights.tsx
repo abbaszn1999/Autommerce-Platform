@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { Bot, Globe, Layers, ShieldOff, Telescope } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { contentMetrics, segmentRows, type SegmentRow } from "@/lib/google-ads/analytics";
+import { contentMetrics, type SegmentRow } from "@/lib/google-ads/analytics";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import { EMPTY_BASE, addBase, assetGroupBase, campaignBase, derive, money, searchTermBase } from "@/lib/google-ads/metrics";
 import type { AssetGroup, AssetRating, ContentTarget, Metrics } from "@/lib/google-ads/types";
@@ -11,6 +11,7 @@ import { metricColumns } from "../ga-columns";
 import { GaTable, type GaColumn } from "../ga-table";
 import { Card, EmptyState, Pill, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
+import { SegmentNotice, hasNotice, useSegmentRows } from "../use-segment";
 
 const AGENT_BTN = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 px-3 text-xs font-semibold hover:bg-muted";
 
@@ -27,9 +28,11 @@ function NeedsCampaign({ title, kind = "Performance Max" }: { title: string; kin
 
 export function ChannelsView() {
   const { data, range, currency, campaign, assetGroup } = useGa();
+  const ids = useMemo(() => [campaign?.id ?? ""], [campaign?.id]);
+  const load = useSegmentRows("network", ids);
   const rows = useMemo(() => {
     if (!campaign) return [];
-    const all = segmentRows(data, range, "network", [campaign.id]);
+    const all = load.rows;
     if (!assetGroup) return all;
     // Inside an asset group: the group's share of the campaign's spend, split the same way across channels.
     const k = Math.min(1, assetGroupBase(data, assetGroup.id, range).cost / (campaignBase(data, campaign.id, range).cost || 1));
@@ -37,7 +40,7 @@ export function ChannelsView() {
       const base = { impressions: r.base.impressions * k, clicks: r.base.clicks * k, cost: r.base.cost * k, conversions: r.base.conversions * k, conversionsValue: r.base.conversionsValue * k };
       return { ...r, base, metrics: derive(base) };
     });
-  }, [data, range, campaign, assetGroup]);
+  }, [data, range, campaign, assetGroup, load.rows]);
   if (!campaign) return <NeedsCampaign title="Channels" kind="Performance Max or Demand Gen" />;
   const demandGen = campaign.type === "DEMAND_GEN";
   const total = rows.reduce((s, r) => s + r.base.cost, 0) || 1;
@@ -68,7 +71,11 @@ export function ChannelsView() {
         subtitle={demandGen ? `Where ${campaign.name} spent its budget, by surface. You choose the allowed channels per ad group; Google decides the split.` : `Where ${campaign.name} spent its budget. Google decides the split; this shows what it chose.`}
         actions={<button type="button" onClick={() => runAgentTurn(demandGen ? "Which Demand Gen channels are working and which are wasting money?" : "Which channels is my Performance Max campaign wasting money on?")} className={AGENT_BTN}><Bot className="h-3.5 w-3.5" /> Analyse with agent</button>}
       />
-      <GaTable rows={rows} columns={columns} rowKey={(r) => r.key} defaultSort={{ id: "cost", dir: "desc" }} />
+      {hasNotice(load, load.empty) ? (
+        <Card className="p-4"><SegmentNotice load={load} empty={load.empty} /></Card>
+      ) : (
+        <GaTable rows={rows} columns={columns} rowKey={(r) => r.key} defaultSort={{ id: "cost", dir: "desc" }} />
+      )}
     </div>
   );
 }

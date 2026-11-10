@@ -40,7 +40,7 @@ export function RecommendationsView() {
           <div className="h-full rounded-full bg-gradient-to-r from-[#400095] to-[#F76D01] transition-all" style={{ width: `${data.account.optimizationScore * 100}%` }} />
         </div>
         <p className="text-xs text-muted-foreground">
-          {recs.length} open · up to <span className="font-semibold text-foreground">+{recs.reduce((s, r) => s + r.scoreUplift, 0).toFixed(1)} pts</span>
+          {recs.length} open{recs.some((r) => r.scoreUplift > 0) && <> · up to <span className="font-semibold text-foreground">+{recs.reduce((s, r) => s + r.scoreUplift, 0).toFixed(1)} pts</span></>}
         </p>
       </Card>
 
@@ -71,7 +71,7 @@ export function RecommendationsView() {
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{RECOMMENDATION_CATEGORIES[r.category]}</p>
                     <p className="text-sm font-bold">{r.title}</p>
                   </div>
-                  <Pill tone="brand">+{r.scoreUplift.toFixed(1)}%</Pill>
+                  {r.scoreUplift > 0 && <Pill tone="brand">+{r.scoreUplift.toFixed(1)}%</Pill>}
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{r.description}</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">

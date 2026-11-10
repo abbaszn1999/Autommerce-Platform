@@ -2,6 +2,7 @@
 
 import { Component, type ReactNode } from "react";
 import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import { UNAVAILABLE_LABELS } from "@/lib/google-ads/live-targeting";
 import { useAccountState, useGoogleAds } from "@/lib/google-ads/store";
 import { Card } from "./ga-ui";
 
@@ -42,6 +43,19 @@ export function GaSyncBanner() {
   const acc = useAccountState();
   const refresh = useGoogleAds((s) => s.refreshData);
   const sync = acc?.sync;
+  const unavailable = acc?.data.unavailable;
+  if (sync?.status === "ready" && unavailable?.length)
+    return (
+      <div role="alert" className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs">
+        <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+        <span className="min-w-0 flex-1 text-muted-foreground">
+          <span className="font-semibold text-foreground">Part of this account couldn&apos;t be read from Google Ads:</span> {unavailable.map((n) => UNAVAILABLE_LABELS[n] ?? n).join(", ")}. Those parts may look empty.
+        </span>
+        <button type="button" onClick={() => void refresh()} className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-background px-2 py-1 font-semibold hover:bg-muted">
+          <RefreshCw className="h-3 w-3" /> Retry
+        </button>
+      </div>
+    );
   if (!sync || sync.status === "ready") return null;
   if (sync.status === "loading") {
     return (

@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { signalAccountChanged } from "@/lib/store-agent/change-signal";
 import { emptyReply, reduceReply, type ReplyState } from "@/lib/store-agent/blocks";
 import { announceDoc } from "@/lib/store-agent/doc-links";
 import { requestLabel } from "@/lib/store-agent/mentions";
@@ -464,6 +465,8 @@ function applyEvent(chatId: string, event: StoreAgentEvent) {
   if (event.type === "question" && !replayed) notifyUser(chatId, "Vera has a question for you");
   if (event.type === "doc" && !replayed) announceDoc({ docId: event.docId, kind: event.kind, title: event.title, version: event.version });
   if (event.type === "approval_resolved") {
+    // Approved, then applied: the account changed, so pages showing it load again.
+    if (event.status === "approved" && !replayed) signalAccountChanged();
     patchChat(chatId, (s) => ({
       approvals: {
         ...s.approvals,
@@ -710,6 +713,7 @@ export async function undoChange(chatId: string, approvalId: string): Promise<st
   const { workspaceId } = get();
   if (!workspaceId) throw new Error("No workspace");
   const result = await storeAgentApi.undo(workspaceId, approvalId);
+  signalAccountChanged();
   patchChat(chatId, (s) => ({
     approvals: { ...s.approvals, [approvalId]: { ...(s.approvals[approvalId] ?? { status: "approved", kind: "write", applied: true }), undoable: false, undone: true } },
   }));

@@ -5,6 +5,7 @@
 // one is seen to finish.
 
 import { create } from "zustand";
+import { signalAccountChanged } from "@/lib/store-agent/change-signal";
 import type { DocKind, LiveDoc, LiveDocSummary, PreviewItem } from "./live-docs";
 import { useGoogleAds } from "./store";
 
@@ -149,6 +150,7 @@ export async function runDocStep(docId: string, stepId: string, action: "apply" 
   try {
     const res = await post<{ ok: boolean; error?: string; doc: LiveDoc }>(docId, { action, stepId, version: get().docs[docId]?.version });
     if (res.doc) storeDoc(res.doc);
+    if (res.ok) signalAccountChanged();
     return res.ok ? { ok: true } : { ok: false, error: res.error };
   } catch (error) {
     // The result is unknown (network): read the plan again so the page shows what Google confirmed.

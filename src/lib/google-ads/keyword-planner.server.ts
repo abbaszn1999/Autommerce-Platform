@@ -7,7 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadProfile } from "../business-profile.server";
 import { ConnectionHttpError, execute, searchGaql, type ConnectionRow } from "./connection.server";
 import { loadLiveAccount } from "./live-report.server";
-import { rangeFor } from "./metrics";
+import { rangeFor, todayIn } from "./metrics";
 import {
   KeywordInputError,
   MAX_IDEAS,
@@ -91,7 +91,7 @@ async function targeting(admin: SupabaseClient, row: ConnectionRow, raw: { count
 /** The account's keyword texts and negatives, to mark ideas it already has (empty when it can't load). */
 export async function accountTerms(row: ConnectionRow) {
   try {
-    const { data } = await loadLiveAccount(row, rangeFor("LAST_30_DAYS"));
+    const { data } = await loadLiveAccount(row, rangeFor("LAST_30_DAYS", todayIn(row.account_time_zone)));
     return {
       keywords: new Set(data.keywords.filter((k) => k.status !== "REMOVED").map((k) => k.text.toLowerCase())),
       negatives: new Set(data.negatives.map((n) => n.text.toLowerCase())),

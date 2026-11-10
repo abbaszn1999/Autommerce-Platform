@@ -179,9 +179,11 @@ export const AUDIENCE_KINDS: Record<AudienceKind, { label: string; blurb: string
   AFFINITY: { label: "Affinity", blurb: "Long-term interests and habits" },
   CUSTOM: { label: "Custom segment", blurb: "Built from keywords, URLs or apps" },
   DEMOGRAPHIC: { label: "Detailed demographics", blurb: "Life stage and household facts" },
+  INTEREST: { label: "Interest", blurb: "An in-market, affinity or life-event segment from Google" },
 };
 
 export const CONVERSION_CATEGORIES: Record<ConversionCategory, string> = {
+  OTHER: "Other",
   PURCHASE: "Purchase",
   ADD_TO_CART: "Add to cart",
   BEGIN_CHECKOUT: "Begin checkout",

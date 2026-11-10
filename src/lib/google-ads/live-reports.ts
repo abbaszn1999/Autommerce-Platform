@@ -19,6 +19,52 @@ export type ReportDays = (typeof REPORT_DAYS)[number];
 export type Severity = "high" | "medium" | "low" | "info";
 export type Finding = { severity: Severity; check: string; detail: string; entity?: string };
 
+/**
+ * The queries each check reads. A check whose data Google didn't return would
+ * report an absence that isn't real ("tracking is not set up"), so it is dropped.
+ */
+const CHECK_NEEDS: Record<string, string[]> = {
+  "Conversion tracking": ["settings"],
+  "Primary conversion": ["actions"],
+  "Purchase tracking": ["actions", "campaigns"],
+  "Double counting": ["actions"],
+  Counting: ["actions"],
+  "Purchase value": ["actions"],
+  "No recent data": ["actions", "byAction"],
+  Attribution: ["actions"],
+  "Micro conversion as primary": ["actions"],
+  "Bidding volume": ["campaigns", "campaignPerf"],
+  "Bidding without signal": ["campaigns", "campaignPerf"],
+  "Missing assets": ["assetGroups", "assetGroupAssets"],
+  "Ad strength": ["assetGroups", "assetGroupAssets"],
+  Signals: ["assetGroups", "signals"],
+  "Catch-all": ["assetGroups", "listingGroups"],
+  Overlap: ["listingGroups"],
+  "Custom labels": ["listingGroups"],
+  "Thin asset group": ["assetGroups", "assetGroupPerf"],
+  "Spend concentration": ["assetGroups", "assetGroupPerf"],
+  "Shopping vs PMax": ["campaigns"],
+  "Not eligible": ["catalog"],
+  "Eligible but barely shown": ["catalog", "performance"],
+  "Products spending without sales": ["performance"],
+  "Auto-apply": ["autoApply"],
+  Assets: ["campaignAssets", "accountAssets"],
+  Device: ["devices"],
+  "Location option": ["locations"],
+  Locations: ["locations", "geo"],
+};
+
+/** Drops checks built on data Google didn't return and says what couldn't be read. */
+export function withoutUnreadChecks(findings: Finding[], unavailable: Record<string, string>): Finding[] {
+  const failed = Object.keys(unavailable).filter((k) => !k.startsWith("pmaxSearch:"));
+  if (!failed.length) return findings;
+  const kept = findings.filter((f) => !(CHECK_NEEDS[f.check] ?? []).some((q) => failed.includes(q)));
+  return [
+    { severity: "high", check: "Incomplete data", detail: `Google Ads didn't return: ${failed.join(", ")}. Checks that depend on it were skipped; don't read their absence as "nothing wrong" or as "not set up".` },
+    ...kept,
+  ];
+}
+
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const pct = (n: number) => Math.round(n * 1000) / 10;
 const micros = (v: unknown) => (v == null || v === "" ? 0 : Number(v) / 1_000_000);

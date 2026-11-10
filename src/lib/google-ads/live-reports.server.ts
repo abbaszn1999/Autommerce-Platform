@@ -5,6 +5,8 @@
 import { ConnectionHttpError, searchGaql, type ConnectionRow } from "./connection.server";
 import { googleMessage } from "./live-mutate.server";
 import type { GaqlRow } from "./live-report";
+import { geoNames } from "./live-segments.server";
+import { todayIn } from "./metrics";
 import {
   conversionsReport,
   productsReport,
@@ -14,6 +16,8 @@ import {
   shoppingPmaxReport,
   type ReportDays,
   type ReportName,
+  type Finding,
+  withoutUnreadChecks,
 } from "./live-reports";
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
@@ -40,17 +44,6 @@ async function runAll(row: ConnectionRow, customerId: string, queries: Record<st
   return { rows, unavailable };
 }
 
-async function geoNames(row: ConnectionRow, customerId: string, ids: string[]): Promise<Record<string, string>> {
-  const list = [...new Set(ids.filter((id) => /^\d+$/.test(id)))].slice(0, 200);
-  if (!list.length) return {};
-  try {
-    const rows = await searchGaql<GaqlRow>(row, customerId, `SELECT geo_target_constant.id, geo_target_constant.canonical_name FROM geo_target_constant WHERE geo_target_constant.id IN (${list.join(", ")})`, 2);
-    return Object.fromEntries(rows.map((r) => [String(r.geoTargetConstant?.id), String(r.geoTargetConstant?.canonicalName ?? r.geoTargetConstant?.id)]));
-  } catch {
-    return {};
-  }
-}
-
 export async function runReport(row: ConnectionRow, report: ReportName, days: ReportDays, opts: { targetRoas?: number; force?: boolean } = {}) {
   const customerId = row.account_id;
   if (row.kind !== "ads" || !customerId) throw new ConnectionHttpError(409, "no_account");
@@ -58,7 +51,8 @@ export async function runReport(row: ConnectionRow, report: ReportName, days: Re
   const hit = cache.get(key);
   if (!opts.force && hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.data;
 
-  const today = new Date();
+  // Noon on the account's own date: every day the report asks for follows the account's clock.
+  const today = new Date(`${todayIn(row.account_time_zone)}T12:00:00Z`);
   const queries = reportQueries(report, days, today);
   const pmaxQuery = queries.pmaxSearch;
   delete queries.pmaxSearch;
@@ -100,7 +94,8 @@ export async function runReport(row: ConnectionRow, report: ReportName, days: Re
     data = shoppingPmaxReport(rows, days, search);
   }
 
-  const out = { report, account: { customerId, name: row.account_name, currency: row.account_currency }, ...data, unavailable, fetchedAt: today.toISOString() };
+  if (Array.isArray(data.findings)) data.findings = withoutUnreadChecks(data.findings as Finding[], unavailable);
+  const out = { report, account: { customerId, name: row.account_name, currency: row.account_currency }, ...data, unavailable, fetchedAt: new Date().toISOString() };
   if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!);
   cache.set(key, { at: Date.now(), data: out });
   return out;

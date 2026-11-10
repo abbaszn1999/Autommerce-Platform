@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ExperimentPlanError, describeExperiment, isExperimentOp, planExperiment } from "@/lib/google-ads/live-experiment";
+import { validateExperiment } from "@/lib/google-ads/live-experiment.server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { verifyAgentRequest } from "@/lib/google-ads/agent-auth.server";
 import { GaqlGuardError, accountOverview, describeLiveChange, guardGaql } from "@/lib/google-ads/agent-support";
 import { ConnectionHttpError, batchMutate, errorStatus, loadConnection, searchGaql } from "@/lib/google-ads/connection.server";
-import { LivePlanError, planLiveChange } from "@/lib/google-ads/live-mutate";
+import { LivePlanError, planLiveChange, toMicros } from "@/lib/google-ads/live-mutate";
 import { applyLiveChange, fetchBefore, googleMessage } from "@/lib/google-ads/live-mutate.server";
 import { loadLiveAccount } from "@/lib/google-ads/live-report.server";
 import { REPORTS, REPORT_DAYS, isReportName, type ReportDays } from "@/lib/google-ads/live-reports";
 import { runReport } from "@/lib/google-ads/live-reports.server";
 import { MerchantPlanError, merchantOverview, type MerchantOp } from "@/lib/google-ads/merchant-live";
 import { applyMerchantChange, loadMerchantSnapshot, previewMerchantChange } from "@/lib/google-ads/merchant.server";
-import { rangeFor } from "@/lib/google-ads/metrics";
+import { rangeFor, todayIn } from "@/lib/google-ads/metrics";
 import { PROFILE_SOURCES, ProfileEditError, fieldLabel, formatValue, isProfileField, missingRequired, profileForAgent, userStatedValue, type ProfileEdit, type ProfileSource } from "@/lib/business-profile";
 import { editProfile, loadProfile } from "@/lib/business-profile.server";
 import { DocInputError, parsePlanInput, parseReportInput } from "@/lib/google-ads/live-docs";
@@ -91,7 +93,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     const customerId = row.account_id;
 
     if (action === "overview") {
-      const range = rangeFor("LAST_30_DAYS");
+      const range = rangeFor("LAST_30_DAYS", todayIn(row.account_time_zone));
       const { data, fetchedAt } = await loadLiveAccount(row, range);
       return NextResponse.json({ overview: accountOverview(data, range), fetchedAt });
     }
@@ -153,6 +155,17 @@ export async function POST(request: NextRequest, { params }: Params) {
       // Same checks as applying, then Google validates it without changing anything.
       try {
         const before = await fetchBefore(admin, row, customerId, ops);
+        if (ops.some(isExperimentOp)) {
+          let experiment;
+          try {
+            experiment = planExperiment(ops, before, before.create?.campaignTypes ?? {}, todayIn(row.account_time_zone), (n) => toMicros(n, before.billableUnitMicros));
+          } catch (e) {
+            if (e instanceof ExperimentPlanError) return NextResponse.json({ ok: false, error: e.message });
+            throw e;
+          }
+          await validateExperiment(row, customerId, experiment);
+          return NextResponse.json({ ok: true, items: describeExperiment(experiment, before), warnings: ["Google checks the trial's setup when it is created; it starts on its start date."], operations: 4 });
+        }
         const plan = planLiveChange(customerId, ops, before);
         await batchMutate(row, customerId, plan.operations, { validateOnly: true });
         return NextResponse.json({ ok: true, items: describeLiveChange(ops, before, row.account_currency ?? ""), warnings: plan.warnings, operations: plan.operations.length });

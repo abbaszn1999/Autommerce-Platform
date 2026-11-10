@@ -127,7 +127,7 @@ export function GaNav() {
       items: [
         { view: "documents", label: "Documents", icon: FileStack, badge: (live ? liveDocs : acc.docs.length) || undefined, hidden: inCampaign },
         { view: "profile", label: "Business profile", icon: Brain, hidden: inCampaign },
-        { view: "rules", label: "Rules & alerts", icon: BellRing, badge: unread || undefined, hidden: inCampaign },
+        { view: "rules", label: "Rules & alerts", icon: BellRing, badge: unread || undefined, hidden: inCampaign || live },
       ],
     },
   ];

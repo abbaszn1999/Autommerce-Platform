@@ -19,7 +19,7 @@ function fail(err: unknown) {
 export async function GET(request: NextRequest) {
   try {
     const workspaceId = request.nextUrl.searchParams.get("workspaceId") ?? "";
-    const { admin, role } = await requireConnectionAccess(workspaceId);
+    const { admin, role } = await requireConnectionAccess(workspaceId, { preview: false });
     const [profile, ads] = await Promise.all([loadProfile(admin, workspaceId), loadConnection(admin, workspaceId, "ads")]);
     return NextResponse.json(
       { profile: { values: profile.values, meta: profile.meta, updatedAt: profile.updatedAt }, canEdit: canEdit(role), currency: ads?.account_currency ?? null },
@@ -35,7 +35,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => ({}))) as { workspaceId?: string; edits?: unknown };
     const workspaceId = body.workspaceId ?? "";
-    const { admin, user } = await requireConnectionAccess(workspaceId, { admin: true });
+    const { admin, user } = await requireConnectionAccess(workspaceId, { admin: true, preview: false });
     const edits = Array.isArray(body.edits) ? body.edits : [];
     if (!edits.length || !edits.every((e) => e && typeof e === "object" && isProfileField((e as ProfileEdit).field)))
       return NextResponse.json({ error: "invalid_edit", message: "Nothing valid to save." }, { status: 422 });

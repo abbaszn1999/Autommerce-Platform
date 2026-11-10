@@ -3,6 +3,8 @@
 // with sample rows. Unknown or unsupported values are skipped, never guessed.
 
 import { buildEmptyAccount } from "./mock-data";
+import { applyTargeting, mapConversions, mapRecommendations, type TargetingRows } from "./live-targeting";
+import { mapAssetGroups, mapAssets, mapAudiences, mapContentTargets, mapExperiments, mapLibrary, mapLinks, mapListingGroups, type StructureRows } from "./live-structure";
 import type {
   AccountData,
   Ad,
@@ -46,7 +48,19 @@ export type LiveRows = {
   ads: GaqlRow[];
   adMetrics: GaqlRow[];
   searchTerms: GaqlRow[];
-};
+  customerDaily?: GaqlRow[];
+  conversions?: GaqlRow[];
+  conversionCounts?: GaqlRow[];
+  recommendations?: GaqlRow[];
+  assetGroupMetrics?: GaqlRow[];
+  placementMetrics?: GaqlRow[];
+  topicMetrics?: GaqlRow[];
+  productGroupMetrics?: GaqlRow[];
+} & TargetingRows &
+  StructureRows;
+
+/** Search terms come back as the top rows only; this many means there may be more. */
+export const SEARCH_TERMS_LIMIT = 500;
 
 const micros = (v: unknown) => (v == null || v === "" ? 0 : Number(v) / 1_000_000);
 const optMicros = (v: unknown) => (v == null || v === "" || Number(v) === 0 ? undefined : Number(v) / 1_000_000);
@@ -74,7 +88,7 @@ const CAMPAIGN_TYPES: Record<string, CampaignType> = {
   DISCOVERY: "DEMAND_GEN",
 };
 
-const BIDDING: Record<string, BiddingStrategyType> = {
+export const BIDDING: Record<string, BiddingStrategyType> = {
   MAXIMIZE_CONVERSIONS: "MAXIMIZE_CONVERSIONS",
   MAXIMIZE_CONVERSION_VALUE: "MAXIMIZE_CONVERSION_VALUE",
   TARGET_CPA: "TARGET_CPA",
@@ -282,6 +296,13 @@ const TERM_MATCH: Record<string, SearchTerm["matchedVia"]> = {
 export const searchTermId = (row: GaqlRow) =>
   `${str(row.adGroup?.id || row.campaign?.id)}~${str(row.segments?.searchTermMatchType)}~${str(row.searchTermView?.searchTerm)}`;
 
+function dailyOf(rows: GaqlRow[]): DailyPoint[] {
+  return rows
+    .filter((r) => r.segments?.date)
+    .map((r) => ({ date: str(r.segments.date), ...metricsOf(r) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 /**
  * Exact totals for the chosen range, plus traffic share / conversion efficiency
  * per child so other ranges can still be estimated from the campaign's daily data.
@@ -374,9 +395,21 @@ export function buildLiveAccount(account: GoogleAccount, rows: LiveRows, range: 
     termChildren.push({ id, parent: adGroupId || campaignId, m: metricsOf(r) });
   }
 
-  const all = [...adGroupChildren, ...keywordChildren, ...adChildren, ...termChildren];
+  const inAccount = <T extends { campaignId: string }>(list: T[]) => list.filter((x) => campaignIds.has(x.campaignId));
+  const assetGroups = inAccount(mapAssetGroups(rows));
+  const assetGroupIds = new Set(assetGroups.map((g) => g.id));
+  const assetGroupChildren = (rows.assetGroupMetrics ?? [])
+    .filter((r) => assetGroupIds.has(str(r.assetGroup?.id)))
+    .map((r) => ({ id: str(r.assetGroup.id), parent: assetGroups.find((g) => g.id === str(r.assetGroup.id))!.campaignId, m: metricsOf(r) }));
+  const { audiences, audienceTargets } = mapAudiences(rows);
+  const library = mapLibrary(rows, BIDDING);
+
+  const all = [...adGroupChildren, ...keywordChildren, ...adChildren, ...termChildren, ...assetGroupChildren];
   for (const c of all) exact[c.id] = c.m;
-  const weights = { ...weightsFrom(adGroupChildren), ...weightsFrom(keywordChildren), ...weightsFrom(adChildren) };
+  // Same ids as the placements and product groups they belong to (see live-structure).
+  for (const r of [...(rows.placementMetrics ?? []), ...(rows.topicMetrics ?? [])]) exact[`${str(r.adGroup?.id)}-${str(r.adGroupCriterion?.criterionId)}`] = metricsOf(r);
+  for (const r of rows.productGroupMetrics ?? []) exact[str(r.adGroupCriterion?.criterionId)] = metricsOf(r);
+  const weights = { ...weightsFrom(assetGroupChildren), ...weightsFrom(adGroupChildren), ...weightsFrom(keywordChildren), ...weightsFrom(adChildren) };
   const termWeights = weightsFrom(termChildren);
   for (const t of searchTerms) Object.assign(t, termWeights[t.id] ?? { share: 0, efficiency: 0 });
 
@@ -384,20 +417,34 @@ export function buildLiveAccount(account: GoogleAccount, rows: LiveRows, range: 
     ...buildEmptyAccount(),
     account: {
       ...account,
+      // Google's own values: the saved ones are blank for accounts opened through a manager.
+      name: str(customer.descriptiveName) || account.name,
+      currency: str(customer.currencyCode) || account.currency,
+      timeZone: str(customer.timeZone) || account.timeZone,
       optimizationScore: customer.optimizationScore != null ? num(customer.optimizationScore) : account.optimizationScore,
       autoTagging: customer.autoTaggingEnabled ?? account.autoTagging,
     },
-    campaigns,
+    campaigns: applyTargeting(campaigns, rows),
     budgets,
     adGroups,
     keywords,
     negatives,
     ads,
     searchTerms,
-    audiences: [],
-    conversions: [],
-    // Not loaded from Google yet: empty rather than the template's "not linked" placeholders.
-    links: [],
+    searchTermsCapped: rows.searchTerms.length >= SEARCH_TERMS_LIMIT,
+    accountDaily: rows.customerDaily ? dailyOf(rows.customerDaily) : undefined,
+    assetGroups,
+    assets: mapAssets(rows).filter((a) => a.level === "ACCOUNT" || (a.level === "CAMPAIGN" ? campaignIds.has(a.parentId!) : adGroupIds.has(a.parentId!))),
+    audiences,
+    audienceTargets: audienceTargets.filter((t) => (t.level === "CAMPAIGN" ? campaignIds.has(t.parentId) : adGroupIds.has(t.parentId))),
+    listingGroups: inAccount(mapListingGroups(rows)),
+    contentTargets: inAccount(mapContentTargets(rows)),
+    experiments: mapExperiments(rows).filter((e) => !e.baseCampaignId || campaignIds.has(e.baseCampaignId)),
+    ...library,
+    conversions: mapConversions(rows.conversions ?? [], rows.conversionCounts ?? []),
+    recommendations: mapRecommendations(rows.recommendations ?? []),
+    // Only links Google reports: a missing one isn't shown as "not linked".
+    links: mapLinks(rows),
     daily,
     weights,
     exact: { start: range.start, end: range.end, byId: exact },

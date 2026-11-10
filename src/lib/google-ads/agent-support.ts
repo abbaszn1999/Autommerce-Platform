@@ -3,6 +3,8 @@
 // its approval card shows. No network here; the server routes call these.
 
 import { adGroupBase, campaignBase, derive, keywordBase, searchTermBase } from "./metrics";
+import { isCreateOp } from "./live-create";
+import { describeCreate } from "./live-create-describe";
 import type { BeforeState } from "./live-mutate";
 import type { AccountData, MutateOp } from "./types";
 
@@ -102,7 +104,11 @@ export function describeLiveChange(ops: MutateOp[], before: BeforeState, currenc
   const adGroup = (id: string) => before.adGroups[id]?.name ?? `Ad group ${id}`;
   const items: PreviewItem[] = [];
   const push = (id: string, label: string, field: string, from?: string, to?: string) => items.push({ id, label, changes: [{ field, before: from, after: to }] });
-  for (const op of ops) {
+  for (const [n, op] of ops.entries()) {
+    if (isCreateOp(op)) {
+      items.push(...describeCreate(op, before, currency, n));
+      continue;
+    }
     switch (op.kind) {
       case "status.set":
         for (const id of op.ids) {

@@ -3,14 +3,16 @@
 import { useMemo, useState } from "react";
 import { Bot, Globe, MonitorPlay, Tag, Users2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { contentMetrics, segmentRows } from "@/lib/google-ads/analytics";
+import { contentMetrics } from "@/lib/google-ads/analytics";
 import { formatMetric } from "@/lib/google-ads/metrics";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import type { ContentTarget } from "@/lib/google-ads/types";
 import { metricColumns } from "../ga-columns";
 import { GaTable, type GaColumn } from "../ga-table";
 import { EmptyState, Pill, Segmented, SelectBox, ViewHeader } from "../ga-ui";
+import { useGoogleAds } from "@/lib/google-ads/store";
 import { useGa } from "../use-ga";
+import { SegmentNotice, hasNotice, useSegmentRows } from "../use-segment";
 
 const KIND: Record<ContentTarget["kind"], { label: string; icon: LucideIcon }> = {
   PLACEMENT: { label: "Website / app", icon: Globe },
@@ -95,19 +97,22 @@ const DEMO_GRID = "grid grid-cols-[72px_repeat(4,minmax(0,1fr))_72px] items-cent
 
 /** Read-only: exclusions and bid adjustments are changed by asking the agent. */
 export function DemographicsView() {
-  const { data, range, currency, campaign } = useGa();
+  const { data, currency, campaign } = useGa();
+  // Bid adjustments per age and gender aren't read from a live account yet.
+  const live = useGoogleAds((s) => s.mode === "live");
   const eligible = data.campaigns.filter((c) => c.status !== "REMOVED" && c.type !== "PERFORMANCE_MAX" && c.type !== "SHOPPING");
   const [cid, setCid] = useState(campaign && eligible.some((c) => c.id === campaign.id) ? campaign.id : eligible[0]?.id ?? "");
   const selectedCampaign = data.campaigns.find((c) => c.id === cid);
-  const ageRows = useMemo(() => (cid ? segmentRows(data, range, "age", [cid]) : []), [data, range, cid]);
-  const genderRows = useMemo(() => (cid ? segmentRows(data, range, "gender", [cid]) : []), [data, range, cid]);
+  const ids = useMemo(() => [cid], [cid]);
+  const age = useSegmentRows("age", ids);
+  const gender = useSegmentRows("gender", ids);
 
   if (!selectedCampaign) return <div><ViewHeader title="Demographics" /><EmptyState icon={Users2} title="No campaigns that support demographics" body="Performance Max and Shopping use audience signals instead." /></div>;
 
   const smart = !["MANUAL_CPC"].includes(selectedCampaign.bidding.type);
   const record = (kind: "AGE" | "GENDER", value: string) => data.demographics.find((d) => d.campaignId === cid && d.kind === kind && d.value === value);
 
-  const block = (kind: "AGE" | "GENDER", values: string[], rows: ReturnType<typeof segmentRows>) => (
+  const block = (kind: "AGE" | "GENDER", values: string[], load: ReturnType<typeof useSegmentRows>) => (
     <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
       <p className="border-b border-border/60 px-4 py-3 text-sm font-bold">{kind === "AGE" ? "Age" : "Gender"}</p>
       <div className={cn(DEMO_GRID, "border-b border-border/40 bg-muted/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground")}>
@@ -118,11 +123,12 @@ export function DemographicsView() {
         <span className="text-right">ROAS</span>
         <span className="text-right">Bid adj.</span>
       </div>
-      <div className="divide-y divide-border/40">
+      {hasNotice(load) && <div className="p-4"><SegmentNotice load={load} /></div>}
+      <div className={cn("divide-y divide-border/40", hasNotice(load) && "hidden")}>
         {values.map((v) => {
           const d = record(kind, v);
           const excluded = !!d?.excluded;
-          const m = rows.find((r) => r.key === v)?.metrics;
+          const m = load.rows.find((r) => r.key === v)?.metrics;
           const bid = d?.bidModifier;
           return (
             <div key={v} className={cn(DEMO_GRID, "px-4 py-2.5 text-xs", excluded && "opacity-60")}>
@@ -138,7 +144,7 @@ export function DemographicsView() {
                 <span className="col-span-4 text-right text-muted-foreground">{excluded ? "Excluded from targeting" : "—"}</span>
               )}
               <span className="text-right text-[11px] text-muted-foreground">
-                {excluded ? <Pill tone="bad">Excluded</Pill> : bid ? <span className="font-semibold text-foreground">{bid > 0 ? "+" : ""}{Math.round(bid * 100)}%</span> : "None"}
+                {excluded ? <Pill tone="bad">Excluded</Pill> : bid ? <span className="font-semibold text-foreground">{bid > 0 ? "+" : ""}{Math.round(bid * 100)}%</span> : live ? "—" : "None"}
               </span>
             </div>
           );
@@ -162,8 +168,8 @@ export function DemographicsView() {
       </ViewHeader>
       {smart && <p className="text-[11px] text-muted-foreground"><Pill tone="info">Smart Bidding</Pill> adjusts bids by demographic automatically; exclusions still apply.</p>}
       <div className="grid gap-4 xl:grid-cols-2">
-        {block("AGE", AGE, ageRows)}
-        {block("GENDER", GENDER, genderRows)}
+        {block("AGE", AGE, age)}
+        {block("GENDER", GENDER, gender)}
       </div>
     </div>
   );

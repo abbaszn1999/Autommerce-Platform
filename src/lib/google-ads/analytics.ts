@@ -231,6 +231,8 @@ export function productsInGroup(data: AccountData, groupId: string): Product[] {
 }
 
 export function groupMetrics(data: AccountData, groupId: string, metrics: Map<string, Metrics>): Metrics {
+  // Live: Google reports each product group's numbers directly.
+  if (data.exact) return derive(data.exact.byId[groupId] ?? EMPTY_BASE);
   const base = productsInGroup(data, groupId).reduce((s, p) => addBase(s, metrics.get(p.id) ?? EMPTY_BASE), EMPTY_BASE);
   return derive(base);
 }
@@ -252,6 +254,11 @@ export function catalogFix(p: Product): Product {
 
 export function contentMetrics(data: AccountData, range: DateRange, targets: ContentTarget[]): Map<string, Metrics> {
   const out = new Map<string, Metrics>();
+  // Live: Google's own numbers per placement and topic.
+  if (data.exact) {
+    for (const t of targets) out.set(t.id, derive(data.exact.byId[t.id] ?? EMPTY_BASE));
+    return out;
+  }
   const byCampaign = new Map<string, ContentTarget[]>();
   for (const t of targets) byCampaign.set(t.campaignId, [...(byCampaign.get(t.campaignId) ?? []), t]);
   for (const [cid, list] of byCampaign) {

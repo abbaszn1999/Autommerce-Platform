@@ -8,8 +8,8 @@ import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight } from "luc
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DATE_PRESETS, MAX_RANGE_DAYS } from "@/lib/google-ads/constants";
-import { addDays, customRange, formatRange, isoDay, rangeDays, rangeFor, rangeLabel } from "@/lib/google-ads/metrics";
-import { useGoogleAds } from "@/lib/google-ads/store";
+import { addDays, customRange, formatRange, isoDay, rangeDays, rangeFor, rangeLabel, todayIn } from "@/lib/google-ads/metrics";
+import { useGoogleAds, useAccountData } from "@/lib/google-ads/store";
 import type { DateRangePreset } from "@/lib/google-ads/types";
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -92,7 +92,8 @@ export function GaDateRange() {
   const range = useGoogleAds((s) => s.range);
   const setRange = useGoogleAds((s) => s.setRange);
   const [open, setOpen] = useState(false);
-  const today = isoDay(new Date());
+  const timeZone = useAccountData()?.account.timeZone;
+  const today = todayIn(timeZone);
   // What is being picked: a start, then an end. Starts from the current range.
   const [start, setStart] = useState<string | null>(range.start);
   const [end, setEnd] = useState<string | null>(range.end);

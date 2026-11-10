@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Check, KeyRound, Lock, Megaphone, RefreshCw, ShoppingBag, Unplug } from "lucide-react";
+import { liveApi, type LiveConnections } from "@/lib/google-ads/live-api";
 import { cn } from "@/lib/utils";
 import { formatCustomerId } from "@/lib/google-ads/metrics";
 import { MERCHANT_SCOPE, merchantLinkState } from "@/lib/google-ads/merchant";
@@ -30,9 +32,24 @@ export function ConnectionsView() {
   const changeMerchantAccount = useGoogleAds((s) => s.changeMerchantAccount);
   const disconnectMerchant = useGoogleAds((s) => s.disconnectMerchant);
   const live = useGoogleAds((s) => s.mode === "live");
+  const workspaceId = useGoogleAds((s) => s.workspaceId);
+  const [people, setPeople] = useState<LiveConnections | null>(null);
+  useEffect(() => {
+    if (!live || !workspaceId) return;
+    let active = true;
+    liveApi.connections(workspaceId).then((c) => active && setPeople(c), () => undefined);
+    return () => {
+      active = false;
+    };
+  }, [live, workspaceId]);
+  const adsBy = people?.configured ? people.ads.connectedBy : null;
+  const merchantBy = people?.configured ? people.merchant.connectedBy : null;
 
   const mc = merchant.accounts.find((a) => a.merchantId === merchant.merchantId);
-  const link = mc && !live ? merchantLinkState(data.account.merchantCenterId, mc.merchantId) : null;
+  // Live: the ad account's Merchant Center links as Google reports them.
+  const linkedIds = data.links.filter((l) => l.kind === "MERCHANT_CENTER" && l.status === "LINKED").map((l) => l.externalId);
+  const link = !mc ? null : live ? (linkedIds.includes(mc.merchantId) ? "LINKED" : merchantLinkState(linkedIds[0], mc.merchantId)) : merchantLinkState(data.account.merchantCenterId, mc.merchantId);
+  const otherMerchant = live ? linkedIds[0] : data.account.merchantCenterId;
 
   // Live: the current connection stays until the new sign-in succeeds.
   const reconnectAds = () => {
@@ -43,6 +60,12 @@ export function ConnectionsView() {
   return (
     <div className="space-y-4">
       <ViewHeader title="Connections" subtitle="Review what the agent can reach. This workspace uses one ad account. Google Ads and Merchant Center are connected separately, so you can change or reconnect either one at any time." />
+
+      {[adsBy && !adsBy.onTeam ? "Google Ads" : null, merchantBy && !merchantBy.onTeam ? "Merchant Center" : null].filter(Boolean).map((what) => (
+        <p key={what} role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+          {what} still uses the Google sign-in of {what === "Google Ads" ? adsBy?.name : merchantBy?.name}, who is no longer on this team. Reconnect it with your own Google account so their access isn&apos;t used.
+        </p>
+      ))}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="space-y-4 p-4">
@@ -59,6 +82,7 @@ export function ConnectionsView() {
           <dl className="space-y-2 text-xs">
             {!live && <Row k="Signed in as" v={email ?? "-"} />}
             <Row k="Ad account" v={`${data.account.name} · ${formatCustomerId(data.account.customerId)}`} />
+            {adsBy && <Row k="Uses the Google sign-in of" v={adsBy.name} />}
             <Row k="Access" v={<code className="rounded bg-muted px-1 text-[10px]">{ADS_SCOPE}</code>} />
           </dl>
           <div className="flex flex-wrap gap-2 border-t border-border/60 pt-3">
@@ -88,6 +112,7 @@ export function ConnectionsView() {
               <dl className="space-y-2 text-xs">
                 {!live && <Row k="Signed in as" v={merchant.email ?? "-"} />}
                 <Row k="Account" v={`${mc.name} · ${mc.merchantId}`} />
+                {merchantBy && <Row k="Uses the Google sign-in of" v={merchantBy.name} />}
                 {(mc.website || mc.country) && <Row k="Store" v={[mc.website, mc.country].filter(Boolean).join(" · ")} />}
                 <Row k="Access" v={<code className="rounded bg-muted px-1 text-[10px]">{MERCHANT_SCOPE}</code>} />
                 <Row
@@ -96,7 +121,7 @@ export function ConnectionsView() {
                     link === "LINKED" ? (
                       <Pill tone="good">Yes</Pill>
                     ) : link === "OTHER" ? (
-                      <Pill tone="warn">Linked to {data.account.merchantCenterId}</Pill>
+                      <Pill tone="warn">Linked to {otherMerchant}</Pill>
                     ) : (
                       <Pill tone="warn">Not linked</Pill>
                     )

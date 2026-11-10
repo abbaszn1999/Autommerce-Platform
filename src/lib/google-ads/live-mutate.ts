@@ -14,8 +14,10 @@
 // - amounts are rounded to the currency's billable unit, as Google requires.
 
 import type { Bidding, EntityStatus, Keyword, MatchType, MutateOp, NegativeKeyword } from "./types";
+import { EXPERIMENT_OPS, isExperimentOp } from "./live-experiment";
+import { CREATE_OPS, CreatePlanError, emptyCreateState, inverseForCreatedResources, isCreateOp, planCreate, type CreateState } from "./live-create";
 
-export const LIVE_OPS = ["status.set", "budget.update", "campaign.update", "adGroup.update", "keyword.create", "keyword.update", "negative.create", "negative.remove"] as const;
+export const LIVE_OPS = ["status.set", "budget.update", "campaign.update", "adGroup.update", "keyword.create", "keyword.update", "negative.create", "negative.remove", ...CREATE_OPS, ...EXPERIMENT_OPS] as const;
 
 /** A raise beyond this multiple of the current budget or bid must be done in steps. */
 export const MAX_RAISE = 3;
@@ -36,6 +38,8 @@ export type BeforeState = {
   createdKeywordIds: Set<string>;
   /** The account's budgets, when the business profile has a monthly cap and the change could spend more. */
   spend?: SpendState;
+  /** What creating things needs: images, asset groups, targeting, what this app created. */
+  create?: CreateState;
 };
 
 export type SpendState = {
@@ -50,7 +54,7 @@ export type SpendState = {
 const DAYS_PER_MONTH = 30.4;
 
 /** Which created resource each operation's result belongs to, so the server can read back new ids. */
-export type CreatedRef = { index: number; kind: "keyword" | "adGroupNegative" | "campaignNegative"; ref: string };
+export type CreatedRef = { index: number; kind: "keyword" | "adGroupNegative" | "campaignNegative" | "resource"; ref: string };
 
 export type LivePlan = {
   operations: Record<string, unknown>[];
@@ -119,11 +123,34 @@ export function planLiveChange(customerId: string, ops: MutateOp[], before: Befo
   const inverse: MutateOp[] = [];
   const created: CreatedRef[] = [];
   const warnings: string[] = [];
+  const temp = { next: -1 };
   const update = (family: string, resource: Record<string, unknown>, mask: string[]) =>
     operations.push({ [family]: { update: resource, updateMask: mask.join(",") } });
 
   for (const op of ops) {
     if (!(LIVE_OPS as readonly string[]).includes(op.kind)) throw new LivePlanError(`"${op.kind}" can't be sent to Google Ads yet.`);
+    // Experiments run as their own steps (live-experiment.server); they can't be a plan step.
+    if (isExperimentOp(op)) throw new LivePlanError("An experiment is started from the chat on its own, not inside a plan or with other edits.");
+    if (isCreateOp(op)) {
+      try {
+        planCreate(op, {
+          customerId,
+          before,
+          state: before.create ?? emptyCreateState(),
+          undo: !!opts.undo,
+          operations,
+          inverse: inverse as never,
+          created,
+          warnings,
+          toMicros: (amount) => toMicros(amount, before.billableUnitMicros),
+          temp,
+        });
+      } catch (err) {
+        if (err instanceof CreatePlanError) throw new LivePlanError(err.message);
+        throw err;
+      }
+      continue;
+    }
 
     switch (op.kind) {
       case "status.set": {
@@ -377,10 +404,12 @@ export function planLiveChange(customerId: string, ops: MutateOp[], before: Befo
 }
 
 /** Undo ops for what a change created, once Google has returned the new resource names. */
-export function inverseForCreated(created: CreatedRef[], resourceNames: (string | undefined)[]): { inverse: MutateOp[]; keywordIds: string[] } {
+export function inverseForCreated(created: CreatedRef[], resourceNames: (string | undefined)[]): { inverse: MutateOp[]; keywordIds: string[]; resources: string[] } {
   const keywordIds: string[] = [];
   const negativeIds: string[] = [];
+  const made = inverseForCreatedResources(created, resourceNames);
   for (const c of created) {
+    if (c.kind === "resource") continue;
     const id = resourceNames[c.index]?.split("/").pop();
     if (!id || !PAIR.test(id)) continue;
     if (c.kind === "keyword") keywordIds.push(id);
@@ -389,7 +418,8 @@ export function inverseForCreated(created: CreatedRef[], resourceNames: (string 
   const inverse: MutateOp[] = [];
   if (keywordIds.length) inverse.push({ kind: "status.set", entity: "KEYWORD", ids: keywordIds, status: "REMOVED" });
   if (negativeIds.length) inverse.push({ kind: "negative.remove", ids: negativeIds });
-  return { inverse, keywordIds };
+  inverse.unshift(...(made.inverse as MutateOp[]));
+  return { inverse, keywordIds, resources: made.resources };
 }
 
 /** Resource name of each operation's result, in operation order. */

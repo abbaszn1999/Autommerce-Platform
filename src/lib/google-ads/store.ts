@@ -5,7 +5,7 @@
 // POST to /api/google-ads/mutate and account data comes from the report cache.
 
 import { create } from "zustand";
-import { customRange, rangeFor } from "./metrics";
+import { customRange, rangeFor, todayIn } from "./metrics";
 import { MANAGER_ACCOUNT, MERCHANT_ACCOUNTS, buildDemoAccount, buildEmptyAccount, buildSecondAccount, DEMO_GOOGLE_EMAIL } from "./mock-data";
 import { LANDING_PAGE_TYPES } from "./constants";
 import { freshSync, getDataSource, liveDataSource, setDataSource, type SyncState } from "./data-source";
@@ -708,6 +708,15 @@ export const useGoogleAds = create<GaStore>((set, get) => {
       // Keep any change made while loading unless the source returned a new snapshot.
       patch({ status: "ready", refreshedAt: new Date().toISOString(), error: undefined, pending: false }, next === acc.data ? undefined : next);
       if (get().mode === "live") void loadLiveHistory(id);
+      // The account's own day can differ from the browser's: follow it, once its time zone is known.
+      const now = get().range;
+      if (get().mode === "live" && now.preset !== "CUSTOM" && get().customerId === id) {
+        const right = rangeFor(now.preset, todayIn(next.account.timeZone));
+        if (right.start !== now.start || right.end !== now.end) {
+          set({ range: right });
+          reloadAfter.add(id);
+        }
+      }
     } catch (err) {
       patch({ status: "error", error: (err as Error).message || "Could not load this account." });
     }
@@ -722,7 +731,7 @@ export const useGoogleAds = create<GaStore>((set, get) => {
     }),
 
   setRange: (next) => {
-    const range = typeof next === "string" ? rangeFor(next) : customRange(next.start, next.end);
+    const range = typeof next === "string" ? rangeFor(next, todayIn(current(get())?.data.account.timeZone)) : customRange(next.start, next.end);
     if (range.start === get().range.start && range.end === get().range.end && range.preset === get().range.preset) return;
     set({ range });
     // Live: per-keyword and per-ad totals are exact for one range, so load the new one.

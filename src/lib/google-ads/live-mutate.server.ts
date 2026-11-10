@@ -8,8 +8,13 @@ import { ConnectionHttpError, batchMutate, searchGaql, type ConnectionRow } from
 import { forgetLiveAccount } from "./live-report.server";
 import { forgetReports } from "./live-reports.server";
 import { loadProfile } from "../business-profile.server";
-import { LivePlanError, inverseForCreated, planLiveChange, resultNames, type BeforeState, type SpendState } from "./live-mutate";
+import { LivePlanError, inverseForCreated, planLiveChange, resultNames, toMicros, type BeforeState, type SpendState } from "./live-mutate";
 import type { GaqlRow } from "./live-report";
+import { emptyCreateState, imageUrls, type CreateState } from "./live-create";
+import { fetchImages } from "./image-fetch.server";
+import { ExperimentPlanError, isExperimentOp, planExperiment } from "./live-experiment";
+import { runExperiment } from "./live-experiment.server";
+import { todayIn } from "./metrics";
 import type { EntityStatus, MatchType, MutateOp } from "./types";
 
 export type LiveChangeInput = {
@@ -31,6 +36,9 @@ const PAIR = /^\d{1,20}~\d{1,20}$/;
 /** Google's own words from a failed request, without the generic wrapper text. */
 export function googleMessage(detail: string | undefined): string {
   if (!detail) return "Google Ads refused the change.";
+  // A linked account Google can't reach: almost always a Merchant Center link that isn't active.
+  const missing = /RESOURCE_NOT_FOUND[\s\S]{0,200}?"int64Value"\s*:\s*"(\d{6,15})"/.exec(detail);
+  if (missing) return `Google can't reach account ${missing[1]} from this ad account. If it is your Merchant Center, the link isn't active yet: accept it in Merchant Center (Settings → Linked accounts), then try again.`;
   const messages = [...detail.matchAll(/"message"\s*:\s*"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]!.replace(/\\"/g, '"'));
   const specific = messages.filter((m) => !/invalid argument|request contains/i.test(m));
   const pick = [...new Set(specific.length ? specific : messages)].slice(0, 3).join(" ");
@@ -43,7 +51,7 @@ const inList = (ids: Iterable<string>) => [...ids].filter((id) => ID.test(id)).j
 
 /** The account's budgets, when a monthly cap is set and these ops could spend more; otherwise nothing to check. */
 async function loadSpend(admin: SupabaseClient, row: ConnectionRow, customerId: string, ops: MutateOp[]): Promise<SpendState | undefined> {
-  if (!ops.some((op) => op.kind === "budget.update" || (op.kind === "status.set" && op.entity === "CAMPAIGN" && op.status === "ENABLED"))) return undefined;
+  if (!ops.some((op) => op.kind === "budget.update" || op.kind === "campaign.new" || (op.kind === "status.set" && op.entity === "CAMPAIGN" && op.status === "ENABLED"))) return undefined;
   const monthlyCap = (await loadProfile(admin, row.workspace_id)).values.monthlyBudgetCap;
   if (typeof monthlyCap !== "number" || monthlyCap <= 0) return undefined;
   const rows = await searchGaql<GaqlRow>(row, customerId, "SELECT campaign.id, campaign.status, campaign_budget.id, campaign_budget.amount_micros FROM campaign WHERE campaign.status != 'REMOVED'");
@@ -62,6 +70,7 @@ export async function fetchBefore(admin: SupabaseClient, row: ConnectionRow, cus
   const campaigns = new Set<string>();
   const budgets = new Set<string>();
   const adGroups = new Set<string>();
+  const assetGroups = new Set<string>();
   const parentOf = (pair: string) => (PAIR.test(pair) ? pair.split("~")[0]! : "");
   for (const op of ops) {
     if (op.kind === "status.set") {
@@ -82,6 +91,12 @@ export async function fetchBefore(admin: SupabaseClient, row: ConnectionRow, cus
         campaigns.add(parentOf(id));
         adGroups.add(parentOf(id));
       });
+    else if ("campaignId" in op && typeof op.campaignId === "string") campaigns.add(op.campaignId);
+    if (op.kind === "ad.new") adGroups.add(op.adGroupId);
+    if ((op.kind === "asset.new" || op.kind === "audience.add") && op.parentId) (op.level === "CAMPAIGN" ? campaigns : op.level === "AD_GROUP" ? adGroups : new Set<string>()).add(String(op.parentId));
+    if ((op.kind === "negativeList.new" || op.kind === "label.new") && Array.isArray(op.campaignIds)) op.campaignIds.forEach((id) => campaigns.add(String(id)));
+    if (op.kind === "assetGroupAsset.add" || op.kind === "searchTheme.add") assetGroups.add(op.assetGroupId);
+    if (op.kind === "assetGroupAsset.remove") op.ids.forEach((id) => assetGroups.add(String(id).split("~")[0] ?? ""));
   }
 
   const currency = /^[A-Z]{3}$/.test(row.account_currency ?? "") ? row.account_currency! : "USD";
@@ -100,11 +115,12 @@ export async function fetchBefore(admin: SupabaseClient, row: ConnectionRow, cus
     campaignIds
       ? q(`SELECT campaign.id, campaign.name, campaign.status, campaign.campaign_budget, campaign.bidding_strategy_type, campaign.target_cpa.target_cpa_micros,
              campaign.maximize_conversions.target_cpa_micros, campaign.target_roas.target_roas, campaign.maximize_conversion_value.target_roas
+             , campaign.advertising_channel_type, campaign.shopping_setting.merchant_id, campaign.targeting_setting.target_restrictions
            FROM campaign WHERE campaign.id IN (${campaignIds})`)
       : none,
     budgetIds ? q(`SELECT campaign_budget.id, campaign_budget.amount_micros, campaign_budget.explicitly_shared FROM campaign_budget WHERE campaign_budget.id IN (${budgetIds})`) : none,
     adGroupIds
-      ? q(`SELECT ad_group.id, ad_group.name, ad_group.status, campaign.id, ad_group.cpc_bid_micros, ad_group.target_cpa_micros FROM ad_group WHERE ad_group.id IN (${adGroupIds})`)
+      ? q(`SELECT ad_group.id, ad_group.name, ad_group.status, campaign.id, campaign.advertising_channel_type, ad_group.cpc_bid_micros, ad_group.target_cpa_micros, ad_group.targeting_setting.target_restrictions FROM ad_group WHERE ad_group.id IN (${adGroupIds})`)
       : none,
     adGroupIds
       ? q(`SELECT ad_group.id, ad_group_criterion.criterion_id, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.negative,
@@ -168,7 +184,114 @@ export async function fetchBefore(admin: SupabaseClient, row: ConnectionRow, cus
     const k = r.campaignCriterion ?? {};
     before.campaignNegatives[`${r.campaign?.id}~${k.criterionId}`] = { text: String(k.keyword?.text ?? ""), matchType: String(k.keyword?.matchType ?? "") as MatchType };
   }
+  if (ops.some((op) => !["status.set", "budget.update", "campaign.update", "adGroup.update", "keyword.create", "keyword.update", "negative.create", "negative.remove"].includes(op.kind)))
+    before.create = await loadCreateState(row, customerId, ops, { campaignRows: cRows, adGroupRows: gRows, assetGroupIds: inList(assetGroups), created: (created.data ?? []).flatMap((r) => (Array.isArray(r.created_ids) ? (r.created_ids as string[]) : [])) });
   return before;
+}
+
+/** What creating things needs to know: campaign types, asset groups, targeting, images, what this app created. */
+async function loadCreateState(
+  row: ConnectionRow,
+  customerId: string,
+  ops: MutateOp[],
+  given: { campaignRows: GaqlRow[]; adGroupRows: GaqlRow[]; assetGroupIds: string; created: string[] }
+): Promise<CreateState> {
+  const state = emptyCreateState();
+  const q = (query: string) => searchGaql<GaqlRow>(row, customerId, query);
+  const targetingCampaigns = inList(ops.flatMap((op) => (op.kind === "targeting.remove" || op.kind === "device.set" ? [op.campaignId] : [])));
+  const [groups, links, criteria, downloaded] = await Promise.all([
+    given.assetGroupIds ? q(`SELECT asset_group.id, asset_group.name, asset_group.campaign FROM asset_group WHERE asset_group.id IN (${given.assetGroupIds})`) : Promise.resolve([] as GaqlRow[]),
+    given.assetGroupIds
+      ? q(`SELECT asset_group.id, asset.id, asset_group_asset.field_type, asset.text_asset.text FROM asset_group_asset WHERE asset_group_asset.status != 'REMOVED' AND asset_group.id IN (${given.assetGroupIds})`)
+      : Promise.resolve([] as GaqlRow[]),
+    targetingCampaigns
+      ? q(`SELECT campaign.id, campaign_criterion.criterion_id, campaign_criterion.type, campaign_criterion.negative, campaign_criterion.bid_modifier,
+             campaign_criterion.location.geo_target_constant, campaign_criterion.language.language_constant, campaign_criterion.device.type,
+             campaign_criterion.ad_schedule.day_of_week, campaign_criterion.ad_schedule.start_hour, campaign_criterion.ad_schedule.end_hour
+           FROM campaign_criterion WHERE campaign_criterion.type IN ('LOCATION', 'LANGUAGE', 'AD_SCHEDULE', 'DEVICE') AND campaign.id IN (${targetingCampaigns})`)
+      : Promise.resolve([] as GaqlRow[]),
+    fetchImages(imageUrls(ops)),
+  ]);
+  state.images = downloaded.images;
+  if (ops.some((op) => op.kind === "campaign.new" && op.merchantId !== undefined)) {
+    const links = await q("SELECT product_link.merchant_center.merchant_center_id FROM product_link").catch(() => null);
+    state.merchantLinks = links ? links.map((r) => String(r.productLink?.merchantCenter?.merchantCenterId ?? "")).filter(Boolean) : null;
+  }
+  for (const r of given.campaignRows) {
+    const id = String(r.campaign?.id);
+    state.campaignTypes[id] = String(r.campaign?.advertisingChannelType ?? "");
+    if (r.campaign?.shoppingSetting?.merchantId) state.retailCampaigns.add(id);
+    state.restrictions[`CAMPAIGN:${id}`] = r.campaign?.targetingSetting?.targetRestrictions ?? [];
+  }
+  for (const r of given.adGroupRows) {
+    if (r.campaign?.id) state.campaignTypes[String(r.campaign.id)] ??= String(r.campaign?.advertisingChannelType ?? "");
+    state.restrictions[`AD_GROUP:${r.adGroup?.id}`] = r.adGroup?.targetingSetting?.targetRestrictions ?? [];
+  }
+  for (const r of groups) state.assetGroups[String(r.assetGroup?.id)] = { name: String(r.assetGroup?.name ?? ""), campaignId: String(r.assetGroup?.campaign ?? "").split("/").pop() ?? "" };
+  for (const r of links) state.assetGroupAssets[`${r.assetGroup?.id}~${r.asset?.id}~${r.assetGroupAsset?.fieldType}`] = { text: r.asset?.textAsset?.text };
+  for (const r of criteria) {
+    const c = r.campaignCriterion ?? {};
+    const s = c.adSchedule;
+    state.targeting[`${r.campaign?.id}~${c.criterionId}`] = {
+      type: String(c.type ?? ""),
+      negative: !!c.negative,
+      ...(c.bidModifier != null ? { bidModifier: Number(c.bidModifier) } : {}),
+      ...(c.location?.geoTargetConstant ? { geoId: String(c.location.geoTargetConstant).split("/").pop() } : {}),
+      ...(c.language?.languageConstant ? { languageId: String(c.language.languageConstant).split("/").pop() } : {}),
+      ...(c.device?.type ? { device: String(c.device.type) } : {}),
+      ...(s ? { slot: { day: String(s.dayOfWeek), startHour: Number(s.startHour ?? 0), endHour: Number(s.endHour ?? 24), ...(c.bidModifier != null && Number(c.bidModifier) !== 1 ? { bidModifier: Math.round((Number(c.bidModifier) - 1) * 100) / 100 } : {}) } } : {}),
+    };
+  }
+  state.createdResources = new Set(given.created.filter((r) => r.startsWith(`customers/${customerId}/`)));
+  state.names = await targetNames(row, customerId, ops, state);
+  return state;
+}
+
+/** Names of the locations, languages and audience lists a change uses, for its card. Ids stay when Google doesn't answer. */
+async function targetNames(row: ConnectionRow, customerId: string, ops: MutateOp[], state: CreateState): Promise<Record<string, string>> {
+  const geo = new Set<string>();
+  const languages = new Set<string>();
+  const lists = new Set<string>();
+  const add = (set: Set<string>, values: unknown) => (Array.isArray(values) ? values : []).forEach((v) => ID.test(String(v)) && set.add(String(v)));
+  for (const op of ops) {
+    if (op.kind === "campaign.new") {
+      add(geo, op.locations);
+      add(geo, op.excludedLocations);
+      add(languages, op.languages);
+    } else if (op.kind === "location.add") add(geo, op.geoIds);
+    else if (op.kind === "language.add") add(languages, op.languageIds);
+    else if (op.kind === "audience.add") add(lists, op.userListIds);
+  }
+  for (const t of Object.values(state.targeting)) {
+    if (t.geoId) geo.add(t.geoId);
+    if (t.languageId) languages.add(t.languageId);
+  }
+  const names: Record<string, string> = {};
+  const read = async (query: string, put: (r: GaqlRow) => void) => {
+    try {
+      (await searchGaql<GaqlRow>(row, customerId, query, 2)).forEach(put);
+    } catch {
+      // The card shows ids instead.
+    }
+  };
+  await Promise.all([
+    geo.size
+      ? read(`SELECT geo_target_constant.id, geo_target_constant.canonical_name FROM geo_target_constant WHERE geo_target_constant.id IN (${[...geo].slice(0, 300).join(", ")})`, (r) => {
+          names[`location:${r.geoTargetConstant?.id}`] = String(r.geoTargetConstant?.canonicalName ?? "");
+        })
+      : null,
+    languages.size
+      ? read(`SELECT language_constant.id, language_constant.name FROM language_constant WHERE language_constant.id IN (${[...languages].join(", ")})`, (r) => {
+          names[`language:${r.languageConstant?.id}`] = String(r.languageConstant?.name ?? "");
+        })
+      : null,
+    lists.size
+      ? read(`SELECT user_list.id, user_list.name FROM user_list WHERE user_list.id IN (${[...lists].join(", ")})`, (r) => {
+          names[`list:${r.userList?.id}`] = String(r.userList?.name ?? "");
+        })
+      : null,
+  ]);
+  return names;
 }
 
 async function finish(admin: SupabaseClient, id: string, patch: Record<string, unknown>) {
@@ -254,13 +377,29 @@ export async function applyLiveChange(opts: {
 
   try {
     const before = await fetchBefore(admin, row, customerId, ops);
+    if (ops.some(isExperimentOp)) {
+      // Google's experiment steps, in order; a failed step removes what the earlier ones made.
+      let experiment;
+      try {
+        experiment = planExperiment(ops, before, before.create?.campaignTypes ?? {}, todayIn(row.account_time_zone), (n) => toMicros(n, before.billableUnitMicros));
+      } catch (err) {
+        if (err instanceof ExperimentPlanError) throw new LivePlanError(err.message);
+        throw err;
+      }
+      const ran = await runExperiment(row, customerId, experiment);
+      await finish(admin, claimed.id, { status: "applied", inverse: ran.inverse, created_ids: ran.created });
+      forgetLiveAccount(row.workspace_id);
+      forgetReports(row.workspace_id);
+      return { status: "applied", id: claimed.id, inverse: ran.inverse as MutateOp[], warnings: [] };
+    }
     const plan = planLiveChange(customerId, ops, before, { undo: !!undoOf });
     await finish(admin, claimed.id, { google_operations: plan.operations, warnings: plan.warnings });
     await batchMutate(row, customerId, plan.operations, { validateOnly: true });
     const response = await batchMutate(row, customerId, plan.operations, { validateOnly: false });
     const created = inverseForCreated(plan.created, resultNames(response));
     const inverse = [...created.inverse, ...plan.inverse];
-    await finish(admin, claimed.id, { status: "applied", inverse, created_ids: created.keywordIds });
+    // Keyword ids, and the full names of everything else this change created: only those may be removed by an undo.
+    await finish(admin, claimed.id, { status: "applied", inverse, created_ids: [...created.keywordIds, ...created.resources] });
     forgetLiveAccount(row.workspace_id);
     forgetReports(row.workspace_id);
     return { status: "applied", id: claimed.id, inverse, warnings: plan.warnings };

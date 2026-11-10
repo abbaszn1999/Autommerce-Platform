@@ -4,7 +4,9 @@
 
 import { Composio, AuthScheme } from "@composio/core";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase-server";
+import { PREVIEW_COOKIE, hasPreviewAccess } from "./preview-access";
 import { createAdminClient } from "@/lib/supabase-admin";
 
 export type ConnectionKind = "ads" | "merchant";
@@ -30,6 +32,7 @@ export type ConnectionRow = {
   account_name: string | null;
   account_currency: string | null;
   account_time_zone: string | null;
+  connected_by?: string | null;
 };
 
 /** What the browser may see about a connection: no Composio ids. */
@@ -40,7 +43,23 @@ export type ClientConnection = {
   accountName: string | null;
   currency: string | null;
   timeZone: string | null;
+  /** Whose Google sign-in the workspace uses, and whether they are still on the team. */
+  connectedBy?: { name: string; onTeam: boolean } | null;
 };
+
+/** Name of the person whose Google sign-in each connection uses, and whether they're still a member. */
+export async function connectedByInfo(admin: SupabaseClient, workspaceId: string, userIds: (string | null | undefined)[]): Promise<Map<string, { name: string; onTeam: boolean }>> {
+  const ids = [...new Set(userIds.filter((id): id is string => !!id))];
+  const out = new Map<string, { name: string; onTeam: boolean }>();
+  if (!ids.length) return out;
+  const [{ data: profiles }, { data: members }] = await Promise.all([
+    admin.from("profiles").select("id, full_name").in("id", ids),
+    admin.from("workspace_members").select("user_id").eq("workspace_id", workspaceId).in("user_id", ids),
+  ]);
+  const onTeam = new Set((members ?? []).map((m) => String(m.user_id)));
+  for (const id of ids) out.set(id, { name: String(profiles?.find((p) => p.id === id)?.full_name || "A former member"), onTeam: onTeam.has(id) });
+  return out;
+}
 
 export function toClientConnection(row: ConnectionRow | null | undefined): ClientConnection {
   if (!row?.composio_connected_account_id)
@@ -101,9 +120,13 @@ export function normalizeCustomerId(input: unknown): string | null {
   return /^\d{10}$/.test(digits) ? digits : null;
 }
 
-/** Signed-in member of the workspace (admin or owner when `admin` is set). */
-export async function requireConnectionAccess(workspaceId: string, opts: { admin?: boolean } = {}) {
+/**
+ * Signed-in member of the workspace (admin or owner when `admin` is set).
+ * Until launch, Google Ads routes answer only to browsers holding the preview cookie, like the page.
+ */
+export async function requireConnectionAccess(workspaceId: string, opts: { admin?: boolean; preview?: boolean } = {}) {
   if (!workspaceId) throw new ConnectionHttpError(400, "missing_workspace");
+  if (opts.preview !== false && !hasPreviewAccess((await cookies()).get(PREVIEW_COOKIE)?.value)) throw new ConnectionHttpError(404, "not_found");
   const supabase = await createClient();
   const {
     data: { user },
@@ -120,7 +143,28 @@ export async function requireConnectionAccess(workspaceId: string, opts: { admin
   return { user, admin, role: String(member.role) };
 }
 
+/** A change still "applying" after this long was cut off (the server restarted mid-send). */
+const STUCK_AFTER_MS = 10 * 60 * 1000;
+
+/**
+ * Closes changes a restart left "applying", so plan steps and retries aren't blocked forever.
+ * Google may or may not have received them; the message says to check before retrying.
+ */
+export async function closeStuckChanges(admin: SupabaseClient, workspaceId: string): Promise<void> {
+  const { data: closed } = await admin
+    .from("google_ads_changes")
+    .update({ status: "failed", error: "Interrupted while sending: Google may or may not have applied it. Refresh and check the account before trying again." })
+    .eq("workspace_id", workspaceId)
+    .eq("status", "applying")
+    .lt("created_at", new Date(Date.now() - STUCK_AFTER_MS).toISOString())
+    .select("undo_of");
+  // An interrupted undo releases the change it was undoing, so it can be undone again.
+  const undone = (closed ?? []).map((r) => r.undo_of).filter(Boolean);
+  if (undone.length) await admin.from("google_ads_changes").update({ undone_at: null }).in("id", undone);
+}
+
 export async function loadConnections(admin: SupabaseClient, workspaceId: string): Promise<Record<ConnectionKind, ConnectionRow | null>> {
+  await closeStuckChanges(admin, workspaceId).catch(() => undefined);
   const { data, error } = await admin.from("google_ads_connections").select("*").eq("workspace_id", workspaceId);
   if (error) throw new ConnectionHttpError(500, "load_failed");
   const rows = (data ?? []) as ConnectionRow[];
@@ -217,16 +261,38 @@ export async function completeConnection(admin: SupabaseClient, workspaceId: str
 export async function disconnect(admin: SupabaseClient, workspaceId: string, kind: ConnectionKind): Promise<void> {
   const row = await loadConnection(admin, workspaceId, kind);
   if (!row) return;
-  for (const id of [row.composio_connected_account_id, row.pending_connected_account_id]) if (id) await deleteComposioAccount(id);
+  // The Google tokens live at Composio: the row goes only once they are gone, so a failure can be retried.
+  for (const id of [row.composio_connected_account_id, row.pending_connected_account_id]) if (id) await deleteComposioAccount(id, { strict: true });
   const { error } = await admin.from("google_ads_connections").delete().eq("workspace_id", workspaceId).eq("kind", kind);
   if (error) throw new ConnectionHttpError(500, "save_failed");
 }
 
-async function deleteComposioAccount(id: string) {
+/**
+ * Before a workspace is deleted: remove every Google sign-in Composio holds for it
+ * (Composio's user id is the workspace id), including ones our table lost track of.
+ * Throws when one can't be removed, so the deletion stops and can be retried.
+ */
+export async function removeWorkspaceConnections(admin: SupabaseClient, workspaceId: string): Promise<number> {
+  if (!process.env.COMPOSIO_API_KEY) return 0;
+  const rows = Object.values(await loadConnections(admin, workspaceId)).filter((r): r is ConnectionRow => !!r);
+  const ids = new Set(rows.flatMap((r) => [r.composio_connected_account_id, r.pending_connected_account_id]).filter((id): id is string => !!id));
+  const { items } = await getComposio().connectedAccounts.list({ userIds: [workspaceId] });
+  for (const a of items) ids.add(a.id);
+  for (const id of ids) await deleteComposioAccount(id, { strict: true });
+  return ids.size;
+}
+
+const isNotFound = (err: unknown) => (err as { status?: number })?.status === 404 || /not.?found|404/i.test(String((err as Error)?.message ?? err));
+
+async function deleteComposioAccount(id: string, opts: { strict?: boolean } = {}) {
   try {
     await getComposio().connectedAccounts.delete(id);
-  } catch {
-    // Already gone, or Composio is down: the row is the source of truth for us.
+  } catch (err) {
+    // Already gone is done. Otherwise a strict delete (disconnect, workspace deletion) must not pretend it worked.
+    if (opts.strict && !isNotFound(err)) {
+      console.error("[google-ads] Composio delete failed:", (err as Error)?.message ?? err);
+      throw new ConnectionHttpError(502, "disconnect_failed");
+    }
   }
 }
 
@@ -239,7 +305,7 @@ export async function execute<T>(row: ConnectionRow, slug: string, args: Record<
     arguments: args,
     dangerouslySkipVersionCheck: true,
   });
-  if (!result.successful) throw new ConnectionHttpError(502, "google_request_failed", String(result.error ?? "").slice(0, 600));
+  if (!result.successful) throw new ConnectionHttpError(502, "google_request_failed", String(result.error ?? "").slice(0, 4000));
   return result.data as T;
 }
 
@@ -280,6 +346,16 @@ export async function searchGaql<T = Record<string, unknown>>(row: ConnectionRow
     if (!pageToken) break;
   }
   return rows;
+}
+
+/** An account's currency and time zone, from the account itself. Null when Google doesn't answer. */
+export async function adsAccountDetails(row: ConnectionRow, customerId: string): Promise<{ currency: string; timeZone: string } | null> {
+  try {
+    const [first] = await searchGaql<CustomerRow>(row, customerId, "SELECT customer.currency_code, customer.time_zone FROM customer LIMIT 1", 1);
+    return first?.customer?.currencyCode ? { currency: first.customer.currencyCode, timeZone: first.customer.timeZone ?? "" } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Why Google won't open an account, in words a store owner understands. */

@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   try {
     const params = request.nextUrl.searchParams;
     const workspaceId = params.get("workspaceId") ?? "";
-    const { admin, role } = await requireConnectionAccess(workspaceId);
+    const { admin, role } = await requireConnectionAccess(workspaceId, { preview: false });
     const status = await loadSetupStatus(admin, workspaceId);
     const show = canEdit(role) && status === null;
     if (!show || params.get("prefill") !== "1") return NextResponse.json({ show, status }, { headers: { "Cache-Control": "no-store" } });
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => ({}))) as { workspaceId?: string; status?: string; suggestions?: unknown };
     const workspaceId = body.workspaceId ?? "";
-    const { admin, user } = await requireConnectionAccess(workspaceId, { admin: true });
+    const { admin, user } = await requireConnectionAccess(workspaceId, { admin: true, preview: false });
     if (body.status !== "completed" && body.status !== "skipped") return NextResponse.json({ error: "invalid_request" }, { status: 400 });
 
     const suggestions = Array.isArray(body.suggestions) ? (body.suggestions as { field?: unknown; value?: unknown; source?: unknown }[]) : [];

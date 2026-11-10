@@ -21,6 +21,7 @@ const LINKS: Record<LinkedAccount["kind"], { label: string; icon: LucideIcon; wh
 
 export function LinksView() {
   const { data } = useGa();
+  const live = useGoogleAds((s) => s.mode === "live");
 
   return (
     <div>
@@ -40,7 +41,7 @@ export function LinksView() {
               </div>
               <div className="flex flex-col items-end gap-2">
                 <Pill tone={l.status === "LINKED" ? "good" : l.status === "PENDING" ? "warn" : "neutral"}>{l.status === "LINKED" ? "Linked" : l.status === "PENDING" ? "Pending approval" : "Not linked"}</Pill>
-                {l.status !== "LINKED" && (
+                {l.status !== "LINKED" && !live && (
                   <button type="button" onClick={() => runAgentTurn(l.status === "PENDING" ? `Check whether my ${LINKS[l.kind].label} link request was approved` : `Link ${LINKS[l.kind].label} to this account`)} className="inline-flex items-center gap-1 rounded-lg border border-border/70 px-2.5 py-1 text-[11px] font-semibold hover:bg-muted">
                     <Bot className="h-3 w-3" /> {l.status === "PENDING" ? "Ask agent to check" : "Ask agent to link"}
                   </button>
@@ -50,6 +51,11 @@ export function LinksView() {
           );
         })}
       </div>
+      {live && (
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          {data.links.length ? "" : "Google Ads reports no Merchant Center link for this account. "}Links to Google Analytics, YouTube, Business Profile and Search Console aren&apos;t read here yet; check them in Google Ads.
+        </p>
+      )}
     </div>
   );
 }

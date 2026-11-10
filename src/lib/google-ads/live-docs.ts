@@ -5,6 +5,7 @@
 // the platform routes, the page and the tests.
 
 import type { ApprovalPreview } from "@/lib/store-agent/protocol";
+import { reportHtmlProblem } from "./report-sandbox";
 
 export type DocKind = "plan" | "report";
 export type StepTarget = "ads" | "merchant";
@@ -44,7 +45,9 @@ export type ReportBlock =
   | { kind: "callout"; tone: "info" | "good" | "warn" | "bad"; title: string; text: string }
   | { kind: "table"; columns: string[]; rows: (string | number)[][]; align?: ("left" | "right")[] }
   | { kind: "chart"; title: string; variant: "bar" | "line" | "donut"; format: ValueFormat; data: { label: string; value: number }[] }
-  | { kind: "score"; score: number; label: string; parts: { label: string; score: number }[] };
+  | { kind: "score"; score: number; label: string; parts: { label: string; score: number }[] }
+  /** Any page the agent writes (layouts, charts, JavaScript), shown in a sandboxed frame that can't reach anything. */
+  | { kind: "html"; title: string; html: string };
 
 export type ReportKpi = { label: string; value: string; delta?: number; hint?: string; higherIsBetter?: boolean };
 
@@ -106,7 +109,7 @@ export type LiveDoc = LiveDocSummary & {
 
 export class DocInputError extends Error {}
 
-export const DOC_LIMITS = { steps: 20, opsPerStep: 50, findings: 30, sections: 20, blocksPerSection: 20, kpis: 8, tableRows: 200, tableColumns: 12, chartPoints: 60, history: 10 } as const;
+export const DOC_LIMITS = { steps: 20, opsPerStep: 50, findings: 30, sections: 20, blocksPerSection: 20, kpis: 8, tableRows: 200, tableColumns: 12, chartPoints: 60, history: 10, htmlTotal: 600_000 } as const;
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const list = <T>(v: unknown, max: number): T[] => (Array.isArray(v) ? (v.slice(0, max) as T[]) : []);
@@ -148,19 +151,34 @@ export function parsePlanInput(raw: Record<string, unknown>): PlanInput {
   };
 }
 
-function parseBlock(raw: unknown): ReportBlock | null {
-  if (!raw || typeof raw !== "object") return null;
+const BLOCK_KINDS = "text, callout, table, chart, score or html";
+
+/**
+ * One block. A block that can't be shown is an error the agent sees and fixes,
+ * never dropped in silence (the owner would read a report with a hole in it).
+ */
+function parseBlock(raw: unknown, where: string): ReportBlock {
+  const bad = (why: string): never => {
+    throw new DocInputError(`${where}: ${why}`);
+  };
+  if (!raw || typeof raw !== "object") return bad(`a block must be an object with a "kind" (${BLOCK_KINDS}).`);
   const b = raw as Record<string, unknown>;
   switch (b.kind) {
     case "text": {
       const md = str(b.md ?? b.text, 20_000);
-      return md ? { kind: "text", md } : null;
+      return md ? { kind: "text", md } : bad("the text block is empty (give md).");
+    }
+    case "html": {
+      const html = typeof b.html === "string" ? b.html : "";
+      const problem = reportHtmlProblem(html);
+      if (problem) bad(`the html block ${problem}.`);
+      return { kind: "html", title: str(b.title, 200), html };
     }
     case "callout":
       return { kind: "callout", tone: oneOf(b.tone, ["info", "good", "warn", "bad"] as const, "info"), title: str(b.title, 200), text: str(b.text, 2000) };
     case "table": {
       const columns = list<unknown>(b.columns, DOC_LIMITS.tableColumns).map((c) => str(String(c ?? ""), 80));
-      if (!columns.length) return null;
+      if (!columns.length) bad("the table has no columns.");
       const rows = list<unknown>(b.rows, DOC_LIMITS.tableRows)
         .filter(Array.isArray)
         .map((r) => (r as unknown[]).slice(0, columns.length).map((c) => (typeof c === "number" && Number.isFinite(c) ? c : str(String(c ?? ""), 300))));
@@ -171,7 +189,7 @@ function parseBlock(raw: unknown): ReportBlock | null {
       const data = list<Record<string, unknown>>(b.data, DOC_LIMITS.chartPoints)
         .filter((d) => d && typeof d === "object" && Number.isFinite(Number(d.value)))
         .map((d) => ({ label: str(String(d.label ?? ""), 60), value: Number(d.value) }));
-      if (!data.length) return null;
+      if (!data.length) bad("the chart has no data points with a number value.");
       return { kind: "chart", title: str(b.title, 200), variant: oneOf(b.variant, ["bar", "line", "donut"] as const, "bar"), format: oneOf(b.format, ["money", "number", "percent", "ratio"] as const, "number"), data };
     }
     case "score": {
@@ -182,7 +200,7 @@ function parseBlock(raw: unknown): ReportBlock | null {
       return { kind: "score", score, label: str(b.label, 120), parts };
     }
     default:
-      return null;
+      return bad(`unknown block kind "${String(b.kind)}". Use ${BLOCK_KINDS}.`);
   }
 }
 
@@ -216,12 +234,16 @@ export function parseReportInput(raw: Record<string, unknown>): ReportInput {
   findings.sort((a, b) => order[a.severity] - order[b.severity]);
   const sections = list<Record<string, unknown>>(raw.sections, DOC_LIMITS.sections)
     .filter((s) => s && typeof s === "object")
-    .map((s, i) => ({
-      id: `sec${i + 1}`,
-      title: str(s.title, 200),
-      blocks: list<unknown>(s.blocks, DOC_LIMITS.blocksPerSection).map(parseBlock).filter((b): b is ReportBlock => !!b),
-    }))
-    .filter((s) => s.title && s.blocks.length);
+    .map((s, i) => {
+      const title = str(s.title, 200);
+      const where = `Section ${i + 1}${title ? ` ("${title}")` : ""}`;
+      if (!title) throw new DocInputError(`${where}: give the section a title.`);
+      const blocks = list<unknown>(s.blocks, DOC_LIMITS.blocksPerSection).map((b, j) => parseBlock(b, `${where}, block ${j + 1}`));
+      if (!blocks.length) throw new DocInputError(`${where}: the section has no blocks.`);
+      return { id: `sec${i + 1}`, title, blocks };
+    });
+  const htmlSize = sections.flatMap((s) => s.blocks).reduce((n, b) => n + (b.kind === "html" ? b.html.length : 0), 0);
+  if (htmlSize > DOC_LIMITS.htmlTotal) throw new DocInputError(`The report's html blocks add up to more than ${DOC_LIMITS.htmlTotal.toLocaleString("en")} characters; keep data in tables and the pages short.`);
   return { title, summary: str(raw.summary, 1000), content: { period: str(raw.period, 120), verdict, kpis, findings, sections } };
 }
 

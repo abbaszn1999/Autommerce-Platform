@@ -154,10 +154,11 @@ export function normalizeValue(field: ProfileField, raw: unknown): ProfileValue 
       return d.choices?.some((c) => c.value === v) ? v : fail(`must be one of: ${d.choices?.map((c) => c.value).join(", ")}`);
     }
     case "percent": {
-      // 40, "40%" and 0.4 all mean 40%. Stored as a share (0.4).
+      // "40%", 40 and 0.4 all mean 40%; with a % sign the number is always a percentage ("1%" is 1%, "0.5%" is 0.5%).
+      // Stored as a share (0.4).
       const n = toNumber(raw);
       if (n === null) return fail("must be a percentage, e.g. 40%");
-      const share = n > 1 ? n / 100 : n;
+      const share = (typeof raw === "string" && raw.includes("%")) || n >= 1 ? n / 100 : n;
       return share >= 0.01 && share <= 0.95 ? Math.round(share * 1000) / 1000 : fail("must be between 1% and 95%");
     }
     case "ratio": {
@@ -328,9 +329,16 @@ export function formatValue(field: ProfileField, value: ProfileValue | null | un
   }
 }
 
+/** Longest value given whole in the brief: every text field's own limit fits; only very long lists are shortened. */
+const BRIEF_VALUE_MAX = 1500;
+
+/** What the agents read when the profile couldn't be loaded for a chat: never "empty". */
+export const PROFILE_UNREADABLE =
+  "- (The business profile couldn't be read for this chat. It is NOT empty: read it with `business_profile` before relying on it, and don't ask the user for anything it may already hold.)";
+
 /**
  * The profile as the agents read it at the start of every chat: every filled
- * field (long texts shortened), what is only suggested, and what is missing.
+ * field (very long lists shortened), what is only suggested, and what is missing.
  */
 export function profileBrief(profile: BusinessProfileData, currency = ""): string {
   const lines: string[] = [];
@@ -338,7 +346,7 @@ export function profileBrief(profile: BusinessProfileData, currency = ""): strin
     const v = profile.values[f];
     if (v == null) continue;
     let text = formatValue(f, v, currency);
-    if (text.length > 400) text = `${text.slice(0, 400)}… (full text: business_profile)`;
+    if (text.length > BRIEF_VALUE_MAX) text = `${text.slice(0, BRIEF_VALUE_MAX)}… (full text: business_profile)`;
     const suggested = profile.meta[f]?.status === "suggested" ? ` [suggested from ${profile.meta[f]!.source}, not confirmed by the owner]` : "";
     lines.push(`- ${def(f).label}: ${text}${suggested}`);
   }

@@ -7,7 +7,8 @@ import { newChat, sendMessage, useStoreAgent } from "@/components/store-agent/us
 import { setLiveAgentHandler } from "@/lib/google-ads/agent-runner";
 import { initLiveDocs, openDoc, refreshDocList } from "@/lib/google-ads/live-docs-store";
 import { setDocHandlers } from "@/lib/store-agent/doc-links";
-import { useAccountData } from "@/lib/google-ads/store";
+import { useAccountData, useGoogleAds } from "@/lib/google-ads/store";
+import { onAccountChanged } from "@/lib/store-agent/change-signal";
 
 /**
  * Live accounts: Vera (the same agent as the Store Assistant, with Google Ads
@@ -17,6 +18,9 @@ import { useAccountData } from "@/lib/google-ads/store";
 export function GaVera({ width }: { width: number }) {
   const { workspace, role } = useWorkspaceContext();
   const accountName = useAccountData()?.account.name ?? "Google Ads";
+
+  // A change Vera applied, an undo or a plan step: load the account again so every page shows it.
+  useEffect(() => onAccountChanged(() => void useGoogleAds.getState().refreshData()), []);
 
   // Plans and reports Vera saves open on the Documents page; the chat's cards open them too.
   useEffect(() => {
@@ -41,7 +45,11 @@ export function GaVera({ width }: { width: number }) {
     const send = (text: string, chatId: string | null) => void sendMessage(chatId ?? newChat(), text, []);
     let stopWaiting: (() => void) | null = null;
     setLiveAgentHandler((text) => {
-      if (ready()) return send(text, useStoreAgent.getState().activeChatId);
+      if (ready()) {
+        const s = useStoreAgent.getState();
+        const busy = s.chats.find((c) => c.id === s.activeChatId)?.status === "running";
+        return send(text, busy ? null : s.activeChatId);
+      }
       // Just opened (e.g. straight from the setup screen): once the chat has loaded, send it in a chat of its own; drop it after 30 s.
       stopWaiting?.();
       const unsubscribe = useStoreAgent.subscribe(() => {

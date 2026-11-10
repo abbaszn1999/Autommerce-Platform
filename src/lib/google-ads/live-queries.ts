@@ -13,7 +13,19 @@ export function assertIsoDay(day: string): string {
 }
 
 export const LIVE_QUERIES = {
-  customer: () => "SELECT customer.id, customer.optimization_score, customer.auto_tagging_enabled FROM customer LIMIT 1",
+  customer: () => "SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone, customer.optimization_score, customer.auto_tagging_enabled FROM customer LIMIT 1",
+  /** The account's own totals: unlike adding up campaigns, these include removed campaigns. */
+  customerDaily: (start: string, end: string) => `SELECT segments.date, ${METRICS} FROM customer WHERE ${between(assertIsoDay(start), assertIsoDay(end))}`,
+  locations: () =>
+    "SELECT campaign.id, campaign_criterion.criterion_id, campaign_criterion.negative, campaign_criterion.bid_modifier, campaign_criterion.location.geo_target_constant, campaign_criterion.proximity.radius, campaign_criterion.proximity.radius_units, campaign_criterion.proximity.address.city_name FROM campaign_criterion WHERE campaign_criterion.type IN ('LOCATION', 'PROXIMITY') AND campaign.status != 'REMOVED'",
+  languages: () => "SELECT campaign.id, campaign_criterion.language.language_constant FROM campaign_criterion WHERE campaign_criterion.type = 'LANGUAGE' AND campaign.status != 'REMOVED'",
+  schedule: () =>
+    "SELECT campaign.id, campaign_criterion.ad_schedule.day_of_week, campaign_criterion.ad_schedule.start_hour, campaign_criterion.ad_schedule.end_hour, campaign_criterion.bid_modifier FROM campaign_criterion WHERE campaign_criterion.type = 'AD_SCHEDULE' AND campaign.status != 'REMOVED'",
+  deviceBids: () => "SELECT campaign.id, campaign_criterion.device.type, campaign_criterion.bid_modifier FROM campaign_criterion WHERE campaign_criterion.type = 'DEVICE' AND campaign.status != 'REMOVED'",
+  conversions: () =>
+    "SELECT conversion_action.id, conversion_action.name, conversion_action.category, conversion_action.status, conversion_action.type, conversion_action.primary_for_goal, conversion_action.counting_type, conversion_action.value_settings.default_value, conversion_action.value_settings.always_use_default_value, conversion_action.click_through_lookback_window_days, conversion_action.attribution_model_settings.attribution_model FROM conversion_action WHERE conversion_action.status != 'REMOVED'",
+  conversionCounts: () => "SELECT segments.conversion_action, metrics.all_conversions FROM customer WHERE segments.date DURING LAST_30_DAYS",
+  recommendations: () => "SELECT recommendation.resource_name, recommendation.type, recommendation.campaign, recommendation.impact FROM recommendation WHERE recommendation.dismissed = FALSE",
 
   campaigns: () =>
     `SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign.bidding_strategy_type,
@@ -65,6 +77,15 @@ export const LIVE_QUERIES = {
     `SELECT ad_group.id, ad_group_ad.ad.id, ${METRICS} FROM ad_group_ad WHERE ad_group_ad.status != 'REMOVED' AND ${between(assertIsoDay(start), assertIsoDay(end))}`,
 
   /** The most-shown 500 search terms of the range. */
+  /** Numbers per targeted placement or YouTube channel, per topic and per Shopping product group. */
+  placementMetrics: (start: string, end: string) =>
+    `SELECT ad_group.id, ad_group_criterion.criterion_id, ${METRICS} FROM managed_placement_view WHERE ${between(assertIsoDay(start), assertIsoDay(end))}`,
+  topicMetrics: (start: string, end: string) =>
+    `SELECT ad_group.id, ad_group_criterion.criterion_id, ${METRICS} FROM topic_view WHERE ${between(assertIsoDay(start), assertIsoDay(end))}`,
+  productGroupMetrics: (start: string, end: string) =>
+    `SELECT ad_group.id, ad_group_criterion.criterion_id, ${METRICS} FROM product_group_view WHERE ${between(assertIsoDay(start), assertIsoDay(end))}`,
+  assetGroupMetrics: (start: string, end: string) =>
+    `SELECT asset_group.id, ${METRICS} FROM asset_group WHERE asset_group.status != 'REMOVED' AND ${between(assertIsoDay(start), assertIsoDay(end))}`,
   searchTerms: (start: string, end: string) =>
     `SELECT campaign.id, ad_group.id, search_term_view.search_term, search_term_view.status, segments.search_term_match_type, ${METRICS}
      FROM search_term_view WHERE ${between(assertIsoDay(start), assertIsoDay(end))} ORDER BY metrics.impressions DESC LIMIT 500`,

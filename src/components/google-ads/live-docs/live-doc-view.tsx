@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { downloadExcel, openPrintable } from "./report-download";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -26,6 +27,7 @@ import {
   Sparkles,
   Undo2,
   XCircle,
+  FileSpreadsheet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -118,6 +120,11 @@ export function LiveDocView({ docId }: { docId: string }) {
 }
 
 function DocHeader({ doc, viewing, onView }: { doc: LiveDoc; viewing: unknown; onView: (v: { version: number; at: string; content: LiveDoc["content"]; title: string; summary: string } | null) => void }) {
+  const account = useAccountData()?.account;
+  // Exports are of the version on screen.
+  const shownVersion = viewing as { content: LiveDoc["content"]; title: string; summary: string } | null;
+  const exportable = { kind: doc.kind, title: shownVersion?.title ?? doc.title, summary: shownVersion?.summary ?? doc.summary, content: shownVersion?.content ?? doc.content };
+  const exportOptions = { currency: account?.currency ?? "", accountName: account?.name ?? "" };
   const canEdit = useLiveDocs((s) => s.canApply);
   const isPlan = doc.kind === "plan";
   const Icon = isPlan ? ClipboardList : FileBarChart;
@@ -206,8 +213,14 @@ function DocHeader({ doc, viewing, onView }: { doc: LiveDoc; viewing: unknown; o
               <MoreHorizontal className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem onSelect={() => window.print()} className="gap-2 text-xs">
-                <Printer className="h-3.5 w-3.5" /> Print or save as PDF
+              <DropdownMenuItem onSelect={() => openPrintable(exportable, exportOptions)} className="gap-2 text-xs">
+                <Printer className="h-3.5 w-3.5" /> Save as PDF or print
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => void downloadExcel(exportable, exportOptions).catch(() => toast.error("The Excel file couldn't be made. Try again."))}
+                className="gap-2 text-xs"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" /> Download Excel
               </DropdownMenuItem>
               {canEdit && (
                 <>

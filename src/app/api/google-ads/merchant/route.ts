@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { errorStatus, loadConnection, requireConnectionAccess } from "@/lib/google-ads/connection.server";
 import { loadMerchantSnapshot } from "@/lib/google-ads/merchant.server";
+import { allowForcedRefresh } from "@/lib/google-ads/refresh-limit";
 
 /**
  * Read-only snapshot of the workspace's chosen Merchant Center account: products,
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
     const row = await loadConnection(admin, workspaceId, "merchant");
     if (!row?.composio_connected_account_id || !row.account_id) return NextResponse.json({ error: "not_connected" }, { status: 409 });
 
-    const data = await loadMerchantSnapshot(row, { force: params.get("refresh") === "1" });
+    const data = await loadMerchantSnapshot(row, { force: params.get("refresh") === "1" && allowForcedRefresh(workspaceId, "merchant") });
     return NextResponse.json({ data }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     const { status, code } = errorStatus(err);
