@@ -222,6 +222,7 @@ export async function processCatalogRow(params: {
           blockedDomains: c.blockedDomains,
           lensMatchScope: c.lensMatchScope,
           lensProductPagesOnly: c.lensProductPagesOnly,
+          lensMarket: c.lensMarket,
           sourceMarket: c.sourceMarket,
           writingTone: c.writingTone as WritingTone | undefined,
           contentLength: c.contentLength as ContentLength | undefined,

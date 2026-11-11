@@ -19,6 +19,7 @@ import { isTransientSearchApiError, SearchApiCallError } from "../image-finder/e
 import { EnrichBilledAttemptError, EnrichCancelledError } from "../openai";
 import type { EnrichAgentParams, EnrichAgentResult } from "../types";
 import { buildLensRowContext, type LensRowContext } from "./product-links";
+import { resolveLensCountry, resolveLensScope } from "./scope";
 import { callGoogleLens, type LensSearchType } from "./searchapi-lens";
 import { describeLensDrops, newLensSelection, selectLensPages } from "./select";
 import { lensAlsoFoundKey, lensSetAsideKey, type LensSetAside } from "./side-keys";
@@ -32,6 +33,8 @@ export interface FindLensMatchesInput {
   /** One public http(s) link to the picture. Omit when the row has none. */
   imageUrl?: string;
   scope: LensMatchScope;
+  /** Two-letter country the search runs from (e.g. "lb"). Omit to send none (the provider's default, US). */
+  country?: string;
   limit: number;
   rules: DomainRules;
   /** Keep only pages that look like product pages, best first, two per website. Default on. */
@@ -73,7 +76,7 @@ export async function searchLensMatches(input: FindLensMatchesInput): Promise<Fi
 
   const once = async (searchType: LensSearchType) => {
     try {
-      const call = await callGoogleLens(imageUrl, searchType);
+      const call = await callGoogleLens(imageUrl, searchType, input.country);
       costs.push(createSearchApiCost(1, SEARCHAPI_GOOGLE_LENS_MODEL));
       return call;
     } catch (error) {
@@ -108,7 +111,7 @@ export async function searchLensMatches(input: FindLensMatchesInput): Promise<Fi
   let visualNote = "";
 
   try {
-    const first = await run(input.scope === "products" ? "products" : "exact_matches");
+    const first = await run("exact_matches");
     firstListed = first.matches.length;
     selectLensPages(first.matches, selection, selectOptions);
   } catch (error) {
@@ -166,10 +169,8 @@ export async function findLensMatches(params: EnrichAgentParams): Promise<Enrich
 
   const result = await searchLensMatches({
     imageUrl: (params.sourceImageUrls ?? []).find((url) => /^https?:\/\//i.test(url)),
-    scope:
-      column?.lensMatchScope === "exact_and_visual" || column?.lensMatchScope === "products"
-        ? column.lensMatchScope
-        : "exact",
+    scope: resolveLensScope(column?.lensMatchScope),
+    country: resolveLensCountry(column?.lensMarket),
     productsOnly: column?.lensProductPagesOnly !== false,
     limit,
     rules: sanitizeDomainRules({ allowedDomains: column?.allowedDomains, blockedDomains: column?.blockedDomains }),

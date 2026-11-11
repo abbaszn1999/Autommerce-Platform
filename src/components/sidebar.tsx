@@ -90,6 +90,7 @@ import {
 import type { EnrichSettings } from "@/lib/enrich";
 import { IMAGE_FINDER_MAX_IMAGES } from "@/lib/enrich/image-finder/brief";
 import { listLensImageColumns } from "@/lib/enrich/lens/image-column";
+import { resolveLensScope } from "@/lib/enrich/lens/scope";
 import { FAILED_TOOLS, failedInTool, type FailedTool } from "@/lib/catalog/failed-rows";
 import {
   categoryCountLabel,
@@ -2014,7 +2015,7 @@ export function Sidebar() {
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-medium text-muted-foreground">Matches</label>
                       <select
-                        value={lensColumn.lensMatchScope ?? "exact"}
+                        value={resolveLensScope(lensColumn.lensMatchScope)}
                         onChange={(e) =>
                           updateEnrichmentColumnConfig(lensColumn.id, {
                             lensMatchScope: e.target.value as LensMatchScope,
@@ -2025,9 +2026,15 @@ export function Sidebar() {
                       >
                         <option value="exact">Exact matches only</option>
                         <option value="exact_and_visual">Exact, then similar if fewer than the limit</option>
-                        <option value="products">Products (shop listings)</option>
                       </select>
                     </div>
+                    <SourceUrlsMarketSettings
+                      market={lensColumn.lensMarket}
+                      disabled={isEnriching}
+                      onMarketChange={(lensMarket) => updateEnrichmentColumnConfig(lensColumn.id, { lensMarket })}
+                      pickedHint={(country) => `Lens searches as a shopper in ${country} would see it.`}
+                      anyHint="No country is sent, so Lens uses its default (United States). Pick the country the shops sell in."
+                    />
                     <label className="flex cursor-pointer items-start gap-2 rounded-md border bg-muted/20 px-2.5 py-2">
                       <input
                         type="checkbox"

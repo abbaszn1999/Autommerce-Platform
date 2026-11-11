@@ -20,7 +20,7 @@ const IMAGE = "https://cdn.test/p.jpg";
 const NO_RULES = { allowedDomains: [], blockedDomains: [] };
 const match = (link: string, title = "") => ({ link, title });
 const answer = (
-  searchType: "exact_matches" | "visual_matches" | "products",
+  searchType: "exact_matches" | "visual_matches",
   matches: Array<{ link: string; title: string; price?: string }>
 ) => ({
   matches,
@@ -57,7 +57,7 @@ describe("searchLensMatches billing", () => {
     expect(result.costs[0]).toMatchObject({ model: "searchapi-google-lens", searchApiCalls: 1 });
     expect(result.costs[0]!.totalCost).toBeCloseTo(SEARCHAPI_COST_PER_SEARCH, 10);
     expect(costToCredits(result.costs[0]!.totalCost)).toBe(0.04);
-    expect(callLensMock).toHaveBeenCalledWith(IMAGE, "exact_matches");
+    expect(callLensMock).toHaveBeenCalledWith(IMAGE, "exact_matches", undefined);
   });
 
   it("still bills a search that found nothing, and says why", async () => {
@@ -98,15 +98,15 @@ describe("searchLensMatches billing", () => {
     expect(result.sources.map((s) => s.uri)).toEqual(["https://shop.test/collections/toys"]);
   });
 
-  it("runs one products search for the Products option and bills it once", async () => {
-    callLensMock.mockResolvedValueOnce(
-      answer("products", [{ ...match("https://www.walmart.com/ip/toy/123", "Toy"), price: "$20*" }])
-    );
-    const result = await search({ scope: "products" });
-    expect(callLensMock).toHaveBeenCalledTimes(1);
-    expect(callLensMock).toHaveBeenCalledWith(IMAGE, "products");
-    expect(result.sources.map((s) => s.uri)).toEqual(["https://www.walmart.com/ip/toy/123"]);
-    expect(result.costs).toHaveLength(1);
+  it("sends the country on every search of the row", async () => {
+    callLensMock
+      .mockResolvedValueOnce(answer("exact_matches", []))
+      .mockResolvedValueOnce(answer("visual_matches", [match("https://a.test/p/1", "A")]));
+    await search({ scope: "exact_and_visual", country: "lb" });
+    expect(callLensMock.mock.calls).toEqual([
+      [IMAGE, "exact_matches", "lb"],
+      [IMAGE, "visual_matches", "lb"],
+    ]);
   });
 
   it("makes no call and bills nothing for a row without a picture", async () => {
@@ -231,6 +231,48 @@ describe("findLensMatches", () => {
     expect(result.data["lensFounds__setAside"]).toEqual([
       { uri: "https://www.ebay.co.uk/sch/i.html?_nkw=gun", reason: "listing" },
     ]);
+  });
+
+  it("sends the column's market as a two-letter country, and nothing for none or an unknown code", async () => {
+    const run = async (lensMarket?: string) => {
+      callLensMock.mockReset();
+      callLensMock.mockResolvedValueOnce(answer("exact_matches", [match("https://a.test/p/1", "A")]));
+      await findLensMatches({
+        productData: {},
+        enabledColumns: ["lensFounds"],
+        sourceImageUrls: [IMAGE],
+        enrichmentColumns: [
+          { id: "lensFounds", label: "Lens founds", description: "", type: "sourceUrls", enabled: true, lensMarket },
+        ],
+      });
+      return callLensMock.mock.calls[0]![2];
+    };
+    expect(await run("lb")).toBe("lb");
+    expect(await run(" GB ")).toBe("gb");
+    for (const setting of ["none", "auto", "", "narnia", undefined]) expect(await run(setting)).toBeUndefined();
+  });
+
+  it("reads a sheet saved with the removed products scope as exact then similar", async () => {
+    callLensMock
+      .mockResolvedValueOnce(answer("exact_matches", []))
+      .mockResolvedValueOnce(answer("visual_matches", [match("https://a.test/p/1", "A")]));
+    const result = await findLensMatches({
+      productData: {},
+      enabledColumns: ["lensFounds"],
+      sourceImageUrls: [IMAGE],
+      enrichmentColumns: [
+        {
+          id: "lensFounds",
+          label: "Lens founds",
+          description: "",
+          type: "sourceUrls",
+          enabled: true,
+          lensMatchScope: "products" as never,
+        },
+      ],
+    });
+    expect(callLensMock.mock.calls.map((c) => c[1])).toEqual(["exact_matches", "visual_matches"]);
+    expect(result.data.lensFounds).toHaveLength(1);
   });
 });
 

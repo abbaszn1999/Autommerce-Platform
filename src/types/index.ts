@@ -66,8 +66,12 @@ export interface FaqItem {
  */
 export type CategoryFormat = "collections" | "flat" | "depth2" | "depth3";
 
-/** Which Google Lens results fill the Lens founds column. */
-export type LensMatchScope = "exact" | "exact_and_visual" | "products";
+/**
+ * Which Google Lens results fill the Lens founds column. (A third "products"
+ * scope existed until Google removed Lens's Products tab; a sheet saved with it
+ * is read as "exact_and_visual", see resolveLensScope.)
+ */
+export type LensMatchScope = "exact" | "exact_and_visual";
 
 export interface EnrichmentColumn {
   id: string;
@@ -86,8 +90,9 @@ export interface EnrichmentColumn {
   customInstruction?: string; // Custom instruction for this column
   allowedDomains?: string[]; // Image Finder: only use these websites (max 100, subdomains included)
   blockedDomains?: string[]; // Image Finder: never use these websites (max 100)
-  lensMatchScope?: LensMatchScope; // Lens founds: exact matches only (default), exact plus visual matches, or shop listings
+  lensMatchScope?: LensMatchScope; // Lens founds: exact matches only (default), or exact plus similar (visual) matches
   lensProductPagesOnly?: boolean; // Lens founds: drop videos, social, review and category pages (default on)
+  lensMarket?: string; // Lens founds: country the Lens search runs from (lowercase ISO code, e.g. "lb"); empty or "none" = no country sent (the provider's default, US)
   sourceMarket?: string; // Source URLs: country to search from (lowercase ISO code, e.g. "gb"); "none" = any country; empty or "none" = any country
   writingTone?: WritingTone; // Per-column writing tone (for text columns)
   contentLength?: ContentLength; // Per-column content length (for text columns)
