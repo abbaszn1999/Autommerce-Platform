@@ -140,7 +140,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       { onConflict: "workspace_id,user_id" }
     );
   }
-  const { data, error } = await access.admin.from("store_agent_chats").update(update).eq("id", chatId).select("*").single();
+  // The same columns as the chat list: internal ones (the Cursor agent) never reach the browser.
+  const { data, error } = await access.admin
+    .from("store_agent_chats")
+    .update(update)
+    .eq("id", chatId)
+    .select("id, title, model_id, model_params, mode, status, context_used, context_window, credits_total, pinned, created_at, last_activity_at")
+    .single();
   if (error) return NextResponse.json({ error: "Could not update the chat" }, { status: 500 });
   return NextResponse.json({ chat: data });
 }

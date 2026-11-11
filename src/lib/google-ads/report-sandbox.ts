@@ -30,6 +30,28 @@ export const REPORT_CSP = [
   "base-uri 'none'",
 ].join("; ");
 
+/**
+ * The store assistant's reports (files in the panel) may use the usual chart libraries, web fonts
+ * and product images by URL, but still can't send anything: no fetch, forms, frames or navigation.
+ * An image URL is the one way out left, which product photos need.
+ */
+const REPORT_CDNS = "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com";
+export const STORE_REPORT_CSP = [
+  "default-src 'none'",
+  `script-src 'unsafe-inline' 'unsafe-eval' ${REPORT_CDNS}`,
+  `style-src 'unsafe-inline' ${REPORT_CDNS} https://fonts.googleapis.com`,
+  "img-src https: data: blob:",
+  `font-src data: ${REPORT_CDNS} https://fonts.gstatic.com`,
+  "media-src https: data: blob:",
+  "connect-src 'none'",
+  "frame-src 'none'",
+  "child-src 'none'",
+  "worker-src 'none'",
+  "object-src 'none'",
+  "form-action 'none'",
+  "base-uri 'none'",
+].join("; ");
+
 /** The sandbox attribute for report frames: scripts, nothing else. */
 export const REPORT_SANDBOX = "allow-scripts";
 
@@ -68,7 +90,7 @@ const FILL_SLACK = 12;
 const GUARD = `<script>(function(){
 var stop=function(e){try{e.preventDefault();}catch(_){}};
 try{if(window.navigation){navigation.addEventListener("navigate",stop);}}catch(_){}
-document.addEventListener("click",function(e){var a=e.target&&e.target.closest&&e.target.closest("a[href]");if(a){e.preventDefault();}},true);
+document.addEventListener("click",function(e){var a=e.target&&e.target.closest&&e.target.closest("a[href]");if(a){e.preventDefault();try{var u=new URL(a.getAttribute("href"),location.href);if(/^https?:$/.test(u.protocol)){parent.postMessage({autommerceOpenLink:u.href},"*");}}catch(_){}}},true);
 document.addEventListener("submit",stop,true);
 try{window.open=function(){return null;};}catch(_){}
 var last=0;var natural=0;var send=function(){var b=document.body;var cs=b?getComputedStyle(b):null;var h=b?Math.ceil(b.scrollHeight+parseFloat(cs.marginTop||0)+parseFloat(cs.marginBottom||0)):0;if(h<innerHeight-${FILL_SLACK}){natural=h;}else if(natural&&h<=natural+${FILL_SLACK}){h=natural;}else{natural=0;h=Math.max(h,innerHeight<${FILL_HEIGHT}?${FILL_HEIGHT}:innerHeight);}if(h!==last){last=h;parent.postMessage({autommerceReportHeight:h},"*");}};
@@ -81,25 +103,37 @@ const attr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").rep
 // The report frame inherits this policy too (srcdoc frames do), so the one library is allowed here as well.
 const WRAPPER_CSP = `default-src 'none'; frame-src 'none'; child-src 'none'; script-src 'unsafe-inline' ${CHART_JS_URL}; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'`;
 
+export type ReportPolicy = {
+  /** The report's own policy. */
+  csp: string;
+  /** The wrapper's policy: the report frame inherits it, so it must allow what the report may load. */
+  wrapperCsp: string;
+  /** Tell the page the app's theme (Google Ads reports always; store files only when written for it). */
+  theme: boolean;
+};
+const GOOGLE_ADS_POLICY: ReportPolicy = { csp: REPORT_CSP, wrapperCsp: WRAPPER_CSP, theme: true };
+/** A store file: the report's policy is also the wrapper's (it already forbids every frame URL). */
+export const STORE_POLICY: ReportPolicy = { csp: STORE_REPORT_CSP, wrapperCsp: STORE_REPORT_CSP, theme: true };
+
 /**
  * What goes in the frame on the page: a wrapper that holds the report's own frame.
  * Use with sandbox={REPORT_SANDBOX}.
  */
-export function sandboxedReport(html: string, dark: boolean): string {
+export function sandboxedReport(html: string, dark: boolean, policy: ReportPolicy = GOOGLE_ADS_POLICY): string {
   return (
-    `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${WRAPPER_CSP}"><meta name="referrer" content="no-referrer">` +
+    `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy.wrapperCsp}"><meta name="referrer" content="no-referrer">` +
     `<style>html,body{margin:0;padding:0;background:transparent}iframe{display:block;width:100%;height:100vh;border:0}</style>` +
-    `<iframe sandbox="${REPORT_SANDBOX}" referrerpolicy="no-referrer" srcdoc="${attr(reportDocument(html, dark))}"></iframe>` +
-    `<script>addEventListener("message",function(e){var f=document.querySelector("iframe");if(f&&e.source===f.contentWindow&&e.data&&typeof e.data.autommerceReportHeight==="number"){parent.postMessage({autommerceReportHeight:e.data.autommerceReportHeight},"*");}});</script>`
+    `<iframe sandbox="${REPORT_SANDBOX}" referrerpolicy="no-referrer" srcdoc="${attr(reportDocument(html, dark, policy))}"></iframe>` +
+    `<script>addEventListener("message",function(e){var f=document.querySelector("iframe");var d=e.data;if(!f||e.source!==f.contentWindow||!d)return;if(typeof d.autommerceReportHeight==="number"){parent.postMessage({autommerceReportHeight:d.autommerceReportHeight},"*");}else if(typeof d.autommerceOpenLink==="string"){parent.postMessage({autommerceOpenLink:d.autommerceOpenLink},"*");}});</script>`
   );
 }
 
 /** The report's own document: our policy and guard first, then the report, told the app's theme. */
-export function reportDocument(html: string, dark: boolean): string {
+export function reportDocument(html: string, dark: boolean, policy: ReportPolicy = GOOGLE_ADS_POLICY): string {
   const body = html.replace(/^\s*<!doctype[^>]*>/i, "");
   const theme = dark ? "dark" : "light";
-  const withTheme = /<html(\s[^>]*)?>/i.test(body)
+  const withTheme = policy.theme && /<html(\s[^>]*)?>/i.test(body)
     ? body.replace(/<html(\s[^>]*)?>/i, (_m, rest = "") => `<html${String(rest).replace(/\sdata-theme\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i, "")} data-theme="${theme}">`)
     : body;
-  return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${REPORT_CSP}"><meta name="referrer" content="no-referrer"><style>*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style>${GUARD}${withTheme}`;
+  return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy.csp}"><meta name="referrer" content="no-referrer"><style>*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style>${GUARD}${withTheme}`;
 }

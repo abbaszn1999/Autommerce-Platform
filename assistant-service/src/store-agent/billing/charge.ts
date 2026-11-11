@@ -34,6 +34,17 @@ export async function chargeRun(
 ): Promise<ChargeResult> {
   const amount = round(params.credits);
   if (!(amount > 0)) return { charged: 0, duplicate: false };
+  // A run is charged once, whichever way: a recovery after a crash must not
+  // charge in full what was already taken in part (the ":balance" charge), and
+  // reports what was really taken.
+  const earlier = await db
+    .from("credit_transactions")
+    .select("credits_used")
+    .eq("entity_type", "store_assistant")
+    .eq("entity_id", params.runId);
+  if (!earlier.error && earlier.data?.length) {
+    return { charged: round(earlier.data.reduce((sum, row) => sum + (Number(row.credits_used) || 0), 0)), duplicate: true };
+  }
   const key = `store_agent:${params.runId}`;
   let full = await deduct(db, { ...params, amount, key });
   if (!full.success && !/insufficient credits/i.test(full.error ?? "")) {

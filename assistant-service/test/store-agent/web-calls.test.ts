@@ -61,6 +61,13 @@ describe("webCallsInMessages", () => {
     expect(call).toMatchObject({ ok: true, summary: NO_RESULTS, links: [] });
   });
 
+  it("does not say nothing was found when the results came as text only", () => {
+    const [call] = webCallsInMessages([
+      turn([{ toolCallId: "s4", toolCall: { webSearchToolCall: { args: { searchTerm: "x" }, result: { success: { references: [{ title: "Web search results", url: "", chunk: "Littledata: median 1.3%" }] } } } } }]),
+    ]);
+    expect(call).toMatchObject({ ok: true, summary: undefined, links: [] });
+  });
+
   it("keeps the links on the saved tool block", () => {
     let state = reduceReply(emptyReply(), { type: "tool_start", callId: "s1", tool: "webSearch", kind: "web", title: "Searching the web", seq: 1 });
     state = reduceReply(state, { type: "tool_end", callId: "s1", ok: true, links: [{ title: "A", url: "https://a.example/" }], seq: 2 });

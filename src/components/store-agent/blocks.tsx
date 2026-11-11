@@ -96,7 +96,8 @@ function ThinkingBlock({ block, live }: { block: Extract<MessageBlock, { type: "
   );
 }
 
-function ToolBlock({ block }: { block: Extract<MessageBlock, { type: "tool" }> }) {
+/** `live`: the reply is still being written. A tool still "running" in a finished reply was cut off (the run stopped). */
+function ToolBlock({ block, live = true }: { block: Extract<MessageBlock, { type: "tool" }>; live?: boolean }) {
   const [open, setOpen] = useState(false);
   const Icon = TOOL_ICON[block.kind] ?? Wrench;
   const failed = block.status === "error";
@@ -136,8 +137,10 @@ function ToolBlock({ block }: { block: Extract<MessageBlock, { type: "tool" }> }
         )}
         {noResults && <span className="shrink-0 text-[11.5px] text-muted-foreground/80">{block.summary}</span>}
         <span className="ms-auto shrink-0">
-          {block.status === "running" ? (
+          {block.status === "running" && live ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+          ) : block.status === "running" ? (
+            <span className="text-[11.5px] text-muted-foreground/80">Stopped</span>
           ) : failed ? (
             <X className="h-3.5 w-3.5 text-destructive" />
           ) : (
@@ -619,7 +622,7 @@ function ActivityGroup({ blocks, live }: { blocks: MessageBlock[]; live: boolean
       </button>
       {open && (
         <div className="ms-3 mt-1 space-y-1 border-s ps-2">
-          {blocks.map((b, i) => (b.type === "tool" ? <ToolBlock key={b.callId} block={b} /> : b.type === "thinking" ? <ThinkingBlock key={i} block={b} live={live} /> : null))}
+          {blocks.map((b, i) => (b.type === "tool" ? <ToolBlock key={b.callId} block={b} live={live} /> : b.type === "thinking" ? <ThinkingBlock key={i} block={b} live={live} /> : null))}
         </div>
       )}
     </div>
@@ -689,7 +692,7 @@ export function ReplyBlocks({ blocks, ...handlers }: { blocks: MessageBlock[] } 
           case "thinking":
             return <ThinkingBlock key={i} block={block} live={handlers.live} />;
           case "tool":
-            return <ToolBlock key={block.callId} block={block} />;
+            return <ToolBlock key={block.callId} block={block} live={handlers.live} />;
           case "todos":
             return <TodosBlock key={i} block={block} />;
           case "approval":

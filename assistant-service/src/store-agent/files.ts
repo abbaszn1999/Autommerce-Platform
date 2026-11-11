@@ -8,7 +8,7 @@ import type { StoreAgentRun } from "./run";
 
 export const FILES_BUCKET = "store-agent-files";
 const SKIP_DIRS = new Set(["node_modules", ".git", ".cursor"]);
-const MAX_SYNC_BYTES = 25 * 1024 * 1024;
+export const MAX_SYNC_BYTES = 25 * 1024 * 1024;
 
 const KIND_BY_EXT: Record<string, string> = {
   ".md": "report",

@@ -155,6 +155,7 @@ export async function initStoreAgent(workspaceId: string, opts: { onRunFinished?
   }
   const chats = await storeAgentApi.listChats(workspaceId).catch(() => ({ chats: [] as ChatSummary[] }));
   set({ chats: chats.chats, chatsLoaded: true, models: catalog.models, autoRun: catalog.prefs.autoRun, availability: "ready" });
+  watchStaleRunning();
   // Suggestions come from a quick scan of the store; the page does not wait for them.
   if (domain === "store")
     void storeAgentApi
@@ -169,7 +170,10 @@ export async function initStoreAgent(workspaceId: string, opts: { onRunFinished?
     saved = {};
   }
   const known = new Set(chats.chats.map((c) => c.id));
-  const tabs = (saved.tabs ?? []).filter((t) => known.has(t)).slice(0, 12);
+  // The newest 12 tabs come back (new tabs are added at the end), and always the
+  // one that was open, so a reload never hides the chat the user was working in.
+  let tabs = (saved.tabs ?? []).filter((t) => known.has(t)).slice(-12);
+  if (saved.active && known.has(saved.active) && !tabs.includes(saved.active)) tabs = [...tabs.slice(-11), saved.active];
   if (tabs.length) {
     set({ openTabs: tabs });
     const active = saved.active && tabs.includes(saved.active) ? saved.active : tabs[0]!;
@@ -306,6 +310,33 @@ export async function deleteChat(chatId: string) {
   readers.delete(chatId);
   set((state) => ({ chats: state.chats.filter((c) => c.id !== chatId) }));
   if (get().openTabs.includes(chatId)) closeTab(chatId);
+}
+
+/**
+ * A tab shows a chat as running from the events it followed. When a run ended
+ * in a chat nobody was following (another tab, a dropped stream), that "done"
+ * never arrived: ask the server for those chats' real status.
+ */
+let statusSync: ReturnType<typeof setInterval> | null = null;
+function watchStaleRunning() {
+  if (statusSync) return;
+  statusSync = setInterval(() => {
+    const { workspaceId, chats } = get();
+    if (!workspaceId || !chats.some((c) => c.status === "running" && !readers.has(c.id))) return;
+    void storeAgentApi
+      .listChats(workspaceId)
+      .then(({ chats: fresh }) => {
+        if (get().workspaceId !== workspaceId) return;
+        const byId = new Map(fresh.map((c) => [c.id, c]));
+        set((state) => ({
+          chats: state.chats.map((c) => {
+            const latest = byId.get(c.id);
+            return c.status === "running" && !readers.has(c.id) && latest && latest.status !== "running" ? { ...c, status: latest.status } : c;
+          }),
+        }));
+      })
+      .catch(() => undefined);
+  }, 15_000);
 }
 
 export async function refreshChats(search?: string) {

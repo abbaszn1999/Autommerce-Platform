@@ -17,6 +17,10 @@ type Payload = {
     storeChanges: number;
     credits: number;
     usd: number;
+    shortfallCredits: number;
+    billedRuns: number;
+    estimatedRuns: number;
+    ledgerCredits: number;
     avgDurationMs: number | null;
     cacheHitRatio: number | null;
   };
@@ -34,6 +38,44 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
       <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
       {hint && <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>}
+    </div>
+  );
+}
+
+/**
+ * Does what customers paid match what the runs cost? The runs' own figure, the
+ * credits ledger, what could not be collected, and where the cost came from.
+ */
+function BillingCheck({ t }: { t: Payload["totals"] }) {
+  const diff = Math.round((t.ledgerCredits - t.credits) * 1000) / 1000;
+  const costCredits = Math.round(t.usd * 10 * 1000) / 1000;
+  return (
+    <div className="rounded-xl border bg-card p-4 text-sm">
+      <div className="mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Billing check</div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <div className="text-xs text-muted-foreground">Model cost</div>
+          <div className="font-semibold tabular-nums">${t.usd.toFixed(4)} = {costCredits.toFixed(3)} credits</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">Charged (runs)</div>
+          <div className="font-semibold tabular-nums">{t.credits.toFixed(3)} credits</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">Taken (credits ledger)</div>
+          <div className={cn("font-semibold tabular-nums", diff !== 0 && "text-destructive")}>
+            {t.ledgerCredits.toFixed(3)} credits {diff === 0 ? "· matches" : `· differs by ${diff.toFixed(3)}`}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">Not collected (balance ran out)</div>
+          <div className={cn("font-semibold tabular-nums", t.shortfallCredits > 0 && "text-amber-600")}>{t.shortfallCredits.toFixed(3)} credits</div>
+        </div>
+      </div>
+      <div className="mt-3 text-xs text-muted-foreground">
+        Priced from Cursor&apos;s bill: {t.billedRuns} runs · from token counts at Cursor&apos;s rates: {t.estimatedRuns} runs.
+        {t.billedRuns === 0 && t.estimatedRuns > 0 && " Cursor does not report this account's billed amount, so compare the model cost above with the Cursor dashboard for the same period."}
+      </div>
     </div>
   );
 }
@@ -97,6 +139,8 @@ export default function AdminStoreAgentPage() {
               hint={`${t.storeChanges} store changes · cache ${t.cacheHitRatio === null ? "—" : `${Math.round(t.cacheHitRatio * 100)}%`}`}
             />
           </div>
+
+          <BillingCheck t={t} />
 
           <div className="overflow-hidden rounded-xl border">
             <table className="w-full text-sm">

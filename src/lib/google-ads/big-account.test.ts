@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildLiveAccount, LIST_LIMITS, type LiveRows } from "./live-report";
 import { LivePlanError, planLiveChange, type BeforeState } from "./live-mutate";
-import { FILL_HEIGHT, reportDocument } from "./report-sandbox";
+import { FILL_HEIGHT, REPORT_CSP, STORE_POLICY, STORE_REPORT_CSP, reportDocument, sandboxedReport } from "./report-sandbox";
 
 const range = { preset: "CUSTOM" as const, start: "2026-10-01", end: "2026-10-31" };
 const account = { customerId: "1", name: "Big", currency: "USD", timeZone: "", isManager: false, optimizationScore: 0, autoTagging: true };
@@ -72,5 +72,20 @@ describe("the monthly budget cap is required to spend more", () => {
 describe("report frames", () => {
   it("give a page that fills its window a comfortable height", () => {
     expect(reportDocument("<p>x</p>", false)).toContain(`innerHeight<${FILL_HEIGHT}?${FILL_HEIGHT}:innerHeight`);
+  });
+});
+
+describe("store report frames", () => {
+  it("let charts, fonts and images load but block every way to send data", () => {
+    for (const rule of ["connect-src 'none'", "frame-src 'none'", "form-action 'none'", "worker-src 'none'"]) expect(STORE_REPORT_CSP).toContain(rule);
+    expect(STORE_REPORT_CSP).toContain("https://cdnjs.cloudflare.com");
+    expect(STORE_REPORT_CSP).toContain("img-src https:");
+    const doc = sandboxedReport("<html><body>x</body></html>", false, STORE_POLICY);
+    expect(doc.split(STORE_REPORT_CSP.replace(/'/g, "'")).length).toBeGreaterThan(1);
+  });
+
+  it("leave Google Ads reports as strict as before", () => {
+    expect(reportDocument("<p>x</p>", false)).toContain(REPORT_CSP);
+    expect(sandboxedReport("<p>x</p>", false)).not.toContain("unpkg");
   });
 });

@@ -65,6 +65,19 @@ export async function GET(req: Request) {
       : { data: [] as Array<{ id: string; name: string }> };
     const names = new Map((workspaces ?? []).map((w) => [w.id as string, w.name as string]));
 
+    // What the credits ledger really took for these runs: it must equal the runs' own figure.
+    let ledgerCredits = 0;
+    const ids = runs.map((r) => r.id);
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data: rows, error: ledgerError } = await admin
+        .from("credit_transactions")
+        .select("credits_used")
+        .eq("entity_type", "store_assistant")
+        .in("entity_id", ids.slice(i, i + 200));
+      if (ledgerError) throw new Error(ledgerError.message);
+      for (const row of rows ?? []) ledgerCredits += Number(row.credits_used) || 0;
+    }
+
     const { count: activeChats } = await admin.from("store_agent_chats").select("id", { count: "exact", head: true }).gte("last_activity_at", since);
     const { count: changes } = await admin.from("store_agent_audit_log").select("id", { count: "exact", head: true }).gte("created_at", since);
 
@@ -81,6 +94,7 @@ export async function GET(req: Request) {
         shortfallCredits: runs.reduce((s, r) => s + (Number(r.shortfall_credits) || 0), 0),
         billedRuns: runs.filter((r) => r.cost_source === "billed").length,
         estimatedRuns: runs.filter((r) => r.cost_source === "estimated").length,
+        ledgerCredits,
         avgDurationMs: durationCount ? Math.round(durationTotal / durationCount) : null,
         cacheHitRatio: (() => {
           const input = runs.reduce((s, r) => s + (r.input_tokens ?? 0), 0);

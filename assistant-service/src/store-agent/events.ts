@@ -319,6 +319,12 @@ function safeLink(url: unknown, title: unknown): ToolLink | null {
   }
 }
 
+/** Whether a search result carries any text of results (in a reference's chunk). */
+function searchText(success: Record<string, unknown> | undefined): boolean {
+  const refs = success?.references;
+  return Array.isArray(refs) && refs.some((r) => typeof (r as { chunk?: unknown })?.chunk === "string" && !!(r as { chunk: string }).chunk.trim());
+}
+
 type WebToolCall = {
   args?: Args;
   result?: { success?: Record<string, unknown>; error?: { error?: unknown }; rejected?: { reason?: unknown } };
@@ -363,7 +369,9 @@ export function webCallsInMessages(messages: readonly unknown[]): WebCall[] {
         ok: !!success,
         summary: !success
           ? clip(scrub(str(failure) || "failed").replace(/\s+/g, " "), 200)
-          : search && !links.length
+          : // Nothing found means no links and no result text: some models get their results as text only
+            // (a "Web search results" entry whose chunk holds them), which is not "No results".
+            search && !links.length && !searchText(success)
             ? NO_RESULTS
             : undefined,
         links,
