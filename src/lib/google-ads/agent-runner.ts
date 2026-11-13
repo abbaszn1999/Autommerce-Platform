@@ -10,6 +10,7 @@ import { replyToComment } from "./agent-docs";
 import { reviseDoc, type DocComment } from "./docs";
 import { gid } from "./mutations";
 import { activeChatOf, useGoogleAds } from "./store";
+import { useBusinessStore } from "@/lib/ads-shared/business-store";
 
 export function runAgentTurn(text: string): void {
   const message = text.trim();
@@ -26,8 +27,8 @@ export function runAgentTurn(text: string): void {
     data: state.data,
     range: store.range,
     scope: store.scope,
-    profile: state.profile,
-    memories: state.memories,
+    profile: useBusinessStore.getState().profile,
+    memories: useBusinessStore.getState().memories,
     docs: state.docs,
     activeDocId: state.activeTab !== "account" ? state.activeTab : undefined,
     merchantConnected: !!store.merchant.merchantId,
@@ -134,7 +135,7 @@ export function commentOnDoc(docId: string, sectionId: string, text: string): vo
     const acc = s.customerId ? s.accounts[s.customerId] : null;
     const current = acc?.docs.find((d) => d.id === docId);
     if (!acc || !current) return;
-    const { reply, edit } = replyToComment(current, comment, { data: acc.data, range: s.range, scope: s.scope, profile: acc.profile, memories: acc.memories, docs: acc.docs, activeDocId: docId });
+    const { reply, edit } = replyToComment(current, comment, { data: acc.data, range: s.range, scope: s.scope, profile: useBusinessStore.getState().profile, memories: useBusinessStore.getState().memories, docs: acc.docs, activeDocId: docId });
     s.updateDoc(docId, (d) => {
       const withReply = { ...d, comments: d.comments.map((c) => (c.id === comment.id ? { ...c, replies: [...c.replies, { author: "AGENT" as const, text: reply, at: new Date().toISOString() }], resolved: !!edit } : c)) };
       return edit ? reviseDoc(withReply, edit.sections, `${edit.note} (from a comment)`, "AGENT", edit.extra) : withReply;

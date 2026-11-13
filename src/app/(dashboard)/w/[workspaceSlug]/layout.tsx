@@ -39,6 +39,7 @@ import {
   BarChart3,
   Library,
   Megaphone,
+  Infinity as InfinityIcon,
   Lock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -142,6 +143,7 @@ export default function WorkspaceLayout({
   const isMarketResearchPage = pathname.includes("/market-research");
   const isWebsiteRestructurePage = pathname.includes("/website-restructure");
   const isGoogleAdsPage = pathname.includes("/google-ads");
+  const isMetaAdsPage = pathname.includes("/meta-ads");
   const isProductsGalleryPage = pathname.includes("/products-gallery");
   const isProductsGalleryProject = isProductsGalleryPage && searchParams.has("project");
   const isProductsVisualizerPage = pathname.includes("/products-visualizer");
@@ -154,6 +156,7 @@ export default function WorkspaceLayout({
     isMarketResearchPage ||
     isWebsiteRestructurePage ||
     isGoogleAdsPage ||
+    isMetaAdsPage ||
     isSyncPage;
   // Immersive mode hides the top header — keep false so Enrich shows it
   const isImmersive = false;
@@ -165,7 +168,8 @@ export default function WorkspaceLayout({
     isMarketResearchPage ||
     (isFreeAssessmentPage && !isFreeAssessmentWalletPage) ||
     isWebsiteRestructurePage ||
-    isGoogleAdsPage;
+    isGoogleAdsPage ||
+    isMetaAdsPage;
   // Subscription page should be accessible without an active subscription
   const isSubscriptionPage =
     pathname === `${basePath}/subscription` ||
@@ -284,6 +288,7 @@ export default function WorkspaceLayout({
     },
     // Front-end prototype on demo data until the Google Ads API is connected.
     { href: `${basePath}/google-ads`, label: "Google Ads", icon: Megaphone },
+    { href: `${basePath}/meta-ads`, label: "Meta Ads", icon: InfinityIcon },
     { href: `${basePath}/library`, label: "Library", icon: Library },
   ];
 
@@ -867,7 +872,7 @@ export default function WorkspaceLayout({
               <SubscriptionGate subscription={subscription} isActive={isActive} isLoading={subLoading} role={role}>
                 <div
                   className={
-                    isEnrichPage || isMarketResearchPage || isWebsiteRestructurePage || isGoogleAdsPage
+                    isEnrichPage || isMarketResearchPage || isWebsiteRestructurePage || isGoogleAdsPage || isMetaAdsPage
                       ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden"
                       : "flex min-h-0 flex-1 flex-col"
                   }

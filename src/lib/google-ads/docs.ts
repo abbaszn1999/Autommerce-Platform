@@ -218,6 +218,8 @@ export type AgentMemory = {
   text: string;
   source: "YOU" | "AGENT";
   at: string;
+  /** Which ads agent learned it. Memories are shared by both agents. */
+  platform?: "GOOGLE" | "META";
 };
 
 const STRIDE_LOGO = `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -298,7 +300,8 @@ export function profileCompleteness(p: BusinessProfile) {
 export function seedMemories(): AgentMemory[] {
   const at = new Date(Date.now() - 6 * 86400000).toISOString();
   return [
-    { id: gid("mem"), text: "Broad match on Running Shoes was tested in August: +3% conversions but +11% CPA. Owner prefers phrase match.", source: "AGENT", at },
+    { id: gid("mem"), text: "Broad match on Running Shoes was tested in August: +3% conversions but +11% CPA. Owner prefers phrase match.", source: "AGENT", at, platform: "GOOGLE" },
+    { id: gid("mem"), text: "On Meta, the Reels creatives with a person in the first second hold attention best. Refresh each concept every 3 weeks.", source: "AGENT", at, platform: "META" },
     { id: gid("mem"), text: "Never let total daily spend go above $600 without asking.", source: "YOU", at },
     { id: gid("mem"), text: "Glide 3 is the hero product for 2026; keep it in every running campaign.", source: "YOU", at },
   ];

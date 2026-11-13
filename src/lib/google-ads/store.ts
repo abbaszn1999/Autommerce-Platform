@@ -11,7 +11,8 @@ import { LANDING_PAGE_TYPES } from "./constants";
 import { freshSync, getDataSource, type SyncState } from "./data-source";
 import { applyOps, describeOps, gid, touchedBy } from "./mutations";
 import { validateOps } from "./validation";
-import { DEFAULT_PROFILE, seedMemories, type AgentDoc, type AgentMemory, type BusinessProfile } from "./docs";
+import type { AgentDoc, AgentMemory, BusinessProfile } from "./docs";
+import { useBusinessStore } from "@/lib/ads-shared/business-store";
 import { seedDocs } from "./agent-docs";
 import type {
   AccountData,
@@ -72,8 +73,6 @@ type AccountState = {
   openDocIds: string[];
   /** "account" or a document id. */
   activeTab: string;
-  profile: BusinessProfile;
-  memories: AgentMemory[];
   /** Whether the data on screen is loading, failed to load, or was last refreshed at some time. */
   sync: SyncState;
 };
@@ -301,8 +300,6 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
         docs,
         openDocIds: [],
         activeTab: "account",
-        profile: { ...DEFAULT_PROFILE, businessName: data.account.name },
-        memories: data.campaigns.length ? seedMemories() : [],
         sync: freshSync(),
       };
     };
@@ -538,12 +535,12 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
 
   setActiveTab: (tab) => set((s) => withAccount(s, (a) => ({ ...a, activeTab: tab }))),
 
-  setProfile: (patch) => set((s) => withAccount(s, (a) => ({ ...a, profile: { ...a.profile, ...patch } }))),
+  // Profile and memory are shared with the Meta Ads agent: one per workspace.
+  setProfile: (patch) => useBusinessStore.getState().setProfile(patch),
 
-  addMemory: (text, source) =>
-    set((s) => withAccount(s, (a) => ({ ...a, memories: [{ id: gid("mem"), text, source, at: new Date().toISOString() }, ...a.memories] }))),
+  addMemory: (text, source) => useBusinessStore.getState().addMemory(text, source, "GOOGLE"),
 
-  removeMemory: (id) => set((s) => withAccount(s, (a) => ({ ...a, memories: a.memories.filter((m) => m.id !== id) }))),
+  removeMemory: (id) => useBusinessStore.getState().removeMemory(id),
 
   markAlertsRead: (ids) =>
     set((s) =>

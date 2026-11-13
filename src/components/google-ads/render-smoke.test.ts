@@ -7,6 +7,7 @@ import { OBJECTIVES } from "@/lib/google-ads/constants";
 import { DEFAULT_PROFILE, emptyProfile, profileCompleteness } from "@/lib/google-ads/docs";
 import type { CampaignType, GaView } from "@/lib/google-ads/types";
 import { GoogleAdsShell } from "./ga-shell";
+import { useBusinessStore } from "@/lib/ads-shared/business-store";
 import { GaDialogs } from "./ga-dialogs";
 import { FolderView } from "./views/documents";
 import { GaCampaignEditor } from "./ga-campaign-editor";
@@ -23,6 +24,7 @@ const VIEWS: GaView[] = ["overview", "campaigns", "adGroups", "ads", "assets", "
 const part = (html: string, tag: string) => html.slice(html.indexOf("<" + tag), html.indexOf("</" + tag + ">"));
 
 function connect(customer = "7316204458") {
+  useBusinessStore.getState().reset();
   const s = useGoogleAds.getState();
   s.disconnect();
   s.disconnectMerchant();
@@ -704,7 +706,7 @@ describe("render smoke", () => {
     const { buildPlanDoc, buildReportDoc, buildAuditDoc, buildBudgetDoc, buildKeywordDoc, buildAdCopyDoc, buildFeedDoc, buildCompetitorDoc, buildExperimentDoc } = await import("@/lib/google-ads/agent-docs");
     const s = useGoogleAds.getState();
     const state = s.accounts[s.customerId!];
-    const c = { data: state.data, range: s.range, scope: {}, profile: state.profile, memories: state.memories };
+    const c = { data: state.data, range: s.range, scope: {}, profile: useBusinessStore.getState().profile, memories: useBusinessStore.getState().memories };
     const docs = [buildPlanDoc(c, { occasion: "Ramadan", budget: 5000, goal: "Sales", focus: "Running shoes" }), buildReportDoc(c), buildAuditDoc(c), buildBudgetDoc(c, 12000), buildKeywordDoc(c, "trail shoes"), buildAdCopyDoc(c, "leggings"), buildFeedDoc(c), buildCompetitorDoc(c), buildExperimentDoc(c)];
     for (const d of docs) {
       useGoogleAds.getState().createDoc(d);

@@ -30,6 +30,64 @@
   scrollbar-color: color-mix(in oklch, var(--muted-foreground) 40%, transparent) var(--muted);
 }
 
+/* Chart colours. Categorical slots in a fixed order (validated for colour-vision deficiency on both surfaces);
+   each mode has its own steps, not an automatic flip. A series keeps its slot whatever else is filtered. */
+.viz {
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-5: #e87ba4;
+  --viz-brand: #7c3aed;
+  --viz-muted: #a1a1aa;
+}
+.dark .viz {
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+  --viz-5: #d55181;
+  --viz-brand: #8b5cf6;
+  --viz-muted: #71717a;
+}
+
+/* Slim, modern scrollbar: no arrows, no track, a small pill that stays faint until the area is hovered, and turns brand purple when grabbed. */
+.scroll-slim::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scroll-slim::-webkit-scrollbar-track,
+.scroll-slim::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.scroll-slim::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.scroll-slim::-webkit-scrollbar-thumb {
+  /* A 3px pill: the transparent border and background-clip inset it inside the 10px hit area. */
+  background-color: color-mix(in oklch, var(--muted-foreground) 22%, transparent);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  transition: background-color 0.2s ease;
+}
+.scroll-slim:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+}
+.scroll-slim::-webkit-scrollbar-thumb:hover,
+.scroll-slim::-webkit-scrollbar-thumb:active {
+  background-color: #7c3aed;
+}
+/* Firefox has no pseudo-elements; it gets the same idea through the standard properties. */
+@supports not selector(::-webkit-scrollbar) {
+  .scroll-slim {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
+  }
+}
+
 /* Scrollable area with no visible scrollbar (arrows, track, thumb) */
 .no-scrollbar::-webkit-scrollbar {
   width: 0;

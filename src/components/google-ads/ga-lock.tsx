@@ -2,11 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Lock, Megaphone } from "lucide-react";
+import { Loader2, Lock, Megaphone, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-/** The Google Ads prototype is open to people given its password. */
-export function GoogleAdsLock() {
+/**
+ * The ads prototypes are open to people given their password. Google Ads and
+ * Meta Ads share one password and one cookie, so one unlock opens both. Icons
+ * are components, so a server page can't pass one: wrap this in a client file.
+ */
+export function GoogleAdsLock({ title = "Google Ads", icon: Icon = Megaphone }: { title?: string; icon?: LucideIcon } = {}) {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -42,10 +46,10 @@ export function GoogleAdsLock() {
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border bg-background p-6 shadow-sm">
         <div className="mb-5 flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#400095]/10 text-[#6B358D] dark:bg-[#F76D01]/10 dark:text-[#F76D01]">
-            <Megaphone className="h-5 w-5" />
+            <Icon className="h-5 w-5" />
           </span>
           <div>
-            <h1 className="text-[15px] font-semibold leading-tight">Google Ads</h1>
+            <h1 className="text-[15px] font-semibold leading-tight">{title}</h1>
             <p className="text-[12px] text-muted-foreground">Preview: enter the password to open it.</p>
           </div>
         </div>

@@ -1,0 +1,43 @@
+"use client";
+
+import { cn } from "@/lib/utils";
+import { useAccountState, useMetaAds } from "@/lib/meta-ads/store";
+import { navCtx, tabGroupOf, visibleTabs } from "./nav-model";
+
+/** Tab strip for sidebar items that hold several related pages (Keywords, Audiences, Locations & schedule). */
+export function MaViewTabs() {
+  const acc = useAccountState();
+  const view = useMetaAds((s) => s.view);
+  const scope = useMetaAds((s) => s.scope);
+  const setView = useMetaAds((s) => s.setView);
+  const hasCatalog = useMetaAds((s) => s.catalog.status === "connected");
+  if (!acc) return null;
+  const ctx = navCtx(acc.data.campaigns, scope, hasCatalog);
+  const group = tabGroupOf(view, ctx);
+  if (!group) return null;
+  const tabs = visibleTabs(group, ctx);
+  if (tabs.length < 2) return null;
+  return (
+    <div role="tablist" aria-label={group.label} className="-mt-1 mb-4 flex gap-1 border-b border-border/60">
+      {tabs.map((t) => {
+        const active = t.view === view;
+        return (
+          <button
+            key={t.view}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => setView(t.view)}
+            className={cn(
+              "-mb-px border-b-2 px-3 py-2 text-xs font-semibold transition-colors",
+              active ? "border-[#400095] text-[#400095] dark:border-violet-400 dark:text-violet-300" : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
