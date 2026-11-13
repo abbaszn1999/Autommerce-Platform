@@ -2,6 +2,7 @@
 
 import { Component, type ReactNode } from "react";
 import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import { UNAVAILABLE_LABELS } from "@/lib/google-ads/live-targeting";
 import { useAccountState, useGoogleAds } from "@/lib/google-ads/store";
 import { Card } from "./ga-ui";
 
@@ -42,6 +43,39 @@ export function GaSyncBanner() {
   const acc = useAccountState();
   const refresh = useGoogleAds((s) => s.refreshData);
   const sync = acc?.sync;
+  const unavailable = acc?.data.unavailable;
+  if (sync?.status === "ready" && unavailable?.length)
+    return (
+      <div role="alert" className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs">
+        <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+        <span className="min-w-0 flex-1 text-muted-foreground">
+          <span className="font-semibold text-foreground">Part of this account couldn&apos;t be read from Google Ads:</span> {unavailable.map((n) => UNAVAILABLE_LABELS[n] ?? n).join(", ")}. Those parts may look empty.
+        </span>
+        <button type="button" onClick={() => void refresh()} className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-background px-2 py-1 font-semibold hover:bg-muted">
+          <RefreshCw className="h-3 w-3" /> Retry
+        </button>
+      </div>
+    );
+  const capped = acc?.data.listsCapped;
+  if (sync?.status === "ready" && capped) {
+    const n = (v: number) => v.toLocaleString("en");
+    const parts = [
+      capped.keywords && `the ${n(capped.keywords.shown)} keywords that spent the most (of ${n(capped.keywords.total)})`,
+      capped.ads && `the ${n(capped.ads.shown)} ads that spent the most (of ${n(capped.ads.total)})`,
+      capped.negatives && `${n(capped.negatives.shown)} of ${n(capped.negatives.total)} negative keywords`,
+    ].filter(Boolean);
+    return (
+      <div role="status" className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/5 px-3 py-2 text-xs text-muted-foreground">
+        <AlertTriangle className="h-3.5 w-3.5 text-sky-600" />
+        <span className="min-w-0 flex-1">
+          <span className="font-semibold text-foreground">A large account.</span>{" "}
+          {parts.length ? `Lists show ${parts.join(", ")}. ` : ""}
+          {capped.queries?.length ? `Google returned more than 100,000 rows for ${capped.queries.map((q) => UNAVAILABLE_LABELS[q] ?? q).join(", ")}; the rest isn't listed. ` : ""}
+          Account, campaign and ad group totals include everything. Vera reads the full account.
+        </span>
+      </div>
+    );
+  }
   if (!sync || sync.status === "ready") return null;
   if (sync.status === "loading") {
     return (

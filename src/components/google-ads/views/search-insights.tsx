@@ -11,6 +11,9 @@ import { metricColumns } from "../ga-columns";
 import { GaTable, type GaColumn } from "../ga-table";
 import { Card, EmptyState, Pill, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
+import { SegmentNotice, hasNotice, useLiveCells } from "../use-segment";
+import { rowsFromCells } from "@/lib/google-ads/live-segments";
+import { useGoogleAds } from "@/lib/google-ads/store";
 
 const AGENT_BTN = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 px-3 text-xs font-semibold hover:bg-muted";
 
@@ -25,7 +28,8 @@ function NeedsSearchCampaign({ title, kind = "Search" }: { title: string; kind?:
 
 // ─── Landing pages ──────────────────────────────────────────────────────────
 
-type PageRow = { url: string; ads: number; base: ReturnType<typeof addBase>; metrics: Metrics; speed: number };
+/** `speed` is out of 100 so one scale colours it; `speedText` is what is shown. Empty when Google has no score. */
+type PageRow = { url: string; ads: number; base: ReturnType<typeof addBase>; metrics: Metrics; speed: number | null; speedText: string };
 
 const clean = (url: string) => url.replace(/^https?:\/\//, "").replace(/[?#].*$/, "").replace(/\/$/, "");
 
@@ -38,18 +42,32 @@ function speedScore(url: string) {
 
 export function LandingPagesView() {
   const { data, range, currency, campaign } = useGa();
+  const live = useGoogleAds((s) => s.mode === "live");
+  const load = useLiveCells(live && campaign ? "landing" : null);
   const rows = useMemo<PageRow[]>(() => {
     if (!campaign) return [];
     const groups = new Set(data.adGroups.filter((g) => g.campaignId === campaign.id).map((g) => g.id));
+    if (live) {
+      const adsUsing = (url: string) => data.ads.filter((a) => groups.has(a.adGroupId) && a.finalUrl && clean(a.finalUrl) === clean(url)).length;
+      return rowsFromCells("landing", load.cells ?? [], [campaign.id]).map((r) => ({
+        url: clean(r.key),
+        ads: adsUsing(r.key),
+        base: r.base,
+        metrics: r.metrics,
+        speed: r.speed ? r.speed * 10 : null,
+        speedText: r.speed ? `${r.speed}/10` : "—",
+      }));
+    }
     const byUrl = new Map<string, PageRow>();
     for (const ad of data.ads.filter((a) => groups.has(a.adGroupId) && a.finalUrl)) {
       const url = clean(ad.finalUrl);
       const cur = byUrl.get(url);
       const base = addBase(cur?.base ?? EMPTY_BASE, adBase(data, ad.id, range));
-      byUrl.set(url, { url, ads: (cur?.ads ?? 0) + 1, base, metrics: derive(base), speed: speedScore(url) });
+      const speed = speedScore(url);
+      byUrl.set(url, { url, ads: (cur?.ads ?? 0) + 1, base, metrics: derive(base), speed, speedText: String(speed) });
     }
     return [...byUrl.values()];
-  }, [data, range, campaign]);
+  }, [data, range, campaign, live, load.cells]);
   if (!campaign) return <NeedsSearchCampaign title="Landing pages" kind="Search, Display or Demand Gen" />;
 
   const columns: GaColumn<PageRow>[] = [
@@ -61,8 +79,8 @@ export function LandingPagesView() {
       header: "Mobile speed",
       label: "Mobile speed score",
       align: "right",
-      sortValue: (r) => r.speed,
-      render: (r) => <Pill tone={r.speed >= 75 ? "good" : r.speed >= 50 ? "warn" : "bad"}>{r.speed}</Pill>,
+      sortValue: (r) => r.speed ?? -1,
+      render: (r) => (r.speed === null ? <span className="text-muted-foreground">—</span> : <Pill tone={r.speed >= 75 ? "good" : r.speed >= 50 ? "warn" : "bad"}>{r.speedText}</Pill>),
     },
   ];
 
@@ -73,13 +91,17 @@ export function LandingPagesView() {
         subtitle={`Pages ${campaign.name} sends people to. Slow or low-converting pages waste clicks. To change a page, ask the agent.`}
         actions={<button type="button" onClick={() => runAgentTurn(`Which landing pages in ${campaign.name} are wasting clicks?`)} className={AGENT_BTN}><Bot className="h-3.5 w-3.5" /> Analyse with agent</button>}
       />
-      <GaTable
-        rows={rows}
-        columns={columns}
-        rowKey={(r) => r.url}
-        defaultSort={{ id: "cost", dir: "desc" }}
-        empty={<p className="px-4 py-6 text-center text-xs text-muted-foreground">No landing pages yet. They appear once the campaign has ads.</p>}
-      />
+      {live && hasNotice(load) ? (
+        <Card className="p-4"><SegmentNotice load={load} /></Card>
+      ) : (
+        <GaTable
+          rows={rows}
+          columns={columns}
+          rowKey={(r) => r.url}
+          defaultSort={{ id: "cost", dir: "desc" }}
+          empty={<p className="px-4 py-6 text-center text-xs text-muted-foreground">{live ? "Google Ads has no landing page data for this period." : "No landing pages yet. They appear once the campaign has ads."}</p>}
+        />
+      )}
     </div>
   );
 }

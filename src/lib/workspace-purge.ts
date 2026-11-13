@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { removeWorkspaceConnections } from "@/lib/google-ads/connection.server";
 
 const BUCKET = "workspace-files";
 const LIST_PAGE_SIZE = 100;
@@ -61,6 +62,11 @@ export async function purgeWorkspace(
     .eq("id", workspaceId)
     .is("deleted_at", null);
   if (softError) throw new Error(softError.message);
+
+  // Google sign-ins live at Composio, outside our database: remove them before the row that points to them.
+  await removeWorkspaceConnections(admin, workspaceId).catch((err) => {
+    throw new Error(`Google connection removal failed (${(err as Error).message}). The workspace row was retained; try again.`);
+  });
 
   const filesDeleted = await deleteStoragePrefix(admin, workspaceId);
   const remaining = await listStoragePathsUnderPrefix(admin, workspaceId);

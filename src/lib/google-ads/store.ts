@@ -5,15 +5,17 @@
 // POST to /api/google-ads/mutate and account data comes from the report cache.
 
 import { create } from "zustand";
-import { rangeFor } from "./metrics";
+import { customRange, rangeFor, todayIn } from "./metrics";
 import { MANAGER_ACCOUNT, MERCHANT_ACCOUNTS, buildDemoAccount, buildEmptyAccount, buildSecondAccount, DEMO_GOOGLE_EMAIL } from "./mock-data";
 import { LANDING_PAGE_TYPES } from "./constants";
-import { freshSync, getDataSource, type SyncState } from "./data-source";
+import { freshSync, getDataSource, liveDataSource, setDataSource, type SyncState } from "./data-source";
 import { applyOps, describeOps, gid, touchedBy } from "./mutations";
 import { validateOps } from "./validation";
 import type { AgentDoc, AgentMemory, BusinessProfile } from "./docs";
 import { useBusinessStore } from "@/lib/ads-shared/business-store";
 import { seedDocs } from "./agent-docs";
+import { LiveApiError, liveApi, type LiveConnection, type LiveKind } from "./live-api";
+import { LIVE_OPS } from "./live-mutate";
 import type {
   AccountData,
   AgentMessage,
@@ -45,6 +47,28 @@ export type MerchantConnection = {
 };
 
 const NO_MERCHANT: MerchantConnection = { status: "disconnected", email: null, accounts: [], merchantId: null };
+
+/**
+ * "demo": simulated sign-in and sample accounts, all in memory.
+ * "live": real Google sign-in through /api/google-ads/connection for one workspace.
+ */
+export type ConnectionMode = "demo" | "live";
+
+export type LiveState = {
+  /** A request to the server is running (connect, list, select, disconnect). */
+  busy: boolean;
+  /** Which connection the running request is for, so only its button shows progress. */
+  busyFor: "ads" | "merchant" | null;
+  error: string | null;
+  /** Accounts in the picker that Google won't let us use (cancelled, not enabled). */
+  unusable: string[];
+  /** Google's reason per unusable account, when it gives one. */
+  unusableReasons: Record<string, string>;
+  /** The customer ID typed before sign-in, when Google refuses it for this sign-in (wrong number). */
+  wrongLoginId: string | null;
+};
+
+const LIVE_IDLE: LiveState = { busy: false, busyFor: null, error: null, unusable: [], unusableReasons: {}, wrongLoginId: null };
 
 export type GaDialog =
   | { kind: "adGroup"; campaignId?: string }
@@ -86,6 +110,9 @@ type GaStore = {
   /** The user pressed "Go to agent". Connecting Google Ads alone doesn't open the workspace. */
   entered: boolean;
   merchant: MerchantConnection;
+  mode: ConnectionMode;
+  workspaceId: string | null;
+  live: LiveState;
 
   view: GaView;
   scope: GaScope;
@@ -96,6 +123,14 @@ type GaStore = {
   busyChatId: string | null;
   editor: { open: boolean; draft?: CampaignBundle; changeId?: string };
   dialog: GaDialog | null;
+
+  /** Switch to real connections for a workspace and load what it has connected. */
+  initLive: (workspaceId: string, notice?: { result: string | null; kind: string | null }) => Promise<void>;
+  /** Live mode: send the browser to Google sign-in. Google Ads needs the customer ID first. */
+  startLiveConnect: (kind: LiveKind, loginCustomerId?: string) => Promise<void>;
+  clearLiveError: () => void;
+  /** Close the sign-in step without touching an existing connection. */
+  cancelConnect: () => void;
 
   startConnect: () => void;
   completeAuth: () => void;
@@ -119,9 +154,10 @@ type GaStore = {
 
   setView: (view: GaView) => void;
   /** Reload the open account from the data source (shows loading, then ready or an error with Retry). */
-  refreshData: () => Promise<void>;
+  refreshData: (opts?: { force?: boolean }) => Promise<void>;
   setScope: (scope: GaScope, view?: GaView) => void;
-  setRange: (preset: DateRangePreset) => void;
+  /** A preset, or dates the user picked (a custom range). */
+  setRange: (range: DateRangePreset | { start: string; end: string }) => void;
   setAutoApprove: (on: boolean) => void;
   setAgentBusy: (busy: boolean, chatId?: string) => void;
   openEditor: (draft?: CampaignBundle, changeId?: string) => void;
@@ -185,7 +221,7 @@ function viewForScope(view: GaView, scope: GaScope, type?: CampaignType): GaView
     return allowed.includes(view) ? view : "assetGroupAssets";
   }
   if (assetGroupOnly.includes(view)) return scope.campaignId ? "adGroups" : "campaigns";
-  const accountOnly: GaView[] = ["campaigns", "conversions", "library", "products", "rules", "keywordPlanner", "experiments", "links", "accountSettings", "documents", "profile", "connections", "trends"];
+  const accountOnly: GaView[] = ["campaigns", "conversions", "library", "products", "rules", "competitorAds", "experiments", "links", "accountSettings", "documents", "profile", "connections", "trends"];
   if (scope.adGroupId) {
     // Inside an ad group only that type's own pages exist; anything else goes to its home page.
     const home: GaView = isSearch ? "keywords" : "ads";
@@ -236,6 +272,9 @@ function withAccount(state: GaStore, update: (a: AccountState) => AccountState):
 
 export const NEW_CHAT_TITLE = "New chat";
 
+/** Accounts that asked for a reload while one was already running. */
+const reloadAfter = new Set<string>();
+
 function newThread(): ChatThread {
   const now = new Date().toISOString();
   return { id: gid("chat"), title: NEW_CHAT_TITLE, messages: [], mode: "agent", pinned: false, createdAt: now, updatedAt: now };
@@ -264,7 +303,237 @@ function ensureChat(a: AccountState): AccountState {
   return { ...a, chats: [fresh, ...a.chats], openChatIds: [fresh.id], activeChatId: fresh.id };
 }
 
-export const useGoogleAds = create<GaStore>((set, get) => ({
+function freshAccountState(data: AccountData, docs: AgentDoc[] = []): AccountState {
+  const first = newThread();
+  return {
+    data,
+    changes: [],
+    history: [],
+    chats: [first],
+    openChatIds: [first.id],
+    activeChatId: first.id,
+    docs,
+    openDocIds: [],
+    activeTab: "account",
+    // Profile and memories live in the shared business store (one per workspace, shared with Meta Ads).
+    sync: freshSync(),
+  };
+}
+
+type LiveAccountFields = Pick<GoogleAccount, "customerId" | "name" | "currency" | "timeZone" | "isManager" | "managerCustomerId">;
+
+function liveGoogleAccount(a: LiveAccountFields): GoogleAccount {
+  return {
+    customerId: a.customerId,
+    name: a.name,
+    currency: a.currency,
+    timeZone: a.timeZone,
+    isManager: a.isManager,
+    managerCustomerId: a.managerCustomerId,
+    optimizationScore: 0,
+    autoTagging: false,
+  };
+}
+
+/** A real account starts empty; its campaigns and reports load from Google in a later step. */
+function liveAccountData(account: GoogleAccount): AccountData {
+  return { ...buildEmptyAccount(), account, audiences: [], conversions: [], links: [] };
+}
+
+const liveMerchant = (merchantId: string, name: string, website = ""): MerchantAccount => ({ merchantId, name, website, country: "" });
+
+export const useGoogleAds = create<GaStore>((set, get) => {
+  /** Run a live request for the current workspace, showing busy and any error. */
+  const liveRun = async (fn: (workspaceId: string) => Promise<void>, busyFor: LiveState["busyFor"] = null) => {
+    const workspaceId = get().workspaceId;
+    if (!workspaceId) return;
+    set((s) => ({ live: { ...s.live, busy: true, busyFor, error: null } }));
+    try {
+      await fn(workspaceId);
+      set((s) => ({ live: { ...s.live, busy: false, busyFor: null } }));
+    } catch (err) {
+      set((s) => ({ live: { ...s.live, busy: false, busyFor: null, error: err instanceof LiveApiError ? err.message : "Something went wrong. Try again." } }));
+    }
+  };
+
+  const loadAdsOptions = async (workspaceId: string) => {
+    const { accounts, wrongLoginId } = await liveApi.adsAccounts(workspaceId);
+    set((s) => ({
+      status: "selecting",
+      entered: false,
+      accessible: accounts.map(liveGoogleAccount),
+      live: {
+        ...s.live,
+        unusable: accounts.filter((a) => !a.usable).map((a) => a.customerId),
+        unusableReasons: Object.fromEntries(accounts.filter((a) => !a.usable && a.reason).map((a) => [a.customerId, a.reason!])),
+        wrongLoginId: wrongLoginId ?? null,
+      },
+    }));
+  };
+
+  const openAdsAccount = (account: GoogleAccount, entered: boolean) => {
+    set((s) => ({
+      status: "connected",
+      entered,
+      customerId: account.customerId,
+      accessible: s.accessible.some((a) => a.customerId === account.customerId) ? s.accessible : [account],
+      accounts: {
+        ...s.accounts,
+        [account.customerId]: s.accounts[account.customerId] ?? { ...freshAccountState(liveAccountData(account)), sync: { ...freshSync(), pending: true } },
+      },
+      view: "overview",
+      scope: {},
+      editor: { open: false },
+      dialog: null,
+    }));
+    // First open of a real account: load it from Google (the server caches it for a while).
+    if (!get().accounts[account.customerId]?.data.exact) void get().refreshData();
+  };
+
+  const chooseLive = (customerId: string, entered: boolean) =>
+    liveRun(async (workspaceId) => {
+      const { account } = await liveApi.select(workspaceId, "ads", customerId);
+      openAdsAccount(liveGoogleAccount(account as LiveAccountFields), entered);
+    }, "ads");
+
+  const loadMerchantOptions = async (workspaceId: string) => {
+    const { accounts } = await liveApi.merchantAccounts(workspaceId);
+    set((s) => ({ merchant: { ...s.merchant, status: "selecting", accounts: accounts.map((a) => liveMerchant(a.merchantId, a.name, a.website)) } }));
+  };
+
+  /** Update one change / history entry of one account (the account a request started on, even if the user switched). */
+  const patchChange = (customerId: string, changeId: string, patch: Partial<ProposedChange>) =>
+    set((s) => {
+      const a = s.accounts[customerId];
+      return a ? { accounts: { ...s.accounts, [customerId]: { ...a, changes: a.changes.map((c) => (c.id === changeId ? { ...c, ...patch } : c)) } } } : {};
+    });
+  const patchEvent = (customerId: string, eventId: string, patch: Partial<ChangeEvent>) =>
+    set((s) => {
+      const a = s.accounts[customerId];
+      return a ? { accounts: { ...s.accounts, [customerId]: { ...a, history: a.history.map((e) => (e.id === eventId ? { ...e, ...patch } : e)) } } } : {};
+    });
+  const liveMessage = (err: unknown) => (err instanceof LiveApiError ? err.message : "Couldn't reach Google Ads. Try again; the change is never sent twice.");
+
+  /**
+   * Live: send an approved change to Google Ads through the server. A refusal marks it
+   * FAILED with the reason; a network problem leaves it PENDING so Approve can be pressed
+   * again (the server never applies the same change id twice).
+   */
+  const applyLive = async (changeId: string) => {
+    const start = get();
+    const customerId = start.customerId;
+    const workspaceId = start.workspaceId;
+    const acc = current(start);
+    const change = acc?.changes.find((c) => c.id === changeId);
+    if (!customerId || !workspaceId || !acc || !change || change.status !== "PENDING" || change.applying) return;
+    patchChange(customerId, changeId, { applying: true, error: undefined });
+    try {
+      const res = await liveApi.change({ workspaceId, clientChangeId: change.id, title: change.title, source: change.source, ops: change.ops });
+      if (res.status === "failed") return patchChange(customerId, changeId, { applying: false, status: "FAILED", error: res.error });
+      const event: ChangeEvent = {
+        id: gid("evt"),
+        at: new Date().toISOString(),
+        actor: change.source === "AGENT" ? "Agent (approved by you)" : ACTOR,
+        source: change.source,
+        title: change.title,
+        diff: change.diff,
+        inverse: res.inverse.length ? res.inverse : undefined,
+        changeId,
+        serverId: res.id,
+        touched: touchedBy(acc.data, change.ops, acc.data),
+      };
+      set((s) => {
+        const a = s.accounts[customerId];
+        if (!a) return {};
+        const changes = a.changes.map((c) => (c.id === changeId ? { ...c, applying: false, status: "APPLIED" as const } : c));
+        return { accounts: { ...s.accounts, [customerId]: { ...a, changes, history: [event, ...a.history] } } };
+      });
+      // Show what Google now has, not our guess of it.
+      if (get().customerId === customerId) void get().refreshData({ force: true });
+    } catch (err) {
+      patchChange(customerId, changeId, { applying: false, error: liveMessage(err) });
+    }
+  };
+
+  const undoLive = async (eventId: string) => {
+    const start = get();
+    const customerId = start.customerId;
+    const workspaceId = start.workspaceId;
+    const acc = current(start);
+    const event = acc?.history.find((e) => e.id === eventId);
+    if (!customerId || !workspaceId || !acc || !event?.serverId || !event.inverse || event.undone || event.undoing) return;
+    patchEvent(customerId, eventId, { undoing: true, undoError: undefined });
+    try {
+      const res = await liveApi.change({ workspaceId, clientChangeId: gid("undo"), undoOf: event.serverId });
+      if (res.status === "failed") return patchEvent(customerId, eventId, { undoing: false, undoError: res.error });
+      const undoEvent: ChangeEvent = {
+        id: gid("evt"),
+        at: new Date().toISOString(),
+        actor: ACTOR,
+        source: "USER",
+        title: `Undo: ${event.title}`,
+        diff: describeOps(acc.data, event.inverse),
+        serverId: res.id,
+        touched: event.touched,
+      };
+      set((s) => {
+        const a = s.accounts[customerId];
+        if (!a) return {};
+        const history = [undoEvent, ...a.history.map((e) => (e.id === eventId ? { ...e, undoing: false, undone: true } : e))];
+        return { accounts: { ...s.accounts, [customerId]: { ...a, history } } };
+      });
+      if (get().customerId === customerId) void get().refreshData({ force: true });
+    } catch (err) {
+      patchEvent(customerId, eventId, { undoing: false, undoError: liveMessage(err) });
+    }
+  };
+
+  /**
+   * Live: the account's change history comes from the server, so changes approved
+   * in Vera's chats show here too, each with Undo while it can still be undone.
+   */
+  const loadLiveHistory = async (customerId: string) => {
+    const workspaceId = get().workspaceId;
+    if (!workspaceId) return;
+    try {
+      const { changes } = await liveApi.history(workspaceId);
+      set((s) => {
+        const a = s.accounts[customerId];
+        if (!a) return {};
+        const history: ChangeEvent[] = changes.map((c) => {
+          let diff: ChangeEvent["diff"] = [];
+          try {
+            diff = describeOps(a.data, c.ops);
+          } catch {
+            // An entity that no longer exists can't be described; the title still says what happened.
+          }
+          const undoable = c.source !== "UNDO" && !c.undone_at && !!c.inverse?.length;
+          return {
+            id: `srv-${c.id}`,
+            at: c.created_at,
+            actor: c.source === "AGENT" ? "Vera (approved by you)" : ACTOR,
+            source: c.source === "AGENT" ? "AGENT" : c.source === "RECOMMENDATION" ? "RECOMMENDATION" : "USER",
+            title: c.title,
+            diff,
+            inverse: undoable || c.undone_at ? (c.inverse ?? undefined) : undefined,
+            undone: !!c.undone_at,
+            serverId: c.id,
+            touched: touchedBy(a.data, c.ops, a.data),
+          };
+        });
+        return { accounts: { ...s.accounts, [customerId]: { ...a, history } } };
+      });
+    } catch {
+      // History is informative; the account itself still works without it.
+    }
+  };
+
+  const connectedAccount = (c: LiveConnection): GoogleAccount | null =>
+    c.status === "connected" && c.accountId
+      ? liveGoogleAccount({ customerId: c.accountId, name: c.accountName ?? c.accountId, currency: c.currency ?? "", timeZone: c.timeZone ?? "", isManager: false })
+      : null;
+
+  return {
   status: "disconnected",
   googleEmail: null,
   accessible: [],
@@ -272,6 +541,9 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
   customerId: null,
   entered: false,
   merchant: NO_MERCHANT,
+  mode: "demo",
+  workspaceId: null,
+  live: LIVE_IDLE,
 
   view: "overview",
   scope: {},
@@ -282,84 +554,171 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
   editor: { open: false },
   dialog: null,
 
+  initLive: async (workspaceId, notice) => {
+    setDataSource(liveDataSource(workspaceId));
+    set({
+      mode: "live",
+      workspaceId,
+      autoApprove: false,
+      status: "disconnected",
+      entered: false,
+      googleEmail: null,
+      accessible: [],
+      accounts: {},
+      customerId: null,
+      merchant: NO_MERCHANT,
+      // Back from Google sign-in: the connection that was being connected shows the progress.
+      live: { ...LIVE_IDLE, busy: true, busyFor: notice?.result ? (notice.kind === "merchant" ? "merchant" : "ads") : null },
+    });
+    try {
+      const c = await liveApi.connections(workspaceId);
+      if (!c.configured) throw new LiveApiError("Google Ads isn't set up on this server yet.");
+      const ads = connectedAccount(c.ads);
+      if (ads) openAdsAccount(ads, false);
+      else if (c.ads.status === "selecting") await loadAdsOptions(workspaceId);
+      if (c.merchant.status === "connected" && c.merchant.accountId)
+        set({ merchant: { status: "connected", email: null, merchantId: c.merchant.accountId, accounts: [liveMerchant(c.merchant.accountId, c.merchant.accountName ?? c.merchant.accountId)] } });
+      else if (c.merchant.status === "selecting") await loadMerchantOptions(workspaceId);
+      const failed = notice?.result === "failed";
+      const which = notice?.kind === "merchant" ? "Merchant Center" : "Google Ads";
+      set((s) => ({ live: { ...s.live, busy: false, error: failed ? `${which} sign-in didn't finish. Try again.` : null } }));
+    } catch (err) {
+      set((s) => ({ live: { ...s.live, busy: false, error: err instanceof LiveApiError ? err.message : "Couldn't load the Google connection." } }));
+    }
+  },
+
+  startLiveConnect: async (kind, loginCustomerId) => {
+    const workspaceId = get().workspaceId;
+    if (!workspaceId) return;
+    set((s) => ({ live: { ...s.live, busy: true, busyFor: kind, error: null } }));
+    try {
+      const { redirectUrl } = await liveApi.start(workspaceId, kind, loginCustomerId);
+      // Stay busy: the page is leaving for Google.
+      window.location.assign(redirectUrl);
+    } catch (err) {
+      set((s) => ({ live: { ...s.live, busy: false, busyFor: null, error: err instanceof LiveApiError ? err.message : "Couldn't start Google sign-in." } }));
+    }
+  },
+
+  clearLiveError: () => set((s) => ({ live: { ...s.live, error: null } })),
+
+  cancelConnect: () => set((s) => ({ status: s.customerId ? "connected" : s.accessible.length ? "selecting" : "disconnected" })),
+
   startConnect: () => set({ status: "authorizing" }),
 
   completeAuth: () => {
     const demo = buildDemoAccount();
     const second = buildSecondAccount();
     const empty = buildEmptyAccount();
-    const fresh = (data: AccountData, docs: AgentDoc[] = []): AccountState => {
-      const first = newThread();
-      return {
-        data,
-        changes: [],
-        history: [],
-        chats: [first],
-        openChatIds: [first.id],
-        activeChatId: first.id,
-        docs,
-        openDocIds: [],
-        activeTab: "account",
-        sync: freshSync(),
-      };
-    };
     set({
       status: "selecting",
       googleEmail: DEMO_GOOGLE_EMAIL,
       accessible: [MANAGER_ACCOUNT, demo.account, second.account, empty.account],
       accounts: {
-        [demo.account.customerId]: fresh(demo, seedDocs(demo)),
-        [second.account.customerId]: fresh(second),
-        [empty.account.customerId]: fresh(empty),
+        [demo.account.customerId]: freshAccountState(demo, seedDocs(demo)),
+        [second.account.customerId]: freshAccountState(second),
+        [empty.account.customerId]: freshAccountState(empty),
       },
     });
   },
 
-  chooseAccount: (customerId) =>
-    set({ status: "connected", entered: false, customerId, view: "overview", scope: {}, editor: { open: false }, dialog: null }),
+  chooseAccount: (customerId) => {
+    if (get().mode === "live") return void chooseLive(customerId, false);
+    set({ status: "connected", entered: false, customerId, view: "overview", scope: {}, editor: { open: false }, dialog: null });
+  },
 
-  selectAccount: (customerId) =>
-    set({ status: "connected", entered: true, customerId, view: "overview", scope: {}, editor: { open: false }, dialog: null }),
+  selectAccount: (customerId) => {
+    if (get().mode === "live" && customerId !== get().customerId) return void chooseLive(customerId, true);
+    set({ status: "connected", entered: true, customerId, view: "overview", scope: {}, editor: { open: false }, dialog: null });
+  },
 
-  changeAccount: () => set((s) => (s.status === "connected" ? { status: "selecting", entered: false } : {})),
+  changeAccount: () => {
+    if (get().mode === "live") return void liveRun(loadAdsOptions, "ads");
+    set((s) => (s.status === "connected" ? { status: "selecting", entered: false } : {}));
+  },
 
   enterWorkspace: () => set((s) => (s.status === "connected" && s.customerId ? { entered: true, view: "overview", scope: {} } : {})),
 
-  disconnect: () =>
-    set({ status: "disconnected", entered: false, googleEmail: null, accessible: [], accounts: {}, customerId: null, view: "overview", scope: {} }),
+  disconnect: () => {
+    const reset = () =>
+      set({ status: "disconnected", entered: false, googleEmail: null, accessible: [], accounts: {}, customerId: null, view: "overview", scope: {} });
+    if (get().mode !== "live") return reset();
+    void liveRun(async (workspaceId) => {
+      await liveApi.disconnect(workspaceId, "ads");
+      reset();
+    }, "ads");
+  },
 
-  startMerchantConnect: () => set((s) => ({ merchant: { ...s.merchant, status: "authorizing" } })),
+  startMerchantConnect: () => {
+    if (get().mode === "live") return void get().startLiveConnect("merchant");
+    set((s) => ({ merchant: { ...s.merchant, status: "authorizing" } }));
+  },
 
   completeMerchantAuth: () =>
     set((s) => ({ merchant: { ...s.merchant, status: "selecting", email: DEMO_GOOGLE_EMAIL, accounts: MERCHANT_ACCOUNTS } })),
 
-  selectMerchantAccount: (merchantId) =>
-    set((s) => (s.merchant.accounts.some((a) => a.merchantId === merchantId) ? { merchant: { ...s.merchant, status: "connected", merchantId } } : {})),
+  selectMerchantAccount: (merchantId) => {
+    if (get().mode === "live")
+      return void liveRun(async (workspaceId) => {
+        await liveApi.select(workspaceId, "merchant", merchantId);
+        set((s) => ({ merchant: { ...s.merchant, status: "connected", merchantId } }));
+      }, "merchant");
+    set((s) => (s.merchant.accounts.some((a) => a.merchantId === merchantId) ? { merchant: { ...s.merchant, status: "connected", merchantId } } : {}));
+  },
 
-  changeMerchantAccount: () => set((s) => (s.merchant.email ? { merchant: { ...s.merchant, status: "selecting", accounts: MERCHANT_ACCOUNTS } } : {})),
+  changeMerchantAccount: () => {
+    if (get().mode === "live") return void liveRun(loadMerchantOptions, "merchant");
+    set((s) => (s.merchant.email ? { merchant: { ...s.merchant, status: "selecting", accounts: MERCHANT_ACCOUNTS } } : {}));
+  },
 
   cancelMerchantConnect: () =>
     set((s) => ({ merchant: s.merchant.merchantId ? { ...s.merchant, status: "connected" } : NO_MERCHANT })),
 
-  disconnectMerchant: () => set({ merchant: NO_MERCHANT }),
+  disconnectMerchant: () => {
+    if (get().mode !== "live") return set({ merchant: NO_MERCHANT });
+    void liveRun(async (workspaceId) => {
+      await liveApi.disconnect(workspaceId, "merchant");
+      set({ merchant: NO_MERCHANT });
+    }, "merchant");
+  },
 
   setView: (view) => set({ view }),
 
-  refreshData: async () => {
+  refreshData: async (opts) => {
     const start = get();
     const id = start.customerId;
     const acc = current(start);
-    if (!id || !acc || acc.sync.status === "loading") return;
+    if (!id || !acc) return;
+    if (acc.sync.status === "loading") {
+      // A change landed (or the range changed) while loading: load once more when this one ends.
+      reloadAfter.add(id);
+      return;
+    }
+    // Patch the account this load was for, even if the user switched accounts meanwhile.
     const patch = (sync: Partial<SyncState>, data?: AccountData) =>
-      set((s) => withAccount(s, (a) => ({ ...a, data: data ?? a.data, sync: { ...a.sync, ...sync } })));
+      set((s) => {
+        const a = s.accounts[id];
+        return a ? { accounts: { ...s.accounts, [id]: { ...a, data: data ?? a.data, sync: { ...a.sync, ...sync } } } } : {};
+      });
     patch({ status: "loading", error: undefined });
     try {
-      const next = await getDataSource().fetchAccount(id, acc.data);
+      const next = await getDataSource().fetchAccount(id, acc.data, { range: start.range, force: opts?.force });
       // Keep any change made while loading unless the source returned a new snapshot.
-      patch({ status: "ready", refreshedAt: new Date().toISOString(), error: undefined }, next === acc.data ? undefined : next);
+      patch({ status: "ready", refreshedAt: new Date().toISOString(), error: undefined, pending: false }, next === acc.data ? undefined : next);
+      if (get().mode === "live") void loadLiveHistory(id);
+      // The account's own day can differ from the browser's: follow it, once its time zone is known.
+      const now = get().range;
+      if (get().mode === "live" && now.preset !== "CUSTOM" && get().customerId === id) {
+        const right = rangeFor(now.preset, todayIn(next.account.timeZone));
+        if (right.start !== now.start || right.end !== now.end) {
+          set({ range: right });
+          reloadAfter.add(id);
+        }
+      }
     } catch (err) {
       patch({ status: "error", error: (err as Error).message || "Could not load this account." });
     }
+    if (reloadAfter.delete(id) && get().customerId === id) await get().refreshData({ force: true });
   },
 
   setScope: (scope, view) =>
@@ -369,8 +728,14 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
       return { scope, view: viewForScope(view ?? s.view, scope, type) };
     }),
 
-  setRange: (preset) => set({ range: rangeFor(preset) }),
-  setAutoApprove: (on) => set({ autoApprove: on }),
+  setRange: (next) => {
+    const range = typeof next === "string" ? rangeFor(next, todayIn(current(get())?.data.account.timeZone)) : customRange(next.start, next.end);
+    if (range.start === get().range.start && range.end === get().range.end && range.preset === get().range.preset) return;
+    set({ range });
+    // Live: per-keyword and per-ad totals are exact for one range, so load the new one.
+    if (get().mode === "live") void get().refreshData();
+  },
+  setAutoApprove: (on) => set({ autoApprove: get().mode === "live" ? false : on }),
   setAgentBusy: (busy, chatId) =>
     set((s) => {
       const acc = current(s);
@@ -398,11 +763,13 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
       messageId: input.messageId,
     };
     set((s) => withAccount(s, (a) => ({ ...a, changes: [change, ...a.changes] })));
-    if (get().autoApprove) get().applyChange(change.id);
+    // Real accounts: nothing reaches Google without a person pressing Approve.
+    if (get().autoApprove && get().mode !== "live") get().applyChange(change.id);
     return change;
   },
 
   applyChange: (changeId) => {
+    if (get().mode === "live") return void applyLive(changeId);
     const acc = current(get());
     const change = acc?.changes.find((c) => c.id === changeId);
     if (!acc || !change || change.status !== "PENDING") return;
@@ -473,6 +840,15 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
   applyDirect: (title, ops, source = "USER") => {
     const acc = current(get());
     if (!acc) return { ok: false, error: "No account selected" };
+    if (get().mode === "live") {
+      // Nothing Google can't take yet is sent: say so at once instead of recording a failed change.
+      const unsupported = ops.find((o) => !(LIVE_OPS as readonly string[]).includes(o.kind));
+      if (unsupported) return { ok: false, error: "This can't be changed from Autommerce yet. Change it in Google Ads." };
+      // The person's own edit is their approval; it still goes through the server's checks and appears in Pending/History.
+      const change = get().propose({ title, rationale: "Edited directly in Autommerce.", ops, risk: "LOW", source });
+      void applyLive(change.id);
+      return { ok: true };
+    }
     const errors = validateOps(acc.data, ops);
     if (errors.length) return { ok: false, error: errors.join(" ") };
     try {
@@ -487,6 +863,7 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
   },
 
   undo: (eventId) => {
+    if (get().mode === "live") return void undoLive(eventId);
     const acc = current(get());
     const event = acc?.history.find((e) => e.id === eventId);
     if (!acc || !event?.inverse || event.undone) return;
@@ -621,7 +998,8 @@ export const useGoogleAds = create<GaStore>((set, get) => ({
     ),
 
   setChatMode: (mode) => set((s) => withAccount(s, (a) => ({ ...a, chats: a.chats.map((c) => (c.id === a.activeChatId ? { ...c, mode } : c)) }))),
-}));
+  };
+});
 
 /** The selected account's state; null until an account is picked. */
 export function useAccountState(): AccountState | null {

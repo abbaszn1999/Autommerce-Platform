@@ -1,5 +1,5 @@
 import type { MessageBlock } from "@/lib/store-agent/blocks";
-import type { ModelParam, PlanStatus, StoreAgentEvent } from "@/lib/store-agent/protocol";
+import { AGENT_DOMAIN_HEADER, type AgentDomain, type ModelParam, type PlanStatus, type StoreAgentEvent } from "@/lib/store-agent/protocol";
 
 export type ChatSummary = {
   id: string;
@@ -102,19 +102,35 @@ async function json<T>(res: Response): Promise<T> {
 
 const q = (params: Record<string, string>) => new URLSearchParams(params).toString();
 
+/**
+ * Which agent this page talks to. Only Google Ads requests carry the domain
+ * (header, or `domain` in links), so Store Assistant requests stay exactly as before.
+ */
+let agentDomain: AgentDomain = "store";
+export function setAgentDomain(domain: AgentDomain) {
+  agentDomain = domain;
+}
+
+function agentFetch(input: string, init: RequestInit = {}) {
+  if (agentDomain === "store") return fetch(input, init);
+  const headers = new Headers(init.headers);
+  headers.set(AGENT_DOMAIN_HEADER, agentDomain);
+  return fetch(input, { ...init, headers });
+}
+
 export const storeAgentApi = {
   listChats: (workspaceId: string, search?: string) =>
-    fetch(`/api/store-agent/chats?${q({ workspaceId, ...(search ? { q: search } : {}) })}`).then((r) => json<{ chats: ChatSummary[] }>(r)),
+    agentFetch(`/api/store-agent/chats?${q({ workspaceId, ...(search ? { q: search } : {}) })}`).then((r) => json<{ chats: ChatSummary[] }>(r)),
 
   createChat: (workspaceId: string, init?: { modelId?: string; modelParams?: ModelParam[]; mode?: "agent" | "plan" }) =>
-    fetch("/api/store-agent/chats", {
+    agentFetch("/api/store-agent/chats", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workspaceId, ...init }),
     }).then((r) => json<{ chat: ChatSummary }>(r)),
 
   loadChat: (workspaceId: string, chatId: string, before?: string) =>
-    fetch(`/api/store-agent/chats/${chatId}?${q({ workspaceId, ...(before ? { before } : {}) })}`).then((r) =>
+    agentFetch(`/api/store-agent/chats/${chatId}?${q({ workspaceId, ...(before ? { before } : {}) })}`).then((r) =>
       json<{
         chat: ChatSummary;
         messages: ChatMessage[];
@@ -127,52 +143,52 @@ export const storeAgentApi = {
     ),
 
   undo: (workspaceId: string, approvalId: string) =>
-    fetch(`/api/store-agent/approvals/${approvalId}/undo`, {
+    agentFetch(`/api/store-agent/approvals/${approvalId}/undo`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workspaceId }),
     }).then((r) => json<{ restored: number; failed: number; errors: string[]; skipped: string[] }>(r)),
 
   insights: (workspaceId: string) =>
-    fetch(`/api/store-agent/insights?${q({ workspaceId })}`).then((r) => json<{ insights: Insight[]; scanned?: number; totalProducts?: number }>(r)),
+    agentFetch(`/api/store-agent/insights?${q({ workspaceId })}`).then((r) => json<{ insights: Insight[]; scanned?: number; totalProducts?: number }>(r)),
 
   notes: (workspaceId: string) =>
-    fetch(`/api/store-agent/notes?${q({ workspaceId })}`).then((r) => json<{ content: string; updatedAt: string | null }>(r)),
+    agentFetch(`/api/store-agent/notes?${q({ workspaceId })}`).then((r) => json<{ content: string; updatedAt: string | null }>(r)),
 
   saveNotes: (workspaceId: string, content: string) =>
-    fetch("/api/store-agent/notes", {
+    agentFetch("/api/store-agent/notes", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workspaceId, content }),
     }).then((r) => json<{ ok: true }>(r)),
 
   audit: (workspaceId: string, before?: string) =>
-    fetch(`/api/store-agent/audit?${q({ workspaceId, ...(before ? { before } : {}) })}`).then((r) => json<{ entries: AuditEntry[] }>(r)),
+    agentFetch(`/api/store-agent/audit?${q({ workspaceId, ...(before ? { before } : {}) })}`).then((r) => json<{ entries: AuditEntry[] }>(r)),
 
   search: (workspaceId: string, term: string, signal?: AbortSignal) =>
-    fetch(`/api/store-agent/search?${q({ workspaceId, q: term })}`, { signal }).then((r) => json<{ results: Mention[] }>(r)),
+    agentFetch(`/api/store-agent/search?${q({ workspaceId, q: term })}`, { signal }).then((r) => json<{ results: Mention[] }>(r)),
 
   updateChat: (
     workspaceId: string,
     chatId: string,
     patch: { title?: string; pinned?: boolean; modelId?: string; modelParams?: ModelParam[]; mode?: "agent" | "plan" }
   ) =>
-    fetch(`/api/store-agent/chats/${chatId}`, {
+    agentFetch(`/api/store-agent/chats/${chatId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workspaceId, ...patch }),
     }).then((r) => json<{ chat: ChatSummary }>(r)),
 
   deleteChat: (workspaceId: string, chatId: string) =>
-    fetch(`/api/store-agent/chats/${chatId}?${q({ workspaceId })}`, { method: "DELETE" }).then((r) => json<{ ok: true }>(r)),
+    agentFetch(`/api/store-agent/chats/${chatId}?${q({ workspaceId })}`, { method: "DELETE" }).then((r) => json<{ ok: true }>(r)),
 
   models: (workspaceId: string) =>
-    fetch(`/api/store-agent/models?${q({ workspaceId })}`).then((r) =>
+    agentFetch(`/api/store-agent/models?${q({ workspaceId })}`).then((r) =>
       json<{ models: ModelOption[]; prefs: { autoRun: boolean; modelId: string | null; modelParams: ModelParam[] | null } }>(r)
     ),
 
   setAutoRun: (workspaceId: string, autoRun: boolean) =>
-    fetch("/api/store-agent/prefs", {
+    agentFetch("/api/store-agent/prefs", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workspaceId, autoRun }),
@@ -183,19 +199,19 @@ export const storeAgentApi = {
     form.append("workspaceId", workspaceId);
     form.append("chatId", chatId);
     form.append("file", file);
-    return fetch("/api/store-agent/files", { method: "POST", body: form }).then((r) =>
+    return agentFetch("/api/store-agent/files", { method: "POST", body: form }).then((r) =>
       json<{ file: { id: string; name: string; mime: string; size: number } }>(r)
     );
   },
 
   fileUrl: (workspaceId: string, fileId: string, download = false) =>
-    `/api/store-agent/files/${fileId}?${q({ workspaceId, ...(download ? { download: "1" } : {}) })}`,
+    `/api/store-agent/files/${fileId}?${q({ workspaceId, ...(download ? { download: "1" } : {}), ...(agentDomain === "store" ? {} : { domain: agentDomain }) })}`,
 
   fileText: (workspaceId: string, fileId: string) =>
-    fetch(`/api/store-agent/files/${fileId}?${q({ workspaceId, format: "json" })}`).then((r) => json<{ text: string; name: string; mime: string; truncated?: boolean }>(r)),
+    agentFetch(`/api/store-agent/files/${fileId}?${q({ workspaceId, format: "json" })}`).then((r) => json<{ text: string; name: string; mime: string; truncated?: boolean }>(r)),
 
   runAction: (workspaceId: string, runId: string, action: "cancel" | "steer" | "approve" | "answer", body: Record<string, unknown> = {}) =>
-    fetch(`/api/store-agent/runs/${runId}/${action}`, {
+    agentFetch(`/api/store-agent/runs/${runId}/${action}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workspaceId, ...body }),
@@ -207,7 +223,7 @@ export const storeAgentApi = {
     body: { message: string; attachmentIds: string[]; model: { id: string; params: ModelParam[] }; mode: "agent" | "plan"; buildPlanId?: string },
     signal: AbortSignal
   ) =>
-    fetch(`/api/store-agent/chats/${chatId}/send`, {
+    agentFetch(`/api/store-agent/chats/${chatId}/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workspaceId, ...body }),
@@ -215,7 +231,7 @@ export const storeAgentApi = {
     }),
 
   stream: (workspaceId: string, runId: string, after: number, signal: AbortSignal) =>
-    fetch(`/api/store-agent/runs/${runId}/stream?${q({ workspaceId, after: String(after) })}`, { signal }),
+    agentFetch(`/api/store-agent/runs/${runId}/stream?${q({ workspaceId, after: String(after) })}`, { signal }),
 };
 
 /** Read an NDJSON event stream until it ends or the signal aborts. */

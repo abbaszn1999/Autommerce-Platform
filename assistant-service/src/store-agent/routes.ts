@@ -1,5 +1,7 @@
 import type { Hono } from "hono";
-import { MODEL_PRICING } from "../../../src/lib/store-agent/pricing";
+import { MODEL_PRICING, usdToCredits } from "../../../src/lib/store-agent/pricing";
+import { chargeRun } from "./billing/charge";
+import { isAbandoned } from "./billing/settle";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   answerSchema,
@@ -315,6 +317,43 @@ export async function deleteChatData(
   if (error) throw new Error(error.message);
 }
 
+/** How long to wait before looking again at runs another process may still be finishing. */
+const RECOVER_AGAIN_MS = 2 * 60 * 1000;
+
+/**
+ * Closes runs left "running" by a process that died and charges their last
+ * saved estimate, since Cursor billed the work. Returns true when some runs
+ * were too recent to judge.
+ */
+async function recoverAbandonedRuns(deps: Pick<StoreAgentDeps, "db" | "registry">): Promise<boolean> {
+  const { db, registry } = deps;
+  const live = new Set(registry.live.map((r) => r.id));
+  const { data: stale } = await db
+    .from("store_agent_runs")
+    .select("id, chat_id, workspace_id, user_id, owner_user_id, usd, started_at, estimate_saved_at")
+    .eq("status", "running");
+  let waiting = false;
+  for (const row of stale ?? []) {
+    if (live.has(row.id)) continue;
+    if (!isAbandoned(row, Date.now())) {
+      waiting = true;
+      continue;
+    }
+    const credits = usdToCredits(Number(row.usd) || 0);
+    const charge = row.owner_user_id && credits > 0
+      ? await chargeRun(db, { ownerUserId: row.owner_user_id, workspaceId: row.workspace_id, actorUserId: row.user_id, runId: row.id, credits, details: { chatId: row.chat_id, recoveredAfterCrash: true } })
+      : { charged: 0 };
+    const { data: closed } = await db
+      .from("store_agent_runs")
+      .update({ status: "interrupted", finished_at: new Date().toISOString(), credits: charge.charged, charged: charge.charged > 0, shortfall_credits: Math.max(0, Math.round((credits - charge.charged) * 1000) / 1000) })
+      .eq("id", row.id)
+      .eq("status", "running")
+      .select("id");
+    if (closed?.length) await db.from("store_agent_chats").update({ status: "interrupted" }).eq("id", row.chat_id);
+  }
+  return waiting;
+}
+
 /**
  * Housekeeping on start and every hour:
  * - runs left "running" by a process that died are marked interrupted;
@@ -324,16 +363,13 @@ export async function sweepStoreAgent(
   deps: Pick<StoreAgentDeps, "db" | "store" | "registry" | "log">,
   opts: { startup: boolean }
 ) {
-  const { db, store, registry, log } = deps;
+  const { db, store, log } = deps;
   try {
+    const waiting = await recoverAbandonedRuns(deps);
+    if (waiting && opts.startup) {
+      setTimeout(() => void recoverAbandonedRuns(deps).catch((error) => log("recovering runs failed", error)), RECOVER_AGAIN_MS).unref?.();
+    }
     if (opts.startup) {
-      const live = new Set(registry.live.map((r) => r.id));
-      const { data: stale } = await db.from("store_agent_runs").select("id, chat_id").eq("status", "running");
-      for (const row of stale ?? []) {
-        if (live.has(row.id)) continue;
-        await db.from("store_agent_runs").update({ status: "interrupted", finished_at: new Date().toISOString() }).eq("id", row.id);
-        await db.from("store_agent_chats").update({ status: "interrupted" }).eq("id", row.chat_id);
-      }
       await db
         .from("store_agent_approvals")
         .update({ status: "expired", decided_at: new Date().toISOString() })

@@ -11,6 +11,8 @@ type RunRow = {
   status: string;
   error: string | null;
   usd: number | string;
+  cost_source: string;
+  shortfall_credits: number | string;
   credits: number | string;
   input_tokens: number;
   output_tokens: number;
@@ -29,7 +31,7 @@ export async function GET(req: Request) {
 
     const { data, error } = await admin
       .from("store_agent_runs")
-      .select("id, workspace_id, chat_id, model_id, status, error, usd, credits, input_tokens, output_tokens, cache_read_tokens, started_at, finished_at")
+      .select("id, workspace_id, chat_id, model_id, status, error, usd, credits, input_tokens, output_tokens, cache_read_tokens, started_at, finished_at, cost_source, shortfall_credits")
       .gte("started_at", since)
       .order("started_at", { ascending: false })
       .limit(10_000);
@@ -63,6 +65,19 @@ export async function GET(req: Request) {
       : { data: [] as Array<{ id: string; name: string }> };
     const names = new Map((workspaces ?? []).map((w) => [w.id as string, w.name as string]));
 
+    // What the credits ledger really took for these runs: it must equal the runs' own figure.
+    let ledgerCredits = 0;
+    const ids = runs.map((r) => r.id);
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data: rows, error: ledgerError } = await admin
+        .from("credit_transactions")
+        .select("credits_used")
+        .eq("entity_type", "store_assistant")
+        .in("entity_id", ids.slice(i, i + 200));
+      if (ledgerError) throw new Error(ledgerError.message);
+      for (const row of rows ?? []) ledgerCredits += Number(row.credits_used) || 0;
+    }
+
     const { count: activeChats } = await admin.from("store_agent_chats").select("id", { count: "exact", head: true }).gte("last_activity_at", since);
     const { count: changes } = await admin.from("store_agent_audit_log").select("id", { count: "exact", head: true }).gte("created_at", since);
 
@@ -75,6 +90,11 @@ export async function GET(req: Request) {
         storeChanges: changes ?? 0,
         credits: runs.reduce((s, r) => s + (Number(r.credits) || 0), 0),
         usd: runs.reduce((s, r) => s + (Number(r.usd) || 0), 0),
+        // Credits that runs cost but could not be charged, and how many runs were priced from Cursor's own bill.
+        shortfallCredits: runs.reduce((s, r) => s + (Number(r.shortfall_credits) || 0), 0),
+        billedRuns: runs.filter((r) => r.cost_source === "billed").length,
+        estimatedRuns: runs.filter((r) => r.cost_source === "estimated").length,
+        ledgerCredits,
         avgDurationMs: durationCount ? Math.round(durationTotal / durationCount) : null,
         cacheHitRatio: (() => {
           const input = runs.reduce((s, r) => s + (r.input_tokens ?? 0), 0);

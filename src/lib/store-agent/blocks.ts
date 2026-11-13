@@ -37,6 +37,8 @@ export type MessageBlock =
   | { type: "question"; questionId: string; questions: QuestionItem[]; answers?: string[][]; inChat?: boolean }
   /** The plan this reply wrote or revised; its text lives with the plan, shown in the panel. */
   | { type: "plan"; planId: string; title: string; version: number }
+  /** A Google Ads plan or report this reply saved; it lives on the Documents page. */
+  | { type: "doc"; docId: string; kind: "plan" | "report"; title: string; version: number; steps?: number }
   /** `shown` false: one of the agent's working files, not listed under the reply. */
   | { type: "file"; fileId: string; name: string; kind: string; mime: string; shown?: boolean }
   | { type: "summary"; status: "started" | "completed" }
@@ -160,6 +162,14 @@ export function reduceReply(state: ReplyState, event: StoreAgentEvent): ReplySta
       // A revision in the same reply updates its card rather than adding another.
       const i = blocks.findIndex((b) => b.type === "plan" && b.planId === event.planId);
       const block = { type: "plan" as const, planId: event.planId, title: event.title, version: event.version };
+      if (i >= 0) blocks[i] = block;
+      else blocks.push(block);
+      break;
+    }
+    case "doc": {
+      // A revision in the same reply updates its card rather than adding another.
+      const i = blocks.findIndex((b) => b.type === "doc" && b.docId === event.docId);
+      const block = { type: "doc" as const, docId: event.docId, kind: event.kind, title: event.title, version: event.version, ...(event.steps ? { steps: event.steps } : {}) };
       if (i >= 0) blocks[i] = block;
       else blocks.push(block);
       break;

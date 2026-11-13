@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 import { ClipboardList, Download, FolderOpen, Loader2, Search, X } from "lucide-react";
 import { parseCsv } from "@/lib/store-agent/csv";
 import { cellImages, fileSection, isOfficeDocument, isTextFile, isWorkbook, looksLikeImage, mediaKind, viewBase, type FileSectionId } from "@/lib/store-agent/file-kinds";
-import { themedReport } from "@/lib/store-agent/report-theme";
+import { REPORT_SANDBOX, STORE_POLICY, sandboxedReport } from "@/lib/google-ads/report-sandbox";
 import { cn } from "@/lib/utils";
 import { PLAN_TAB_PREFIX, storeAgentApi, type ChatFile, type Plan } from "./api";
 import { FileKindIcon } from "./blocks";
@@ -24,12 +24,13 @@ function toTable(file: ChatFile, text: string): { columns: string[]; rows: strin
     const data = JSON.parse(text) as unknown;
     const list = Array.isArray(data) ? data : null;
     if (!list || !list.length || typeof list[0] !== "object" || list[0] === null) return null;
-    const columns = Array.from(new Set(list.slice(0, 200).flatMap((r) => Object.keys(r as object))));
+    // Every key of every row: a column that first appears late must not be dropped.
+    const columns = Array.from(new Set(list.flatMap((r) => (r && typeof r === "object" ? Object.keys(r as object) : []))));
     return {
       columns,
       rows: list.map((r) =>
         columns.map((c) => {
-          const v = (r as Record<string, unknown>)[c];
+          const v = r && typeof r === "object" ? (r as Record<string, unknown>)[c] : undefined;
           return v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
         })
       ),
@@ -369,6 +370,8 @@ function FileViewer({ workspaceId, file, files, onAsk }: { workspaceId: string; 
     );
   }
   if (truncated) {
+    // The text is cut at a whole line, so a CSV still reads as a table: show its first rows that way.
+    const partial = /csv|tab-separated/.test(file.mime) || /\.(csv|tsv)$/i.test(file.name) ? toTable(file, text) : null;
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-3 py-1.5 text-[11.5px] text-muted-foreground">
@@ -378,9 +381,15 @@ function FileViewer({ workspaceId, file, files, onAsk }: { workspaceId: string; 
             Download all of it
           </a>
         </div>
-        <pre dir="auto" className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap px-6 py-5 font-mono text-[12.5px] leading-relaxed">
-          {text}
-        </pre>
+        {partial ? (
+          <div className="min-h-0 flex-1">
+            <TableView {...partial} imageSrc={imageSrc} />
+          </div>
+        ) : (
+          <pre dir="auto" className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap px-6 py-5 font-mono text-[12.5px] leading-relaxed">
+            {text}
+          </pre>
+        )}
       </div>
     );
   }
@@ -420,17 +429,31 @@ function FileViewer({ workspaceId, file, files, onAsk }: { workspaceId: string; 
 }
 
 /**
- * An HTML report the agent wrote, shown as the page it describes. It runs in
- * a sandboxed frame with an opaque origin: its scripts (charts) work, but
- * cannot reach the app, its cookies or the page around it. Links open in a
- * new tab rather than inside the frame. It follows the app's light or dark
- * mode when it was written to (see themedReport).
+ * An HTML report, shown as the page it describes. It runs in a sandboxed
+ * frame with an opaque origin: its scripts (charts from the usual CDNs) work,
+ * but it cannot reach the app, its cookies or the page around it, and cannot
+ * send anything out (see report-sandbox). A link the user clicks opens in a
+ * new tab. It follows the app's light or dark mode when written for it.
  */
 function HtmlView({ html, name }: { html: string; name: string }) {
   const [showCode, setShowCode] = useState(false);
   const { resolvedTheme } = useTheme();
   const dark = resolvedTheme === "dark";
-  const { doc, themed } = useMemo(() => themedReport(html, dark), [html, dark]);
+  const themed = /data-theme/i.test(html);
+  const doc = useMemo(() => sandboxedReport(html, dark, STORE_POLICY), [html, dark]);
+  const frame = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      // Only our own frame counts (its origin is opaque, so match the window), and only right after a real click.
+      if (e.source !== frame.current?.contentWindow) return;
+      const url = (e.data as { autommerceOpenLink?: unknown } | null)?.autommerceOpenLink;
+      if (typeof url !== "string" || !/^https?:\/\//i.test(url)) return;
+      if (navigator.userActivation && !navigator.userActivation.isActive) return;
+      window.open(url, "_blank", "noopener,noreferrer");
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center justify-end gap-1 border-b px-3 py-1.5 text-[11.5px]">
@@ -454,9 +477,10 @@ function HtmlView({ html, name }: { html: string; name: string }) {
         </pre>
       ) : (
         <iframe
+          ref={frame}
           title={name}
           srcDoc={doc}
-          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+          sandbox={REPORT_SANDBOX}
           referrerPolicy="no-referrer"
           className={cn("min-h-0 w-full flex-1 border-0", themed && dark ? "bg-background" : "bg-white")}
         />

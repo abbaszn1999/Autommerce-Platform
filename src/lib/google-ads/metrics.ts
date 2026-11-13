@@ -30,29 +30,74 @@ export function isoDay(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Today's date on the account's clock: Google Ads days follow the account's time zone. */
+export function todayIn(timeZone?: string | null, now = new Date()): string {
+  if (!timeZone) return isoDay(now);
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  } catch {
+    return isoDay(now);
+  }
+}
+
 export function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return isoDay(d);
 }
 
-/** Reports end yesterday: today's data is incomplete in Google Ads. */
+const ROLLING: Partial<Record<DateRangePreset, number>> = { LAST_7_DAYS: 7, LAST_14_DAYS: 14, LAST_30_DAYS: 30, LAST_90_DAYS: 90 };
+
+/**
+ * Rolling ranges end yesterday: today's data is incomplete in Google Ads.
+ * "Today" and "This month" include today, as in Google Ads.
+ */
 export function rangeFor(preset: DateRangePreset, today = isoDay(new Date())): DateRange {
-  const end = addDays(today, -1);
-  const start = addDays(end, -(DATE_PRESETS[preset].days - 1));
-  return { preset, start, end };
+  const yesterday = addDays(today, -1);
+  const monthStart = `${today.slice(0, 8)}01`;
+  switch (preset) {
+    case "TODAY":
+      return { preset, start: today, end: today };
+    case "YESTERDAY":
+      return { preset, start: yesterday, end: yesterday };
+    case "THIS_MONTH":
+      return { preset, start: monthStart, end: today };
+    case "LAST_MONTH": {
+      const end = addDays(monthStart, -1);
+      return { preset, start: `${end.slice(0, 8)}01`, end };
+    }
+    default:
+      return { preset, start: addDays(yesterday, -((ROLLING[preset] ?? 30) - 1)), end: yesterday };
+  }
 }
 
+/** Dates the user picked, in order. */
+export function customRange(a: string, b: string): DateRange {
+  return a <= b ? { preset: "CUSTOM", start: a, end: b } : { preset: "CUSTOM", start: b, end: a };
+}
+
+/** Days in a range, both ends included. */
+export function rangeDays(range: { start: string; end: string }): number {
+  return Math.round((Date.parse(`${range.end}T00:00:00Z`) - Date.parse(`${range.start}T00:00:00Z`)) / 86_400_000) + 1;
+}
+
+/** The same number of days just before the range, for comparisons. */
 export function previousRange(range: DateRange): DateRange {
-  const days = DATE_PRESETS[range.preset].days;
+  const days = rangeDays(range);
   return { preset: range.preset, start: addDays(range.start, -days), end: addDays(range.start, -1) };
 }
 
 export function formatRange(range: DateRange): string {
-  const fmt = (iso: string) =>
-    new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-  return `${fmt(range.start)} – ${fmt(range.end)}`;
+  const sameYear = range.start.slice(0, 4) === range.end.slice(0, 4);
+  const thisYear = range.end.slice(0, 4) === String(new Date().getUTCFullYear());
+  const fmt = (iso: string, year: boolean) =>
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(year ? { year: "numeric" } : {}), timeZone: "UTC" });
+  if (range.start === range.end) return fmt(range.start, !thisYear);
+  return `${fmt(range.start, !sameYear)} – ${fmt(range.end, !sameYear || !thisYear)}`;
 }
+
+/** The range's name in menus: the preset's, or "Custom". */
+export const rangeLabel = (range: DateRange) => (range.preset === "CUSTOM" ? "Custom" : DATE_PRESETS[range.preset].label);
 
 // ─── Aggregation ────────────────────────────────────────────────────────────
 
@@ -91,7 +136,16 @@ function weightOf(data: AccountData, id: string) {
   return { id, ...(data.weights[id] ?? { share: 1, efficiency: 1 }) };
 }
 
+/** Real totals from Google when the account was loaded for exactly this range. */
+function exactFor(data: AccountData, id: string, range: DateRange): BaseMetrics | null {
+  const e = data.exact;
+  if (!e || e.start !== range.start || e.end !== range.end) return null;
+  return e.byId[id] ?? EMPTY_BASE;
+}
+
 export function adGroupBase(data: AccountData, adGroupId: string, range: DateRange): BaseMetrics {
+  const exact = exactFor(data, adGroupId, range);
+  if (exact) return exact;
   const adGroup = data.adGroups.find((g) => g.id === adGroupId);
   if (!adGroup) return EMPTY_BASE;
   const siblings = data.adGroups.filter((g) => g.campaignId === adGroup.campaignId && g.status !== "REMOVED");
@@ -99,6 +153,8 @@ export function adGroupBase(data: AccountData, adGroupId: string, range: DateRan
 }
 
 export function assetGroupBase(data: AccountData, assetGroupId: string, range: DateRange): BaseMetrics {
+  const exact = exactFor(data, assetGroupId, range);
+  if (exact) return exact;
   const group = data.assetGroups.find((g) => g.id === assetGroupId);
   if (!group) return EMPTY_BASE;
   const siblings = data.assetGroups.filter((g) => g.campaignId === group.campaignId && g.status !== "REMOVED");
@@ -106,6 +162,8 @@ export function assetGroupBase(data: AccountData, assetGroupId: string, range: D
 }
 
 export function keywordBase(data: AccountData, keywordId: string, range: DateRange): BaseMetrics {
+  const exact = exactFor(data, keywordId, range);
+  if (exact) return exact;
   const kw = data.keywords.find((k) => k.id === keywordId);
   if (!kw || kw.status === "PAUSED" || kw.status === "REMOVED") return EMPTY_BASE;
   const siblings = data.keywords.filter((k) => k.adGroupId === kw.adGroupId && k.status === "ENABLED");
@@ -113,6 +171,8 @@ export function keywordBase(data: AccountData, keywordId: string, range: DateRan
 }
 
 export function adBase(data: AccountData, adId: string, range: DateRange): BaseMetrics {
+  const exact = exactFor(data, adId, range);
+  if (exact) return exact;
   const ad = data.ads.find((a) => a.id === adId);
   if (!ad || ad.status !== "ENABLED" || ad.policy === "DISAPPROVED") return EMPTY_BASE;
   const siblings = data.ads.filter((a) => a.adGroupId === ad.adGroupId && a.status === "ENABLED" && a.policy !== "DISAPPROVED");
@@ -120,6 +180,8 @@ export function adBase(data: AccountData, adId: string, range: DateRange): BaseM
 }
 
 export function searchTermBase(data: AccountData, termId: string, range: DateRange): BaseMetrics {
+  const exact = exactFor(data, termId, range);
+  if (exact) return exact;
   const term = data.searchTerms.find((t) => t.id === termId);
   if (!term) return EMPTY_BASE;
   const siblings = data.searchTerms.filter((t) => t.adGroupId === term.adGroupId || (!t.adGroupId && t.campaignId === term.campaignId));
@@ -134,6 +196,20 @@ export function searchTermBase(data: AccountData, termId: string, range: DateRan
 export function accountBase(data: AccountData, range: DateRange, campaignIds?: string[]): BaseMetrics {
   const ids = campaignIds ?? data.campaigns.map((c) => c.id);
   return ids.reduce((sum, id) => addBase(sum, campaignBase(data, id, range)), EMPTY_BASE);
+}
+
+/** The whole account as Google totals it, removed campaigns included. */
+export function accountTotal(data: AccountData, range: DateRange): BaseMetrics {
+  return data.accountDaily ? sumDaily(data.accountDaily, range) : accountBase(data, range);
+}
+
+/** Daily account totals for the chart, on the same basis as accountTotal. */
+export function accountSeries(data: AccountData, range: DateRange): (Metrics & { date: string })[] {
+  if (!data.accountDaily) return dailySeries(data, range);
+  const byDate = new Map(data.accountDaily.map((p) => [p.date, p]));
+  const out: (Metrics & { date: string })[] = [];
+  for (let d = range.start; d <= range.end; d = addDays(d, 1)) out.push({ date: d, ...derive(byDate.get(d) ?? EMPTY_BASE) });
+  return out;
 }
 
 /** Daily totals across the given campaigns, for charts. */

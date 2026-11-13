@@ -11,6 +11,7 @@ import {
   CircleDot,
   CornerDownLeft,
   Database,
+  FileBarChart,
   FileSpreadsheet,
   FileText,
   Globe,
@@ -35,6 +36,7 @@ import type { ToolKind } from "@/lib/store-agent/protocol";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ApprovalState } from "./api";
+import { canOpenDocs, openAgentDoc } from "@/lib/store-agent/doc-links";
 import { isExtractedImage } from "@/lib/store-agent/file-kinds";
 import { Markdown } from "./markdown";
 
@@ -94,7 +96,8 @@ function ThinkingBlock({ block, live }: { block: Extract<MessageBlock, { type: "
   );
 }
 
-function ToolBlock({ block }: { block: Extract<MessageBlock, { type: "tool" }> }) {
+/** `live`: the reply is still being written. A tool still "running" in a finished reply was cut off (the run stopped). */
+function ToolBlock({ block, live = true }: { block: Extract<MessageBlock, { type: "tool" }>; live?: boolean }) {
   const [open, setOpen] = useState(false);
   const Icon = TOOL_ICON[block.kind] ?? Wrench;
   const failed = block.status === "error";
@@ -134,8 +137,10 @@ function ToolBlock({ block }: { block: Extract<MessageBlock, { type: "tool" }> }
         )}
         {noResults && <span className="shrink-0 text-[11.5px] text-muted-foreground/80">{block.summary}</span>}
         <span className="ms-auto shrink-0">
-          {block.status === "running" ? (
+          {block.status === "running" && live ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+          ) : block.status === "running" ? (
+            <span className="text-[11.5px] text-muted-foreground/80">Stopped</span>
           ) : failed ? (
             <X className="h-3.5 w-3.5 text-destructive" />
           ) : (
@@ -270,7 +275,7 @@ function ApprovalCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className={cn("flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide", style.accent)}>
-            {style.label}
+            {block.operations.includes("Google Ads") ? "Google Ads change" : block.operations.includes("Merchant Center") ? "Merchant Center change" : style.label}
             {!!block.records && block.records > 1 && (
               <span className="rounded-full bg-background/70 px-1.5 py-px text-[10px] font-semibold normal-case tracking-normal text-muted-foreground">
                 {block.records.toLocaleString()} records
@@ -539,6 +544,34 @@ function PlanBlock({ block, onOpenPlan }: { block: Extract<MessageBlock, { type:
   );
 }
 
+/** A Google Ads plan or report this reply saved: opens it on the Documents page. */
+function DocCard({ block }: { block: Extract<MessageBlock, { type: "doc" }> }) {
+  const isPlan = block.kind === "plan";
+  return (
+    <button
+      type="button"
+      onClick={() => openAgentDoc(block.docId)}
+      disabled={!canOpenDocs()}
+      className="group flex w-full items-center gap-3 rounded-xl border border-[#6B358D]/25 bg-gradient-to-br from-[#400095]/[0.05] to-transparent px-3.5 py-3 text-start transition-colors hover:border-[#6B358D]/50 disabled:cursor-default dark:border-[#F76D01]/25 dark:from-[#F76D01]/[0.06] dark:hover:border-[#F76D01]/50"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#400095]/10 text-[#6B358D] dark:bg-[#F76D01]/10 dark:text-[#F76D01]">
+        {isPlan ? <ClipboardList className="h-4 w-4" /> : <FileBarChart className="h-4 w-4" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {isPlan ? "Plan" : "Report"}
+          {isPlan && block.steps ? ` · ${block.steps} step${block.steps > 1 ? "s" : ""} checked by Google` : ""}
+          {block.version > 1 ? ` · version ${block.version}` : ""}
+        </span>
+        <span dir="auto" className="block truncate text-[13.5px] font-semibold">
+          {block.title}
+        </span>
+      </span>
+      <span className="shrink-0 text-[12px] font-medium text-[#6B358D] group-hover:underline dark:text-[#F76D01]">{isPlan ? "Review" : "Open"}</span>
+    </button>
+  );
+}
+
 function FileBlock({ block, onOpenFile }: { block: Extract<MessageBlock, { type: "file" }>; onOpenFile: Handlers["onOpenFile"] }) {
   return (
     <button
@@ -589,7 +622,7 @@ function ActivityGroup({ blocks, live }: { blocks: MessageBlock[]; live: boolean
       </button>
       {open && (
         <div className="ms-3 mt-1 space-y-1 border-s ps-2">
-          {blocks.map((b, i) => (b.type === "tool" ? <ToolBlock key={b.callId} block={b} /> : b.type === "thinking" ? <ThinkingBlock key={i} block={b} live={live} /> : null))}
+          {blocks.map((b, i) => (b.type === "tool" ? <ToolBlock key={b.callId} block={b} live={live} /> : b.type === "thinking" ? <ThinkingBlock key={i} block={b} live={live} /> : null))}
         </div>
       )}
     </div>
@@ -659,7 +692,7 @@ export function ReplyBlocks({ blocks, ...handlers }: { blocks: MessageBlock[] } 
           case "thinking":
             return <ThinkingBlock key={i} block={block} live={handlers.live} />;
           case "tool":
-            return <ToolBlock key={block.callId} block={block} />;
+            return <ToolBlock key={block.callId} block={block} live={handlers.live} />;
           case "todos":
             return <TodosBlock key={i} block={block} />;
           case "approval":
@@ -678,6 +711,8 @@ export function ReplyBlocks({ blocks, ...handlers }: { blocks: MessageBlock[] } 
             return <QuestionCard key={block.questionId} block={block} live={handlers.live} onAnswer={handlers.onAnswer} />;
           case "plan":
             return <PlanBlock key={block.planId} block={block} onOpenPlan={handlers.onOpenPlan} />;
+          case "doc":
+            return <DocCard key={block.docId} block={block} />;
           case "file":
             if (!chipped.has(block.fileId)) return null;
             return (

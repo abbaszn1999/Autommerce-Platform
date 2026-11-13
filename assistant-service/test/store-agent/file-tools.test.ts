@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { createFileTools, resolveConfined } from "../../src/store-agent/file-tools";
+import { clearProjectConfig, createFileTools, isHiddenPath, resolveConfined } from "../../src/store-agent/file-tools";
 import { INLINE_RESULT_BYTES, sdkToolOutputDir } from "../../src/store-agent/sdk-output";
 
 type Result = { content: Array<{ text: string }>; isError?: boolean };
@@ -44,6 +44,38 @@ describe("confined file tools", () => {
       return; // symlinks need extra rights on Windows; the realpath check is covered on Linux
     }
     expect((await call(tools, "read_file", { path: "link.env" })).isError).toBe(true);
+  });
+
+  it("never reaches hidden paths, where the SDK reads hooks and MCP servers", async () => {
+    const { root, tools, written } = await setup();
+    for (const p of [".cursor/hooks.json", ".cursor/mcp.json", ".claude/settings.json", ".mcp.json", "reports/.cursor/hooks.json", "./.cursor/hooks.json", "reports/../.cursor/hooks.json"]) {
+      expect((await call(tools, "write_file", { path: p, content: "{}" })).isError, p).toBe(true);
+      await expect(access(path.join(root, p))).rejects.toThrow();
+    }
+    expect(written).toEqual([]);
+    await mkdir(path.join(root, ".cursor", "rules"), { recursive: true });
+    await writeFile(path.join(root, ".cursor", "rules", "vera.mdc"), "secret rules");
+    expect((await call(tools, "read_file", { path: ".cursor/rules/vera.mdc" })).isError).toBe(true);
+    expect((await call(tools, "edit_file", { path: ".cursor/rules/vera.mdc", old_text: "secret", new_text: "x" })).isError).toBe(true);
+    expect((await call(tools, "list_files", { path: ".cursor" })).isError).toBe(true);
+    expect((await call(tools, "search_files", { pattern: "secret", path: ".cursor" })).isError).toBe(true);
+  });
+
+  it("tells hidden paths from ordinary names with dots", () => {
+    expect(isHiddenPath(".cursor/mcp.json")).toBe(true);
+    expect(isHiddenPath("a\\.claude\\settings.json")).toBe(true);
+    expect(isHiddenPath("reports/v1.2/plan.final.md")).toBe(false);
+  });
+
+  it("removes project settings left in a chat folder", async () => {
+    const { root } = await setup();
+    await mkdir(path.join(root, ".cursor"), { recursive: true });
+    await writeFile(path.join(root, ".cursor", "hooks.json"), "{}");
+    await writeFile(path.join(root, ".mcp.json"), "{}");
+    await clearProjectConfig(root);
+    await expect(access(path.join(root, ".cursor", "hooks.json"))).rejects.toThrow();
+    await expect(access(path.join(root, ".mcp.json"))).rejects.toThrow();
+    await expect(access(path.join(root, "attachments", "list.csv"))).resolves.toBeUndefined();
   });
 
   it("refuses to edit when the text is missing or ambiguous", async () => {

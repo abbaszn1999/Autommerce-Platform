@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { SDKCustomTool } from "@cursor/sdk";
 import { MAX_QUESTIONS_PER_CARD } from "../../../src/lib/store-agent/protocol";
-import { mimeFor, resolveInChat } from "./files";
+import { MAX_SYNC_BYTES, mimeFor, resolveInChat } from "./files";
 import { bulkMutationErrors, exportToCsv, parseBulkLines, runBulkMutation, runBulkQuery } from "./shopify/bulk";
 import { grantedScopes, shopifyGraphql, type ShopifyConnection } from "./shopify/client";
 import { inspectShopifyDocument, missingScopes } from "./shopify/guard";
@@ -446,6 +446,12 @@ function createShopifyTools(ctx: ToolContext): Record<string, SDKCustomTool> {
   };
 }
 
+/** The chat tools the Google Ads agent shares with the Store Assistant (no store notes: those belong to the store). */
+export function createChatTools(ctx: ToolContext): Record<string, SDKCustomTool> {
+  const { ask_user, show_file } = createSharedTools(ctx);
+  return { ask_user: ask_user!, show_file: show_file! };
+}
+
 function createSharedTools(ctx: ToolContext): Record<string, SDKCustomTool> {
   return {
     save_store_note: {
@@ -556,6 +562,13 @@ function createSharedTools(ctx: ToolContext): Record<string, SDKCustomTool> {
         } catch (error) {
           return failure((error as Error).message || `There is no file at ${args.path}.`);
         }
+        // The panel takes files up to MAX_SYNC_BYTES: a bigger one would never reach the user.
+        const size = (await fs.stat(resolveInChat(ctx.files.cwd, relative))).size;
+        if (size > MAX_SYNC_BYTES)
+          return failure(
+            `${relative} is ${(size / 1024 / 1024).toFixed(1)} MB, more than the panel can show (${MAX_SYNC_BYTES / 1024 / 1024} MB). ` +
+              "Show a smaller file instead (split it, or a summary or the rows that matter), and tell the user the full file is too large to open here."
+          );
         try {
           if (typeof args.folder === "string") ctx.files.setFolderHint(relative, args.folder);
           await ctx.files.sync(ctx.run, new Set([relative]));

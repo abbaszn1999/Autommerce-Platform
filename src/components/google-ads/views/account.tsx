@@ -21,6 +21,7 @@ const LINKS: Record<LinkedAccount["kind"], { label: string; icon: LucideIcon; wh
 
 export function LinksView() {
   const { data } = useGa();
+  const live = useGoogleAds((s) => s.mode === "live");
 
   return (
     <div>
@@ -40,7 +41,7 @@ export function LinksView() {
               </div>
               <div className="flex flex-col items-end gap-2">
                 <Pill tone={l.status === "LINKED" ? "good" : l.status === "PENDING" ? "warn" : "neutral"}>{l.status === "LINKED" ? "Linked" : l.status === "PENDING" ? "Pending approval" : "Not linked"}</Pill>
-                {l.status !== "LINKED" && (
+                {l.status !== "LINKED" && !live && (
                   <button type="button" onClick={() => runAgentTurn(l.status === "PENDING" ? `Check whether my ${LINKS[l.kind].label} link request was approved` : `Link ${LINKS[l.kind].label} to this account`)} className="inline-flex items-center gap-1 rounded-lg border border-border/70 px-2.5 py-1 text-[11px] font-semibold hover:bg-muted">
                     <Bot className="h-3 w-3" /> {l.status === "PENDING" ? "Ask agent to check" : "Ask agent to link"}
                   </button>
@@ -50,13 +51,76 @@ export function LinksView() {
           );
         })}
       </div>
+      {live && (
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          {data.links.length ? "" : "Google Ads reports no Merchant Center link for this account. "}Links to Google Analytics, YouTube, Business Profile and Search Console aren&apos;t read here yet; check them in Google Ads.
+        </p>
+      )}
     </div>
   );
 }
 
 const CONTENT_CATEGORIES = ["Tragedy & conflict", "Sensitive social issues", "Profanity & rough language", "Sexually suggestive", "Sensational & shocking", "Live streaming video", "Embedded YouTube videos", "Games (in-app)", "Parked domains"];
 
+/**
+ * Live accounts: account-level settings can't be changed from Autommerce yet,
+ * and only auto-tagging is read from Google, so the page shows what is known,
+ * read-only, instead of switches that look like they work.
+ */
+function LiveAccountSettings() {
+  const { data } = useGa();
+  const a = data.account;
+  const notRead = ["Enhanced conversions", "Content suitability (excluded content types)", "Brand exclusions"];
+  return (
+    <div className="space-y-4">
+      <ViewHeader title="Account settings" subtitle={`${a.name} · ${formatCustomerId(a.customerId)}`} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="space-y-3 p-4">
+          <p className="text-sm font-bold">Account</p>
+          {[
+            ["Currency", a.currency, "Set when the account was created; can't change"],
+            ["Time zone", a.timeZone, "Reports and schedules use this; can't change"],
+            ["Manager", a.managerCustomerId ? formatCustomerId(a.managerCustomerId) : "None", "Manager (MCC) the account is linked to"],
+            ["Auto-tagging", a.autoTagging ? "On" : "Off", "Adds a click ID (GCLID) to URLs so conversions link back to ads"],
+          ].map(([k, v, hint]) => (
+            <div key={k} className="flex items-center justify-between gap-3 text-xs">
+              <span>
+                <span className="block font-semibold">{k}</span>
+                <span className="text-[11px] text-muted-foreground">{hint}</span>
+              </span>
+              <span className={cn("font-mono", k === "Auto-tagging" && !a.autoTagging && "font-semibold text-amber-700 dark:text-amber-400")}>{v}</span>
+            </div>
+          ))}
+          {!a.autoTagging && (
+            <p className="rounded-lg bg-amber-500/[0.08] px-2.5 py-2 text-[11px] text-amber-800 dark:text-amber-300">
+              Auto-tagging is off: conversions from Google Analytics can&apos;t be tied to clicks. Turn it on in Google Ads → Admin → Account settings.
+            </p>
+          )}
+        </Card>
+        <Card className="space-y-2 p-4">
+          <p className="flex items-center gap-2 text-sm font-bold">
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" /> Managed in Google Ads
+          </p>
+          <p className="text-[11px] text-muted-foreground">Autommerce doesn&apos;t read or change these account settings yet. See and change them in Google Ads → Admin → Account settings.</p>
+          <ul className="space-y-1 pt-1">
+            {notRead.map((s) => (
+              <li key={s} className="text-xs">
+                · {s}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 export function AccountSettingsView() {
+  const live = useGoogleAds((s) => s.mode === "live");
+  return live ? <LiveAccountSettings /> : <DemoAccountSettings />;
+}
+
+function DemoAccountSettings() {
   const { data } = useGa();
   const applyDirect = useGoogleAds((s) => s.applyDirect);
   const [brand, setBrand] = useState("");

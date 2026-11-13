@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { questionAnswersSchema } from "@/lib/store-agent/protocol";
-import { authorizeStoreAgent, callStoreAgentService, relayEvents } from "@/lib/store-agent/server";
+import { authorizeStoreAgent, callStoreAgentService, chatDomain, relayEvents } from "@/lib/store-agent/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,16 +52,20 @@ export async function POST(request: NextRequest, { params }: Params) {
   const access = await authorizeStoreAgent({ workspaceId: data.workspaceId });
   if (access instanceof NextResponse) return access;
 
-  // Deletes and bulk changes need the workspace owner or an admin.
+  // Deletes and bulk changes need the workspace owner or an admin; so does every Google Ads change.
   if (action === "approve" && data.approve === true) {
     const { data: approval } = await access.admin
       .from("store_agent_approvals")
-      .select("kind")
+      .select("kind, chat_id")
       .eq("id", String(data.approvalId))
       .eq("workspace_id", data.workspaceId)
       .maybeSingle();
     if (!approval) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (approval.kind !== "write" && !["owner", "admin"].includes(String(access.ctx.membershipRole))) {
+    const isOwnerOrAdmin = ["owner", "admin"].includes(String(access.ctx.membershipRole));
+    if ((await chatDomain(access.admin, String(approval.chat_id))) === "google_ads" && !isOwnerOrAdmin) {
+      return NextResponse.json({ error: "Only the workspace owner or an admin can approve Google Ads changes." }, { status: 403 });
+    }
+    if (approval.kind !== "write" && !isOwnerOrAdmin) {
       return NextResponse.json({ error: "Only the workspace owner or an admin can approve deletes and bulk changes." }, { status: 403 });
     }
   }

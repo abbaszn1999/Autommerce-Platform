@@ -295,6 +295,10 @@ function applyOne(data: AccountData, op: MutateOp): { next: AccountData; inverse
         inverse: removed.length ? [{ kind: "collection.upsert", collection: op.collection, items: removed } as MutateOp] : [],
       };
     }
+
+    default:
+      // Live-only edits (creating in a real account) never run on the demo data.
+      return { next: data, inverse: [] };
   }
 }
 

@@ -179,9 +179,11 @@ export const AUDIENCE_KINDS: Record<AudienceKind, { label: string; blurb: string
   AFFINITY: { label: "Affinity", blurb: "Long-term interests and habits" },
   CUSTOM: { label: "Custom segment", blurb: "Built from keywords, URLs or apps" },
   DEMOGRAPHIC: { label: "Detailed demographics", blurb: "Life stage and household facts" },
+  INTEREST: { label: "Interest", blurb: "An in-market, affinity or life-event segment from Google" },
 };
 
 export const CONVERSION_CATEGORIES: Record<ConversionCategory, string> = {
+  OTHER: "Other",
   PURCHASE: "Purchase",
   ADD_TO_CART: "Add to cart",
   BEGIN_CHECKOUT: "Begin checkout",
@@ -217,12 +219,20 @@ export const AD_STRENGTH: Record<AdStrength, { label: string; score: number; ton
   EXCELLENT: { label: "Excellent", score: 4, tone: "text-emerald-600 dark:text-emerald-400" },
 };
 
-export const DATE_PRESETS: Record<DateRangePreset, { label: string; days: number }> = {
-  LAST_7_DAYS: { label: "Last 7 days", days: 7 },
-  LAST_14_DAYS: { label: "Last 14 days", days: 14 },
-  LAST_30_DAYS: { label: "Last 30 days", days: 30 },
-  LAST_90_DAYS: { label: "Last 90 days", days: 90 },
+/** The date presets, in menu order. Rolling ones end yesterday (see rangeFor). */
+export const DATE_PRESETS: Record<DateRangePreset, { label: string }> = {
+  TODAY: { label: "Today" },
+  YESTERDAY: { label: "Yesterday" },
+  LAST_7_DAYS: { label: "Last 7 days" },
+  LAST_14_DAYS: { label: "Last 14 days" },
+  LAST_30_DAYS: { label: "Last 30 days" },
+  THIS_MONTH: { label: "This month" },
+  LAST_MONTH: { label: "Last month" },
+  LAST_90_DAYS: { label: "Last 90 days" },
 };
+
+/** The longest range Google Ads reports load at once (the data route enforces it too). */
+export const MAX_RANGE_DAYS = 366;
 
 /** Locations offered in pickers (mock geo target constants). */
 export const GEO_TARGETS = [

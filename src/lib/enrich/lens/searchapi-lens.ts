@@ -6,7 +6,7 @@
  */
 import { requestSearchApi } from "../image-finder/exact/searchapi";
 
-export type LensSearchType = "exact_matches" | "visual_matches" | "products";
+export type LensSearchType = "exact_matches" | "visual_matches";
 
 export interface LensMatch {
   link: string;
@@ -26,6 +26,8 @@ export interface GoogleLensResult {
 
 interface LensApiMatch {
   link?: unknown;
+  /** Beside a Google redirect link: send it to the Google Resolve API to get the real page. */
+  link_token?: unknown;
   title?: unknown;
   source?: unknown;
   price?: unknown;
@@ -46,14 +48,18 @@ const LENS_NO_RESULTS_ERROR = /didn't return any results/i;
  * Calls the Google Lens engine once. Exact matches come back as encrypted
  * Google redirects unless `link=resolved` is set; resolving costs no extra
  * search (measured live: one search either way, about the same latency), so it
- * is always on for them. Visual and product matches are already direct links.
+ * is always on for them. Visual matches are already direct links.
+ *
+ * `country` is an optional two-letter code (e.g. "lb") that sets where the
+ * search runs from; without it SearchApi uses US.
  *
  * Returns only for a billed call; the caller records that cost immediately,
  * even when no page matched.
  */
 export async function callGoogleLens(
   imageUrl: string,
-  searchType: LensSearchType
+  searchType: LensSearchType,
+  country?: string
 ): Promise<GoogleLensResult> {
   const params = new URLSearchParams({
     engine: "google_lens",
@@ -61,18 +67,80 @@ export async function callGoogleLens(
     url: imageUrl,
   });
   if (searchType === "exact_matches") params.set("link", "resolved");
+  if (country) params.set("country", country.toLowerCase());
   const { data, httpStatus, elapsedMs } = await requestSearchApi<LensApiResponse>(
     params,
     "Google Lens",
     undefined,
     LENS_NO_RESULTS_ERROR
   );
+  const listed = searchType === "exact_matches" ? data.exact_matches : data.visual_matches;
+  const resolveStartedAt = Date.now();
+  const direct = await resolveRedirectLinks(listed);
   return {
-    matches: parseLensMatches(searchType === "exact_matches" ? data.exact_matches : data.visual_matches),
+    matches: parseLensMatches(direct),
     searchType,
     httpStatus,
-    elapsedMs,
+    elapsedMs: elapsedMs + (Date.now() - resolveStartedAt),
   };
+}
+
+interface ResolveApiResponse {
+  search_metadata?: { status?: string };
+  results?: Array<{ link?: unknown }>;
+  error?: unknown;
+}
+
+/** Tokens per Google Resolve call; keeps the request URL short. */
+const RESOLVE_BATCH = 10;
+const RESOLVE_TIMEOUT_MS = 30_000;
+
+/**
+ * Google serves most exact-match links as encrypted `google.com/goto`
+ * redirects and no longer resolves them for us (the `link=resolved` parameter
+ * is phased out). Each redirect carries a `link_token`; SearchApi's Google
+ * Resolve engine turns tokens into the real page URLs, in the order sent, and
+ * uses no credits. Without this step those pages (often the retailer's own
+ * product page) would be dropped as unresolved redirects.
+ *
+ * Best effort: a failed or short answer leaves the redirect as it was, and
+ * parseLensMatches drops it, so Resolve trouble never fails the row.
+ */
+export async function resolveRedirectLinks(items: LensApiMatch[] | undefined): Promise<LensApiMatch[] | undefined> {
+  if (!Array.isArray(items)) return items;
+  const pending: Array<{ index: number; token: string }> = [];
+  items.forEach((item, index) => {
+    const link = typeof item?.link === "string" ? item.link.trim() : "";
+    const token = typeof item?.link_token === "string" ? item.link_token.trim() : "";
+    if (token && (!/^https?:\/\//i.test(link) || isGoogleRedirect(link))) pending.push({ index, token });
+  });
+  if (pending.length === 0) return items;
+
+  const batches: Array<typeof pending> = [];
+  for (let i = 0; i < pending.length; i += RESOLVE_BATCH) batches.push(pending.slice(i, i + RESOLVE_BATCH));
+
+  const resolved = items.slice();
+  await Promise.all(
+    batches.map(async (batch) => {
+      try {
+        const params = new URLSearchParams({ engine: "google_resolve" });
+        for (const { token } of batch) params.append("results[][link_token]", token);
+        const { data } = await requestSearchApi<ResolveApiResponse>(params, "Google Resolve", RESOLVE_TIMEOUT_MS);
+        const answers = data.results;
+        if (!Array.isArray(answers) || answers.length !== batch.length) return;
+        batch.forEach(({ index }, position) => {
+          const link = typeof answers[position]?.link === "string" ? answers[position]!.link as string : "";
+          if (/^https?:\/\//i.test(link)) resolved[index] = { ...items[index]!, link };
+        });
+      } catch (error) {
+        console.warn("[Lens] Google Resolve failed; leaving these links unresolved", {
+          count: batch.length,
+          error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+        });
+      }
+    })
+  );
+  return resolved;
 }
 
 /** Result entries with an http(s) link, in Google's order. A link still on google.com (an unresolved redirect) is dropped. */

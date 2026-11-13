@@ -17,7 +17,9 @@ export async function GET(request: NextRequest, { params }: Params) {
   const { fileId } = await params;
   const workspaceId = request.nextUrl.searchParams.get("workspaceId") ?? "";
   if (!/^[0-9a-f-]{36}$/i.test(fileId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const access = await authorizeStoreAgent({ workspaceId });
+  // Links (images, downloads) can't send the domain header, so they carry it in the URL.
+  const domain = request.nextUrl.searchParams.get("domain") === "google_ads" ? "google_ads" : undefined;
+  const access = await authorizeStoreAgent({ workspaceId, domain });
   if (access instanceof NextResponse) return access;
 
   const { data: file } = await access.admin

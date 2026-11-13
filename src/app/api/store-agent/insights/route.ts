@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 /** Concrete gaps in the store with ready prompts, for the new-chat screen. */
 export async function GET(request: NextRequest) {
   const workspaceId = request.nextUrl.searchParams.get("workspaceId") ?? "";
-  const access = await authorizeStoreAgent({ workspaceId });
+  const access = await authorizeStoreAgent({ workspaceId, domain: "store" });
   if (access instanceof NextResponse) return access;
   try {
     const res = await callStoreAgentService({ path: `/store-agent/insights/${workspaceId}`, userId: access.userId, method: "GET" });

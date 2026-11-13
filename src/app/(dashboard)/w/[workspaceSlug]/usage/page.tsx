@@ -22,6 +22,7 @@ import {
   RefreshCw,
   LayoutGrid,
   Boxes,
+  Swords,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ const OP_LABELS: Record<string, { label: string; icon: any; color: string }> = {
   visualizer_images: { label: "Products Visualizer", icon: Boxes, color: "text-amber-600" },
   store_assistant: { label: "Store Assistant", icon: RefreshCw, color: "text-cyan-600" },
   assistant: { label: "Agent", icon: Sparkles, color: "text-violet-600" },
+  competitor_ads: { label: "Competitor ads", icon: Swords, color: "text-rose-600" },
   ai_column_mapping: { label: "Column Mapping", icon: Columns3, color: "text-amber-600" },
   ai_category_suggest: { label: "Category Suggest", icon: FolderTree, color: "text-green-600" },
   ai_function: { label: "AI Function", icon: Zap, color: "text-indigo-600" },

@@ -28,14 +28,15 @@ import {
   Store,
   Tags,
   Unplug,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLoader } from "@/components/brand/page-loader";
 import { replyText, type MessageBlock } from "@/lib/store-agent/blocks";
-import type { TodoItem } from "@/lib/store-agent/protocol";
-import type { ApprovalState, ChatMessage, Insight, Plan } from "./api";
+import type { AgentDomain, TodoItem } from "@/lib/store-agent/protocol";
+import { storeAgentApi, type ApprovalState, type ChatMessage, type Insight, type Plan } from "./api";
 import { ReplyBlocks } from "./blocks";
 import { ChatTabs } from "./chat-tabs";
 import { Composer } from "./composer";
@@ -134,7 +135,7 @@ function UserBubble({
               a.mime.startsWith("image/") ? (
                 <button key={a.fileId} type="button" onClick={() => onOpenMention?.("file", a.fileId)} aria-label={`Open ${a.name}`} className="rounded-lg">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/api/store-agent/files/${a.fileId}?workspaceId=${workspaceId}`} alt={a.name} className="h-20 w-20 rounded-lg border object-cover" />
+                  <img src={storeAgentApi.fileUrl(workspaceId, a.fileId)} alt={a.name} className="h-20 w-20 rounded-lg border object-cover" />
                 </button>
               ) : (
                 <button
@@ -255,6 +256,47 @@ function AssistantTurn({
   );
 }
 
+const ADS_SUGGESTIONS = [
+  "Where is my Google Ads budget being wasted in the last 30 days?",
+  "Which campaigns are limited by budget but converting well?",
+  "Find search terms that spend money without converting and suggest negative keywords",
+  "Summarize this account's performance and the three most important fixes",
+];
+
+/** The new-chat screen on the Google Ads page. */
+function AdsHero({ accountName, onPick }: { accountName: string; onPick: (prompt: string) => void }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-6">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="mb-5">
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#400095] to-[#6B358D] text-lg font-black text-white shadow-[0_8px_24px_rgba(64,0,149,.22)] dark:from-[#F76D01] dark:to-[#C40000]">
+          V
+        </div>
+        <h1 className="text-xl font-black tracking-[-0.03em]">What should we do in {accountName}?</h1>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+          Vera reads this Google Ads account&apos;s real data, finds waste and growth, and prepares exact changes. Every change waits for your approval on its
+          card, is checked by Google first, and can be undone.
+        </p>
+      </motion.div>
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Ideas</div>
+      <div className="grid gap-1.5">
+        {ADS_SUGGESTIONS.map((s, i) => (
+          <motion.button
+            key={s}
+            type="button"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: i * 0.04 }}
+            onClick={() => onPick(s)}
+            className="rounded-xl border border-border/70 px-3 py-2.5 text-start text-[12.5px] font-medium transition-colors hover:border-[#6B358D]/40 hover:bg-muted/50"
+          >
+            {s}
+          </motion.button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Hero({ storeName, insights, onPick }: { storeName: string; insights: Insight[]; onPick: (prompt: string) => void }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-6">
@@ -319,19 +361,74 @@ function Hero({ storeName, insights, onPick }: { storeName: string; insights: In
   );
 }
 
+/** A chat while it loads: message shapes (and, before anything has loaded, the tabs and the composer). */
+function ChatSkeleton({ withChrome = false }: { withChrome?: boolean }) {
+  const bone = "animate-pulse rounded-md bg-zinc-200/80 dark:bg-zinc-800";
+  return (
+    <div className="flex h-full min-h-0 flex-1 flex-col" aria-busy="true" aria-label="Loading the chat">
+      {withChrome && (
+        <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
+          <div className={cn(bone, "h-6 w-28")} />
+          <div className={cn(bone, "h-6 w-24")} />
+          <div className={cn(bone, "ms-auto h-6 w-16")} />
+        </div>
+      )}
+      <div className="min-h-0 flex-1 space-y-6 overflow-hidden px-4 pt-5">
+        <div className="flex justify-end">
+          <div className={cn(bone, "h-14 w-3/5 rounded-2xl")} />
+        </div>
+        <div className="flex gap-3">
+          <div className={cn(bone, "h-7 w-7 shrink-0 rounded-lg")} />
+          <div className="flex-1 space-y-2 pt-1">
+            <div className={cn(bone, "h-3 w-11/12")} />
+            <div className={cn(bone, "h-3 w-4/5")} />
+            <div className={cn(bone, "h-3 w-2/3")} />
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <div className={cn(bone, "h-10 w-2/5 rounded-2xl")} />
+        </div>
+        <div className="flex gap-3">
+          <div className={cn(bone, "h-7 w-7 shrink-0 rounded-lg")} />
+          <div className="flex-1 space-y-2 pt-1">
+            <div className={cn(bone, "h-3 w-full")} />
+            <div className={cn(bone, "h-3 w-3/4")} />
+          </div>
+        </div>
+      </div>
+      {withChrome && (
+        <div className="shrink-0 px-3 pb-3 pt-1">
+          <div className={cn(bone, "h-[92px] w-full rounded-2xl")} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StoreAgentWorkspace({
   workspaceId,
   basePath,
   storeName,
   canEdit,
   onCreditsChanged,
+  domain = "store",
+  variant = "page",
 }: {
   workspaceId: string;
   basePath: string;
+  /** The store's name, or the Google Ads account's name on the Google Ads page. */
   storeName: string;
   canEdit: boolean;
   onCreditsChanged?: () => void;
+  /** Which agent: the Store Assistant (default) or the Google Ads page's. */
+  domain?: AgentDomain;
+  /**
+   * "page": the Store Assistant's full page (chat + files panel).
+   * "panel": just the chat, for a side column; opened files show in a sheet over the page.
+   */
+  variant?: "page" | "panel";
 }) {
+  const isAds = domain === "google_ads";
   const state = useStoreAgent();
   const [seed, setSeed] = useState<{ text: string; nonce: number } | undefined>();
   const [chatWidth, setChatWidth] = useState(480);
@@ -341,8 +438,8 @@ export function StoreAgentWorkspace({
   const stickToBottom = useRef(true);
 
   useEffect(() => {
-    void initStoreAgent(workspaceId, { onRunFinished: onCreditsChanged });
-  }, [workspaceId, onCreditsChanged]);
+    void initStoreAgent(workspaceId, { onRunFinished: onCreditsChanged, domain });
+  }, [workspaceId, onCreditsChanged, domain]);
 
   useEffect(() => {
     if (!state.notice) return;
@@ -421,7 +518,7 @@ export function StoreAgentWorkspace({
     [chatWidth]
   );
 
-  if (state.availability === "checking") return <PageLoader />;
+  if (state.availability === "checking") return variant === "panel" ? <ChatSkeleton withChrome /> : <PageLoader />;
   if (state.availability !== "ready") {
     const noStore = state.availability === "no_store";
     return (
@@ -432,17 +529,19 @@ export function StoreAgentWorkspace({
           </div>
           <div className="space-y-2">
             <h2 className="text-xl font-black">
-              {noStore ? "Connect your store" : state.availability === "off" ? "Store Agent is not available yet" : "Could not reach the agent"}
+              {noStore ? (isAds ? "Connect Google Ads" : "Connect your store") : state.availability === "off" ? (isAds ? "Vera is not available here yet" : "Store Agent is not available yet") : "Could not reach the agent"}
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">
               {noStore
-                ? "The Store Agent works on a connected Shopify or WooCommerce store. Connect it in Settings to start."
+                ? isAds
+                  ? "Vera works on the connected Google Ads account. Connect it and pick the ad account first."
+                  : "The Store Agent works on a connected Shopify or WooCommerce store. Connect it in Settings to start."
                 : state.availability === "off"
                   ? "This feature is not turned on for this workspace."
                   : "The agent service did not answer. Try again in a moment."}
             </p>
           </div>
-          {noStore && (
+          {noStore && !isAds && (
             <Button asChild className="gap-2 rounded-xl bg-[#400095] text-white hover:bg-[#6B358D] dark:bg-[#F76D01]">
               <Link href={`${basePath}/settings`}>
                 <Settings className="h-4 w-4" /> Go to Settings
@@ -482,6 +581,7 @@ export function StoreAgentWorkspace({
       files={files}
       plans={plans}
       seed={seed}
+      domain={domain}
       autoFocus
       onSend={async (text, attachments) => {
         stickToBottom.current = true;
@@ -511,24 +611,34 @@ export function StoreAgentWorkspace({
         onDelete={deleteChat}
         onSearch={(q) => refreshChats(q)}
         actions={
-          <>
-            <IconAction label="Store notes: what Vera always follows" onClick={() => setNotesOpen(true)}>
-              <BookOpen className="h-4 w-4" />
-            </IconAction>
-            <IconAction label="Store change history" onClick={() => setHistoryOpen(true)}>
-              <History className="h-4 w-4" />
-            </IconAction>
-          </>
+          // Store notes and the store's change history belong to the Store Assistant; Google Ads has its own history page.
+          isAds ? undefined : (
+            <>
+              <IconAction label="Store notes: what Vera always follows" onClick={() => setNotesOpen(true)}>
+                <BookOpen className="h-4 w-4" />
+              </IconAction>
+              <IconAction label="Store change history" onClick={() => setHistoryOpen(true)}>
+                <History className="h-4 w-4" />
+              </IconAction>
+            </>
+          )
         }
       />
 
       <div className="flex min-h-0 flex-1">
         {/* Chat on the left: fixed width, resizable; full width on small screens. */}
-        <section style={{ ["--chat-w" as string]: `${chatWidth}px` }} className="relative flex w-full min-w-0 shrink-0 flex-col md:w-[var(--chat-w)] md:min-w-[360px]">
+        <section
+          style={variant === "page" ? { ["--chat-w" as string]: `${chatWidth}px` } : undefined}
+          className={
+            variant === "page"
+              ? "relative flex w-full min-w-0 shrink-0 flex-col md:w-[var(--chat-w)] md:min-w-[360px]"
+              : "relative flex w-full min-w-0 flex-1 flex-col"
+          }
+        >
           {chatState?.status === "loading" ? (
-            <PageLoader />
+            <ChatSkeleton />
           ) : empty ? (
-            <Hero storeName={storeName} insights={state.insights} onPick={pick} />
+            isAds ? <AdsHero accountName={storeName} onPick={pick} /> : <Hero storeName={storeName} insights={state.insights} onPick={pick} />
           ) : (
             <div
               ref={scrollRef}
@@ -589,20 +699,39 @@ export function StoreAgentWorkspace({
             <div className="mt-1.5 flex items-center justify-center gap-1.5 text-[10.5px] text-muted-foreground/70">
               <Store className="h-3 w-3 shrink-0" />
               <span className="truncate">
-                {storeName} · Type @ to mention a product · Alt+N new chat
+                {isAds ? `${storeName} · Every change waits for your approval · Alt+N new chat` : `${storeName} · Type @ to mention a product · Alt+N new chat`}
               </span>
             </div>
           </div>
         </section>
 
         {/* Workspace on the right: always there, empty until the agent produces something. */}
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          onPointerDown={startResize}
-          className="hidden w-1 shrink-0 cursor-col-resize border-s bg-border/40 transition-colors hover:bg-[#6B358D]/40 md:block dark:hover:bg-[#F76D01]/40"
-        />
-        <aside className="hidden min-w-0 flex-1 md:block">
+        {variant === "page" && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            onPointerDown={startResize}
+            className="hidden w-1 shrink-0 cursor-col-resize border-s bg-border/40 transition-colors hover:bg-[#6B358D]/40 md:block dark:hover:bg-[#F76D01]/40"
+          />
+        )}
+        {/* In a side column the page beside it is the workspace: files open in a sheet over it, and close to give it back. */}
+        <aside
+          className={
+            variant === "page"
+              ? "hidden min-w-0 flex-1 md:block"
+              : cn(
+                  "fixed inset-y-0 end-0 z-50 w-full min-w-0 border-s bg-background shadow-2xl md:w-[min(1100px,70vw)]",
+                  panel.openFileIds.length ? "flex flex-col" : "hidden"
+                )
+          }
+        >
+          {variant === "panel" && chatId && (
+            <div className="flex shrink-0 items-center justify-end border-b px-2 py-1.5">
+              <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-[12px]" onClick={() => panel.openFileIds.forEach((id) => closeFile(chatId, id))}>
+                <X className="h-3.5 w-3.5" /> Close
+              </Button>
+            </div>
+          )}
           {chatId && (
             <FilePanel
               key={chatId ?? "none"}
@@ -636,8 +765,8 @@ export function StoreAgentWorkspace({
         </aside>
       </div>
 
-      <StoreNotesDialog workspaceId={workspaceId} open={notesOpen} onOpenChange={setNotesOpen} />
-      <ChangeHistoryDialog workspaceId={workspaceId} open={historyOpen} onOpenChange={setHistoryOpen} onOpenChat={(id) => void openChat(id)} />
+      {!isAds && <StoreNotesDialog workspaceId={workspaceId} open={notesOpen} onOpenChange={setNotesOpen} />}
+      {!isAds && <ChangeHistoryDialog workspaceId={workspaceId} open={historyOpen} onOpenChange={setHistoryOpen} onOpenChat={(id) => void openChat(id)} />}
 
       <Dialog open={!!state.blocked} onOpenChange={(open) => !open && dismissBlocked()}>
         <DialogContent className="max-w-md">

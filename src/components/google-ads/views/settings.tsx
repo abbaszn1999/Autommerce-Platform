@@ -74,8 +74,8 @@ export function SettingsView() {
 
         <Card className="space-y-3 p-4">
           <p className="text-sm font-bold">Targeting</p>
-          <InfoRow label="Locations" value={place.length ? place.join(", ") : "All countries"} />
-          <InfoRow label="Languages" value={campaign.languages.length ? campaign.languages.join(", ") : "All languages"} />
+          <InfoRow label="Locations" value={place.length ? place.join(", ") : data.unavailable?.includes("locations") ? "Couldn't read from Google" : "All countries"} />
+          <InfoRow label="Languages" value={campaign.languages.length ? campaign.languages.join(", ") : data.unavailable?.includes("languages") ? "Couldn't read from Google" : "All languages"} />
           <InfoRow label="Ad schedule" value={slots ? `${slots} time slot${slots > 1 ? "s" : ""}` : "All day, every day"} />
           {!isPmax && campaign.type !== "DEMAND_GEN" && <InfoRow label="Devices" hint="Bid adjustments by device." value={deviceNote.join(", ")} />}
           {campaign.type === "SEARCH" && <InfoRow label="Networks" value={networks.length ? networks.join(", ") : "None"} />}

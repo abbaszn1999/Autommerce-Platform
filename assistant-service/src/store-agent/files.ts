@@ -3,11 +3,12 @@ import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { attachmentPath, classifyAgentFile, type AgentFolder } from "../../../src/lib/store-agent/file-kinds";
 import { decodeStoragePath, encodeStoragePath } from "../../../src/lib/store-agent/storage-key";
+import { isHiddenPath } from "./file-tools";
 import type { StoreAgentRun } from "./run";
 
 export const FILES_BUCKET = "store-agent-files";
 const SKIP_DIRS = new Set(["node_modules", ".git", ".cursor"]);
-const MAX_SYNC_BYTES = 25 * 1024 * 1024;
+export const MAX_SYNC_BYTES = 25 * 1024 * 1024;
 
 const KIND_BY_EXT: Record<string, string> = {
   ".md": "report",
@@ -68,7 +69,7 @@ export function kindFor(name: string): string {
 export function resolveInChat(cwd: string, relative: string): string {
   const target = path.resolve(cwd, relative);
   const rel = path.relative(cwd, target);
-  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) throw new Error("That path is outside this chat's files.");
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel) || isHiddenPath(rel)) throw new Error("That path is outside this chat's files.");
   return target;
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Bot, Check, CheckCheck, ChevronDown, ClipboardCheck, History, Lightbulb, PenSquare, Undo2, User, X } from "lucide-react";
+import { ArrowRight, Bot, Check, CheckCheck, ChevronDown, ClipboardCheck, History, Lightbulb, Loader2, PenSquare, Undo2, User, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGoogleAds } from "@/lib/google-ads/store";
 import type { ChangeEvent, ChangeSource, DiffRow, ProposedChange } from "@/lib/google-ads/types";
@@ -40,6 +40,8 @@ export function DiffTable({ rows }: { rows: DiffRow[] }) {
 export function PendingView() {
   const { acc } = useGa();
   const applyChange = useGoogleAds((s) => s.applyChange);
+  // Real money: on a live account each change is read and approved on its own.
+  const live = useGoogleAds((s) => s.mode === "live");
   const [showResolved, setShowResolved] = useState(false);
   const pending = acc.changes.filter((c) => c.status === "PENDING");
   const resolved = acc.changes.filter((c) => c.status !== "PENDING");
@@ -50,7 +52,7 @@ export function PendingView() {
         title="Pending changes"
         subtitle="Everything the agent proposes waits here. Nothing reaches Google Ads until you approve it."
         actions={
-          pending.length > 1 ? (
+          pending.length > 1 && !live ? (
             <button type="button" onClick={() => pending.forEach((c) => applyChange(c.id))} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#400095] px-3 text-xs font-semibold text-white hover:bg-[#33007a] dark:bg-violet-600">
               <CheckCheck className="h-3.5 w-3.5" /> Approve all ({pending.length})
             </button>
@@ -115,11 +117,21 @@ function ChangeCard({ change }: { change: ProposedChange }) {
                 <PenSquare className="h-3.5 w-3.5" /> Edit
               </button>
             )}
-            <button type="button" onClick={() => rejectChange(change.id)} className="inline-flex items-center gap-1 rounded-lg border border-border/70 px-2.5 py-1.5 text-[11px] font-medium hover:bg-muted">
+            <button
+              type="button"
+              disabled={change.applying}
+              onClick={() => rejectChange(change.id)}
+              className="inline-flex items-center gap-1 rounded-lg border border-border/70 px-2.5 py-1.5 text-[11px] font-medium hover:bg-muted disabled:opacity-60"
+            >
               <X className="h-3.5 w-3.5" /> Reject
             </button>
-            <button type="button" onClick={() => applyChange(change.id)} className="inline-flex items-center gap-1 rounded-lg bg-[#400095] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[#33007a] dark:bg-violet-600">
-              <Check className="h-3.5 w-3.5" /> Approve
+            <button
+              type="button"
+              disabled={change.applying}
+              onClick={() => applyChange(change.id)}
+              className="inline-flex items-center gap-1 rounded-lg bg-[#400095] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[#33007a] disabled:opacity-60 dark:bg-violet-600"
+            >
+              {change.applying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {change.applying ? "Sending to Google" : "Approve"}
             </button>
           </div>
         ) : (
@@ -199,12 +211,18 @@ function HistoryItem({ event, onUndo }: { event: ChangeEvent; onUndo: () => void
             </button>
           )}
           {event.inverse && !event.undone && (
-            <button type="button" onClick={onUndo} className="inline-flex items-center gap-1 rounded-md border border-border/70 px-2 py-0.5 text-[11px] font-medium hover:bg-muted">
-              <Undo2 className="h-3 w-3" /> Undo
+            <button
+              type="button"
+              disabled={event.undoing}
+              onClick={onUndo}
+              className="inline-flex items-center gap-1 rounded-md border border-border/70 px-2 py-0.5 text-[11px] font-medium hover:bg-muted disabled:opacity-60"
+            >
+              {event.undoing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />} {event.undoing ? "Undoing" : "Undo"}
             </button>
           )}
           {event.undone && <Pill>undone</Pill>}
         </div>
+        {event.undoError && <p className="mt-2 rounded-lg bg-red-500/10 px-3 py-2 text-[11px] text-red-700 dark:text-red-400">{event.undoError}</p>}
         {open && (
           <div className="mt-2">
             <DiffTable rows={event.diff} />

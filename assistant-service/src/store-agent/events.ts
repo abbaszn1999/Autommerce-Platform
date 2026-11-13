@@ -67,6 +67,42 @@ export function describeTool(name: string, args: Args): Described {
       return { kind: "file", title: "Preparing an image for the store", detail: base(args.path) || undefined };
     case "save_store_note":
       return { kind: "other", title: "Remembering for this store", detail: clip(str(args.note), 120) || undefined };
+    case "ads_overview":
+      return { kind: "store_read", title: "Reading the Google Ads account" };
+    case "ads_query":
+      return { kind: "store_read", title: "Querying Google Ads", detail: clip(str(args.purpose), 140) || undefined };
+    case "ads_change":
+      return { kind: "store_write", title: "Changing Google Ads", detail: clip(str(args.title), 140) || undefined };
+    case "ads_report":
+      return { kind: "store_read", title: "Analysing Google Ads", detail: str(args.report).replace(/_/g, " ") || undefined };
+    case "merchant_products":
+      return { kind: "store_read", title: "Reading Merchant Center products" };
+    case "merchant_change":
+      return { kind: "store_write", title: "Fixing Merchant Center products", detail: clip(str(args.title), 140) || undefined };
+    case "business_profile":
+      return { kind: "store_read", title: "Reading the business profile" };
+    case "keyword_research": {
+      const seed = str(args.site) || str(args.url) || (Array.isArray(args.keywords) ? (args.keywords as unknown[]).slice(0, 3).map(String).join(", ") : "");
+      return { kind: "store_read", title: args.mode === "metrics" ? "Checking search volumes" : "Finding keyword ideas", detail: clip(seed, 120) || undefined };
+    }
+    case "keyword_forecast":
+      return { kind: "store_read", title: "Forecasting keywords", detail: Number(args.dailyBudget) ? `${args.dailyBudget} a day` : undefined };
+    case "competitor_ads":
+      return {
+        kind: "store_read",
+        title: args.quoteOnly === true ? "Pricing a competitor lookup" : "Looking up a competitor's ads",
+        detail: clip([args.domain, args.country].filter((v) => typeof v === "string" && v).join(" · "), 120) || undefined,
+      };
+    case "save_plan":
+      return { kind: "plan", title: args.documentId ? "Revising the plan" : "Writing the plan", detail: clip(str(args.title), 140) || undefined };
+    case "save_report":
+      return { kind: "file", title: args.documentId ? "Updating the report" : "Writing the report", detail: clip(str(args.title), 140) || undefined };
+    case "read_document":
+      return { kind: "store_read", title: "Reading a document" };
+    case "update_business_profile": {
+      const fields = Array.isArray(args.edits) ? (args.edits as Array<{ field?: unknown }>).map((e) => str(e?.field)).filter(Boolean).join(", ") : "";
+      return { kind: "other", title: args.statedByUser === true ? "Saving to the business profile" : "Suggesting business profile values", detail: clip(fields, 120) || undefined };
+    }
     case "run_script":
       return { kind: "file", title: "Analysing the data", detail: Array.isArray(args.inputs) ? clip(args.inputs.map(base).join(", "), 100) : undefined };
     case "make_document":
@@ -181,6 +217,64 @@ export function summarizeResult(name: string, result: unknown): { ok: boolean; s
         return { ok: true, summary: text ? clip(scrub(text).replace(/\s+/g, " "), 140) : undefined };
       }
     }
+    case "ads_overview":
+      return { ok: true, summary: /saved to google-ads\//.test(text) ? "large result saved to a file" : undefined };
+    case "ads_query": {
+      if (/saved to google-ads\//.test(text)) return { ok: true, summary: "large result saved to a file" };
+      try {
+        return { ok: true, summary: `${(JSON.parse(text) as { rowCount?: number }).rowCount ?? 0} rows` };
+      } catch {
+        return { ok: true };
+      }
+    }
+    case "ads_change":
+      return { ok: true, summary: "applied in Google Ads" };
+    case "ads_report":
+      return { ok: true, summary: /saved to google-ads\//.test(text) ? "large result saved to a file" : undefined };
+    case "merchant_products":
+      return { ok: true, summary: /saved to google-ads\//.test(text) ? "large result saved to a file" : undefined };
+    case "merchant_change":
+      return { ok: true, summary: "sent to Merchant Center" };
+    case "business_profile":
+      return { ok: true };
+    case "save_plan":
+      try {
+        const steps = (JSON.parse(text) as { steps?: number }).steps;
+        return { ok: true, summary: steps ? `${steps} step${steps > 1 ? "s" : ""}, checked by Google` : undefined };
+      } catch {
+        return { ok: true };
+      }
+    case "save_report":
+    case "read_document":
+    case "keyword_forecast":
+      return { ok: true };
+    case "competitor_ads":
+      if (/saved to google-ads\//.test(text)) return { ok: true, summary: "large result saved to a file" };
+      try {
+        const parsed = JSON.parse(text) as { paidKeywords?: number; credits?: number };
+        if (typeof parsed.credits === "number") return { ok: true, summary: parsed.credits ? `${parsed.credits} credits` : "free" };
+        const n = parsed.paidKeywords ?? 0;
+        return { ok: true, summary: `${n} paid keyword${n === 1 ? "" : "s"}` };
+      } catch {
+        return { ok: true };
+      }
+    case "keyword_research":
+      if (/saved to google-ads\//.test(text)) return { ok: true, summary: "large result saved to a file" };
+      try {
+        const n = ((JSON.parse(text) as { keywords?: unknown[] }).keywords ?? []).length;
+        return { ok: true, summary: `${n} keyword${n === 1 ? "" : "s"}` };
+      } catch {
+        return { ok: true };
+      }
+    case "update_business_profile":
+      try {
+        const parsed = JSON.parse(text) as { saved?: unknown[]; skipped?: unknown[] };
+        const saved = parsed.saved?.length ?? 0;
+        const skipped = parsed.skipped?.length ?? 0;
+        return { ok: true, summary: `${saved} saved${skipped ? `, ${skipped} left to the owner` : ""}` };
+      } catch {
+        return { ok: true };
+      }
     case "shopify_schema":
     case "woo_schema":
     case "webSearch":
@@ -223,6 +317,12 @@ function safeLink(url: unknown, title: unknown): ToolLink | null {
   } catch {
     return null;
   }
+}
+
+/** Whether a search result carries any text of results (in a reference's chunk). */
+function searchText(success: Record<string, unknown> | undefined): boolean {
+  const refs = success?.references;
+  return Array.isArray(refs) && refs.some((r) => typeof (r as { chunk?: unknown })?.chunk === "string" && !!(r as { chunk: string }).chunk.trim());
 }
 
 type WebToolCall = {
@@ -269,7 +369,9 @@ export function webCallsInMessages(messages: readonly unknown[]): WebCall[] {
         ok: !!success,
         summary: !success
           ? clip(scrub(str(failure) || "failed").replace(/\s+/g, " "), 200)
-          : search && !links.length
+          : // Nothing found means no links and no result text: some models get their results as text only
+            // (a "Web search results" entry whose chunk holds them), which is not "No results".
+            search && !links.length && !searchText(success)
             ? NO_RESULTS
             : undefined,
         links,

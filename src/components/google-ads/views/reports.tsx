@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Bot, CalendarClock, Lightbulb, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SEGMENTS, segmentRows, type SegmentRow } from "@/lib/google-ads/analytics";
+import { SEGMENTS, type SegmentRow } from "@/lib/google-ads/analytics";
 import { METRICS, derive, formatMetric } from "@/lib/google-ads/metrics";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import type { MetricKey, SegmentKey } from "@/lib/google-ads/types";
@@ -13,7 +13,9 @@ import { metricColumns } from "../ga-columns";
 import { GaChart } from "../ga-chart";
 import { GaTable, type GaColumn } from "../ga-table";
 import { Card, Pill, SelectBox, ViewHeader } from "../ga-ui";
-import { scopedCampaignIds, useGa } from "../use-ga";
+import { useGoogleAds } from "@/lib/google-ads/store";
+import { useGa } from "../use-ga";
+import { SegmentNotice, hasNotice, useSegmentRows } from "../use-segment";
 
 const CHART_METRICS: MetricKey[] = ["cost", "conversions", "conversionsValue", "roas", "cpa", "clicks", "impressions", "ctr", "convRate"];
 
@@ -27,14 +29,17 @@ const SEGMENT_PROMPT: Partial<Record<SegmentKey, string>> = {
 };
 
 export function ReportsView() {
-  const { acc, data, range, currency, campaign } = useGa();
+  const { acc, currency, campaign } = useGa();
+  // Scheduled e-mails aren't part of live accounts yet.
+  const live = useGoogleAds((s) => s.mode === "live");
   const [segment, setSegment] = useState<SegmentKey>("device");
   const [metric, setMetric] = useState<MetricKey>("conversions");
-  const ids = useMemo(() => scopedCampaignIds(data, campaign), [data, campaign]);
-  const rows = useMemo(() => segmentRows(data, range, segment, ids), [data, range, segment, ids]);
+  const ids = useMemo(() => (campaign ? [campaign.id] : undefined), [campaign]);
+  const load = useSegmentRows(segment, ids);
+  const { rows, empty } = load;
   const timeSeries = segment === "day" || segment === "week";
 
-  const insight = useMemo(() => bestWorst(rows, currency), [rows, currency]);
+  const insight = useMemo(() => (empty ? null : bestWorst(rows, currency)), [rows, currency, empty]);
 
   // View-only dashboard: scheduling is a request to the agent.
   const schedule = () => runAgentTurn(`Email me the ${SEGMENTS[segment].label.toLowerCase()} report weekly${campaign ? ` for ${campaign.name}` : ""}`);
@@ -85,7 +90,9 @@ export function ReportsView() {
           <p className="text-sm font-bold">{METRICS[metric].label} by {SEGMENTS[segment].label.toLowerCase()}</p>
           <SelectBox value={metric} onChange={setMetric} options={CHART_METRICS.map((m) => ({ value: m, label: METRICS[m].label }))} className="ml-auto w-44" />
         </div>
-        {timeSeries ? (
+        {hasNotice(load, empty) ? (
+          <SegmentNotice load={load} empty={empty} height={240} />
+        ) : timeSeries ? (
           <GaChart points={rows.map((r) => ({ date: r.key, ...r.metrics }))} primary={metric} currency={currency} />
         ) : (
           <SegmentBars rows={rows} metric={metric} currency={currency} />
@@ -107,7 +114,7 @@ export function ReportsView() {
         </Card>
       )}
 
-      <div className="flex justify-end">
+      <div className={cn("flex justify-end", live && "hidden")}>
         <button type="button" onClick={schedule} className="inline-flex items-center gap-1.5 rounded-lg border border-border/70 px-3 py-1.5 text-xs font-semibold hover:bg-muted">
           <CalendarClock className="h-3.5 w-3.5" /> Ask agent to email this weekly
         </button>

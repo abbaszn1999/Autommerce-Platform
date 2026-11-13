@@ -1,4 +1,5 @@
 import type {
+  DateRangePreset,
   AdFormat,
   AdvantageState,
   AttributionSetting,
@@ -20,8 +21,19 @@ import type {
   SpecialAdCategory,
 } from "./types";
 
-// Date presets and geo targets are the same list Google Ads uses.
-export { DATE_PRESETS, GEO_TARGETS, LANGUAGES } from "@/lib/google-ads/constants";
+// Geo targets and languages are the same lists Google Ads uses.
+export { GEO_TARGETS, LANGUAGES } from "@/lib/google-ads/constants";
+
+/**
+ * Meta's own date presets: rolling windows that end yesterday, so each has a fixed length. Google Ads has
+ * more presets (today, this month, custom) that Meta's reports don't use, so the lists are kept apart.
+ */
+export const DATE_PRESETS: Record<DateRangePreset, { label: string; days: number }> = {
+  LAST_7_DAYS: { label: "Last 7 days", days: 7 },
+  LAST_14_DAYS: { label: "Last 14 days", days: 14 },
+  LAST_30_DAYS: { label: "Last 30 days", days: 30 },
+  LAST_90_DAYS: { label: "Last 90 days", days: 90 },
+};
 
 /** Meta Ads text limits (visible characters) and structural limits. */
 export const LIMITS = {

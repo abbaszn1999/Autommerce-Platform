@@ -8,6 +8,8 @@ import { emptyReply, reduceReply, replyText, type ReplyState } from "../../../sr
 import { MemoryAgentStoreBackend } from "./agent-store/memory-backend";
 import { WriteBehindAgentStore } from "./agent-store/write-behind-store";
 import { chargeRun } from "./billing/charge";
+import { finishHold, settledCost, startHold, updateHold } from "./billing/settle";
+import { readBilledCents, waitForBilledCents } from "../usage";
 import { IMAGE_GENERATION_USD, contextWindowFor, estimateUsd, usdToCredits, type TokenUsage } from "../../../src/lib/store-agent/pricing";
 import { describeTool, mapTodos, mergeTodos, scrub, summarizeResult, unwrapToolCall, webCallsInMessages } from "./events";
 import { oncePerToolCall } from "./call-once";
@@ -18,10 +20,12 @@ import { grantedScopes } from "./shopify/client";
 import { missingScopes } from "./shopify/guard";
 import { SCOPE_LABELS, STORE_AGENT_SCOPES } from "./shopify/scopes";
 import { plainMentions } from "../../../src/lib/store-agent/mentions";
+import { PROFILE_UNREADABLE, profileBrief } from "../../../src/lib/business-profile";
+import { loadProfile } from "../../../src/lib/business-profile.server";
 import { mentionContext, type MentionContext } from "./mentions";
 import { createDocumentTool } from "./document-tool";
 import { createExcelTool } from "./excel-tool";
-import { createFileTools } from "./file-tools";
+import { clearProjectConfig, createFileTools } from "./file-tools";
 import { ChatFiles } from "./files";
 import { veraRule } from "./instructions";
 import type { StoreAgentRegistry, StoreAgentRun } from "./run";
@@ -29,7 +33,9 @@ import { createScriptTool } from "./script-tool";
 import { loadShopifyConnection, type ShopifyConnection } from "./shopify/client";
 import { storePlatform } from "./store-connection";
 import { loadWooConnection, type WooConnection } from "./woocommerce/client";
-import { createStoreAgentTools } from "./tools";
+import { createChatTools, createStoreAgentTools } from "./tools";
+import { veraAdsRule } from "./google-ads/instructions";
+import { createGoogleAdsTools } from "./google-ads/tools";
 
 /**
  * Cursor tools the agent gets. File access goes through our confined tools
@@ -44,6 +50,8 @@ const PROGRESS_EVERY_MS = 1_500;
 /** Thinking kept in the saved reply; the full text is only useful live. */
 const MAX_SAVED_THINKING = 4_000;
 const CHECKPOINT_EVERY_MS = 15_000;
+/** How often a run in progress saves its cost estimate. */
+const ESTIMATE_SAVE_EVERY_MS = 30_000;
 const SAVE_DEBOUNCE_MS = 1_500;
 
 export type StoreAgentDeps = {
@@ -54,6 +62,9 @@ export type StoreAgentDeps = {
   /** Parent folder of every chat's working folder. */
   workRoot: string;
   log: (message: string, extra?: unknown) => void;
+  /** Google Ads chats: the site their tools call, signed with the service secret. */
+  secret?: string;
+  platformUrl?: string;
 };
 
 /** Marks a run stopped by a deploy or shutdown rather than by the user. */
@@ -167,6 +178,41 @@ async function retryOnNetwork<T>(fn: () => Promise<T>, run: StoreAgentRun, log: 
       log(`${limited ? "Cursor rate limit" : "network error reaching Cursor"}, retry ${attempt + 1} in ${delay / 1000}s: ${(error as Error).message}`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
+  }
+}
+
+/** The Google Ads account a Google Ads chat works on (picked on the Google Ads page). */
+async function loadAdsAccount(
+  db: SupabaseClient,
+  workspaceId: string
+): Promise<{ accountName: string; customerId: string; currency: string; merchant: { name: string; id: string } | null }> {
+  const { data } = await db
+    .from("google_ads_connections")
+    .select("kind, account_id, account_name, account_currency")
+    .eq("workspace_id", workspaceId)
+    .not("composio_connected_account_id", "is", null);
+  const ads = data?.find((r) => r.kind === "ads");
+  const merchant = data?.find((r) => r.kind === "merchant" && r.account_id);
+  if (!ads?.account_id) throw new Error("Google Ads is not connected for this workspace. Connect it on the Google Ads page.");
+  return {
+    accountName: String(ads.account_name ?? ads.account_id),
+    customerId: String(ads.account_id),
+    currency: String(ads.account_currency ?? ""),
+    merchant: merchant ? { name: String(merchant.account_name ?? merchant.account_id), id: String(merchant.account_id) } : null,
+  };
+}
+
+/**
+ * The workspace's shared business profile as the agent reads it. A failure
+ * to read it never stops the chat, and is never passed off as an empty profile.
+ */
+async function loadBusinessContext(db: SupabaseClient, workspaceId: string, currency: string, log: (m: string, e?: unknown) => void) {
+  try {
+    const profile = await loadProfile(db, workspaceId);
+    return { brief: profileBrief(profile, currency), filled: Object.keys(profile.values).length > 0 };
+  } catch (error) {
+    log("reading the business profile failed", error);
+    return { brief: PROFILE_UNREADABLE, filled: false };
   }
 }
 
@@ -327,6 +373,7 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
   let agentId: string | null = null;
   let saveTimer: NodeJS.Timeout | null = null;
   let checkpointTimer: NodeJS.Timeout | null = null;
+  let estimateTimer: ReturnType<typeof setInterval> | undefined;
   let deadline: NodeJS.Timeout | null = null;
   let queue: Promise<unknown> = Promise.resolve();
   const enqueue = (work: () => Promise<unknown>) => {
@@ -451,6 +498,14 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
   let buildingPlanId: string | null = null;
   /** Running cost estimate, for the balance check and for a run stopped before its usage arrived. */
   let estimateSoFar = () => extraUsd;
+  /** Rough size of what tools returned: the model reads it on every later call. */
+  let toolResultTokens = 0;
+  /** Paid work that is not part of this agent on Cursor's side (the chat title). */
+  let titleUsd = 0;
+  /** The agent's billed total before this run; undefined while Cursor does not report it for this account. */
+  let billedBefore: number | undefined;
+  let lastSendReported = false;
+  const holdBase = startHold(req.billing.ownerUserId, run.id);
   let lastProgressAt = 0;
   const addCost = (usd: number, label: string) => {
     extraUsd += usd;
@@ -466,19 +521,24 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     chatFiles = files;
     await files.prepare();
 
-    const platform = await storePlatform(db, req.workspaceId);
+    // Google Ads chats (the Google Ads page) never touch the store: no store connection, store rules or store tools.
+    const isAds = req.domain === "google_ads";
+    /** What the agent works on, for the notes it gets about earlier runs. */
+    const where = isAds ? "Google Ads account" : "store";
+    const platform = isAds ? ("shopify" as const) : await storePlatform(db, req.workspaceId);
     let connection: ShopifyConnection | null = null;
     const getConnection = async () => (connection ??= await loadShopifyConnection(db, req.workspaceId));
     let wooConnection: WooConnection | null = null;
     const getWoo = async () => (wooConnection ??= await loadWooConnection(db, req.workspaceId));
-    const storeInfo =
-      platform === "woocommerce"
+    const storeInfo = isAds
+      ? { name: "", domain: "" }
+      : platform === "woocommerce"
         ? await getWoo().then((c) => ({ name: c.storeName, domain: c.domain }))
         : await getConnection().then((c) => ({ name: c.storeName || c.shopDomain, domain: c.shopDomain }));
 
     // What this store's token may do: told to the agent up front, and kept for the sidebar's locks.
     let missingAccess: string[] = [];
-    if (platform === "shopify") {
+    if (!isAds && platform === "shopify") {
       try {
         const granted = await grantedScopes(await getConnection());
         missingAccess = missingScopes(STORE_AGENT_SCOPES, granted).map((scope) => SCOPE_LABELS[scope]);
@@ -492,19 +552,25 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
       }
     }
 
+    await clearProjectConfig(cwd);
     await fs.mkdir(path.join(cwd, ".cursor", "rules"), { recursive: true });
+    const adsAccount = isAds ? await loadAdsAccount(db, req.workspaceId) : null;
+    const business = await loadBusinessContext(db, req.workspaceId, adsAccount?.currency ?? "", log);
     await fs.writeFile(
       path.join(cwd, ".cursor", "rules", "vera.mdc"),
-      veraRule({
-        platform,
-        storeName: storeInfo.name,
-        shopDomain: storeInfo.domain,
-        mode: req.mode,
-        autoRun: req.autoRun,
-        autoRunBulk: req.autoRunBulk,
-        notes: await loadStoreNotes(db, req.workspaceId),
-        missingAccess,
-      })
+      adsAccount
+        ? veraAdsRule({ ...adsAccount, profile: business.brief, mode: req.mode })
+        : veraRule({
+            businessProfile: business.filled ? business.brief : "",
+            platform,
+            storeName: storeInfo.name,
+            shopDomain: storeInfo.domain,
+            mode: req.mode,
+            autoRun: req.autoRun,
+            autoRunBulk: req.autoRunBulk,
+            notes: await loadStoreNotes(db, req.workspaceId),
+            missingAccess,
+          })
     );
 
     const images: NonNullable<SDKUserMessage["images"]> = [];
@@ -548,14 +614,14 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
       ...converted.map((note) => `[${note}]`),
       ...mentioned.notes.map((note) => `[${note}]`),
       undone.length
-        ? `[Since your last reply the user undid these changes from their cards, so the store has the earlier values again: ${undone.map((s) => `"${s}"`).join("; ")}. Read the store again before relying on those values.]`
+        ? `[Since your last reply the user undid these changes from their cards, so the ${where} has the earlier values again: ${undone.map((s) => `"${s}"`).join("; ")}. Read the ${where} again before relying on those values.]`
         : "",
       unfinished
         ? `[Your previous run in this chat stopped before it finished (${unfinished.status}). ${
             unfinished.changes.length
-              ? `These store changes from it WERE applied: ${unfinished.changes.map((s) => `"${s}"`).join("; ")}.`
-              : "No store change from it was applied."
-          } Read the current state of the store before continuing, and never repeat a change that was already applied.]`
+              ? `These ${isAds ? "Google Ads" : "store"} changes from it WERE applied: ${unfinished.changes.map((s) => `"${s}"`).join("; ")}.`
+              : `No ${isAds ? "Google Ads" : "store"} change from it was applied.`
+          } Read the current state of the ${where} before continuing, and never repeat a change that was already applied.]`
         : "",
     ].filter(Boolean);
     const text = notes.length ? `${agentMessage}\n\n${notes.join("\n")}` : agentMessage;
@@ -563,20 +629,25 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     // ── Tools ──────────────────────────────────────────────────────────────
     const written = new Set<string>();
     // Re-delivered calls join the first execution, which has already seen any guidance.
+    const toolContext = {
+      db,
+      run,
+      files,
+      platform,
+      connection: getConnection,
+      woo: getWoo,
+      // Google Ads changes always wait for a person (the gateway also sends false).
+      autoRun: isAds ? false : req.autoRun,
+      autoRunBulk: isAds ? false : req.autoRunBulk,
+      planMode: req.mode === "plan",
+      checkpoint,
+      log,
+    };
+    if (isAds && (!deps.secret || !deps.platformUrl)) throw new Error("The Google Ads agent is not configured (PLATFORM_URL).");
     const customTools = oncePerToolCall(withGuidance({
-      ...createStoreAgentTools({
-        db,
-        run,
-        files,
-        platform,
-        connection: getConnection,
-        woo: getWoo,
-        autoRun: req.autoRun,
-        autoRunBulk: req.autoRunBulk,
-        planMode: req.mode === "plan",
-        checkpoint,
-        log,
-      }),
+      ...(isAds
+        ? { ...createGoogleAdsTools(toolContext, { url: deps.platformUrl!, secret: deps.secret! }), ...createChatTools(toolContext) }
+        : createStoreAgentTools(toolContext)),
       ...createFileTools(cwd, (relative) => written.add(relative)),
       ...createScriptTool(cwd, (relative, inputs) => {
         written.add(relative);
@@ -608,7 +679,8 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     // (mostly from cache) and adds what was written since.
     const startContext = Math.max(BASE_PROMPT_TOKENS, Number(chat?.context_used) || 0);
     estimateSoFar = () => {
-      const input = modelCalls * (startContext + outputTokens);
+      // Tool results arrive along the way, so on average a call has read half of them.
+      const input = modelCalls * (startContext + outputTokens + Math.round(toolResultTokens / 2));
       return (
         extraUsd +
         estimateUsd(req.model.id, req.model.params, { inputTokens: input, cacheReadTokens: Math.round(input * 0.85), cacheWriteTokens: 0, outputTokens }, modelCalls)
@@ -616,7 +688,8 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     };
     const checkBudget = () => {
       if (budgetExhausted || run.cancelled) return;
-      if (usdToCredits(estimateSoFar()) < req.billing.remainingCredits) return;
+      const spent = usdToCredits(estimateSoFar());
+      if (spent + updateHold(req.billing.ownerUserId, run.id, holdBase, spent) < req.billing.remainingCredits) return;
       budgetExhausted = true;
       log(`run ${run.id} stopped: it reached the remaining balance of ${req.billing.remainingCredits} credits`);
       run.cancel();
@@ -626,8 +699,8 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     const options: AgentOptions = {
       apiKey: deps.cursorApiKey,
       model: { id: req.model.id, params: req.model.params },
-      // Plan mode delivers its plan through Cursor's own createPlan.
-      tools: req.mode === "plan" ? [...BUILTIN_TOOLS, "createPlan"] : BUILTIN_TOOLS,
+      // Plan mode delivers its plan through Cursor's own createPlan; Google Ads plans go to the Documents page (save_plan).
+      tools: req.mode === "plan" && !isAds ? [...BUILTIN_TOOLS, "createPlan"] : BUILTIN_TOOLS,
       local: {
         cwd,
         settingSources: ["project"],
@@ -778,6 +851,7 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
               run.emit({ type: "tool_start", callId, tool: call.name, ...describeTool(call.name, call.args) });
             }
             const outcome = summarizeResult(call.name, call.result);
+            toolResultTokens += Math.ceil((JSON.stringify(call.result ?? "")?.length ?? 0) / 4);
             if (call.name === "createPlan" && typeof call.args.plan === "string" && call.args.plan.trim()) {
               const markdown = call.args.plan;
               enqueue(() => savePlan(db, run, markdown).catch((e) => log("saving the plan failed", e)));
@@ -811,6 +885,7 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
       },
     };
 
+    billedBefore = await readBilledCents(agent);
     let sdkRun: Run;
     try {
       sdkRun = await agent.send(await payload(restoreHistory), sendOptions);
@@ -827,6 +902,7 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
       }
       agent = await freshAgent();
       agentId = agent.agentId;
+      billedBefore = billedBefore === undefined ? undefined : 0;
       void store.deleteAgentsEverywhere([broken]).catch((e) => log("removing the damaged agent failed", e));
       sdkRun = await agent.send(await payload(true), sendOptions);
     }
@@ -839,6 +915,20 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
 
     checkpointTimer = setInterval(checkpoint, CHECKPOINT_EVERY_MS);
     checkpointTimer.unref?.();
+    // If the process dies, the service charges this estimate when it starts again.
+    const saveEstimate = () => {
+      void db
+        .from("store_agent_runs")
+        .update({ usd: estimateSoFar(), cost_source: "estimated", owner_user_id: req.billing.ownerUserId, cursor_agent_id: agentId || null, estimate_saved_at: new Date().toISOString() })
+        .eq("id", req.runId)
+        .eq("status", "running")
+        .then(({ error }) => {
+          if (error) log("saving the run's estimate failed", error.message);
+        });
+    };
+    saveEstimate();
+    estimateTimer = setInterval(saveEstimate, ESTIMATE_SAVE_EVERY_MS);
+    estimateTimer.unref?.();
     deadline = setTimeout(() => {
       run.emit({ type: "error", message: "This run reached the one-hour limit and was stopped." });
       run.cancel();
@@ -854,8 +944,14 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
         cacheWriteTokens: usage.cacheWriteTokens + (u.cacheWriteTokens ?? 0),
       };
     };
-    let result = await sdkRun.wait();
-    addUsage(result.usage);
+    const finishSend = async () => {
+      lastSendReported = false;
+      const sent = await sdkRun.wait();
+      addUsage(sent.usage);
+      lastSendReported = (sent.usage?.inputTokens ?? 0) > 0;
+      return sent;
+    };
+    let result = await finishSend();
     // A model at capacity ("resource_exhausted") is temporary on Cursor's side:
     // wait and carry on in the same run, telling the agent what is already done.
     for (let attempt = 0; result.status === "error" && isCapacityError(result.error) && !run.cancelled; attempt++) {
@@ -866,8 +962,7 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
       if (run.cancelled) break;
       const applied = await appliedInRun(db, req.runId).catch(() => [] as string[]);
       sdkRun = await agent.send(capacityContinueMessage(applied), sendOptions);
-      result = await sdkRun.wait();
-      addUsage(result.usage);
+      result = await finishSend();
     }
     // Messages the user sent that the turn never picked up go in as a follow-up,
     // in this same run, so nothing they wrote is dropped.
@@ -876,8 +971,7 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
         `While you were working I wrote:\n${guidanceText(pending)}\nUnless it says to stop or replace my earlier request, it adds to it: make sure both are answered.`,
         sendOptions
       );
-      result = await sdkRun.wait();
-      addUsage(result.usage);
+      result = await finishSend();
     }
     if (webWatch) {
       // Web tools the last model calls ran: a read already under way may predate them.
@@ -909,6 +1003,7 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
   } finally {
     if (saveTimer) clearTimeout(saveTimer);
     if (checkpointTimer) clearInterval(checkpointTimer);
+    if (estimateTimer) clearInterval(estimateTimer);
     if (deadline) clearTimeout(deadline);
   }
 
@@ -931,16 +1026,27 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     });
     if (titled) {
       extraUsd += titled.usd;
+      titleUsd = titled.usd;
       await db.from("store_agent_chats").update({ title: titled.title }).eq("id", req.chatId);
     }
   }
 
   let usd = extraUsd;
+  let costSource: "billed" | "estimated" | "none" = usd > 0 ? "estimated" : "none";
   try {
-    // A run stopped part way (by the user or the balance) may end without its
-    // usage report; the work it did is still billed, from the running estimate.
-    const unreported = usage.inputTokens === 0 && status === "cancelled" && (outputTokens > 0 || toolCalls > 0);
-    usd = unreported ? estimateSoFar() : extraUsd + estimateUsd(req.model.id, req.model.params, usage, modelCalls);
+    // Cursor's own figure wins whenever it reports one for this account.
+    const billedAfter = billedBefore !== undefined && agent ? await waitForBilledCents(agent, billedBefore) : undefined;
+    const cost = settledCost({
+      status,
+      billedUsd: billedBefore !== undefined && billedAfter !== undefined ? (billedAfter - billedBefore) / 100 : undefined,
+      outsideAgentUsd: titleUsd,
+      reportedUsd: extraUsd + estimateUsd(req.model.id, req.model.params, usage, modelCalls),
+      runningEstimateUsd: estimateSoFar(),
+      lastSendReported,
+      didWork: outputTokens > 0 || toolCalls > 0,
+    });
+    usd = cost.usd;
+    costSource = cost.source;
   } catch (error) {
     log("pricing failed", error);
   }
@@ -954,11 +1060,14 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
       actorUserId: req.userId,
       runId: req.runId,
       credits,
-      details: { chatId: req.chatId, model: req.model.id, params: req.model.params, mode: req.mode, usage, usd, extraUsd, imagesGenerated, modelCalls },
+      details: { chatId: req.chatId, domain: req.domain ?? "store", model: req.model.id, params: req.model.params, mode: req.mode, usage, usd, extraUsd, imagesGenerated, modelCalls },
     }).catch((error) => ({ charged: 0, duplicate: false, error: String(error) }));
     return charge.error ?? null;
   });
   if (charge.error) log(`charge for run ${run.id} incomplete: ${charge.error}`);
+  finishHold(req.billing.ownerUserId, run.id, charge.charged);
+  const shortfall = Math.max(0, Math.round((credits - charge.charged) * 1000) / 1000);
+  if (shortfall > 0) log(`run ${run.id} could not charge ${shortfall} of ${credits} credits`);
 
   if (buildingPlanId) {
     const planId = buildingPlanId;
@@ -1000,8 +1109,11 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
         cache_write_tokens: usage.cacheWriteTokens,
         usd,
         credits: charge.charged,
-        cost_source: usd > 0 ? "estimated" : "none",
+        cost_source: costSource,
         charged: charge.charged > 0,
+        shortfall_credits: shortfall,
+        owner_user_id: req.billing.ownerUserId,
+        cursor_agent_id: agentId || null,
         finished_at: finishedAt,
       })
       .eq("id", req.runId);

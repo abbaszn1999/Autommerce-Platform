@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, Ban, Bot, FileWarning, FlaskConical, Gauge, Sparkles, TrendingUp, Wallet, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BIDDING, CAMPAIGN_TYPES, SERVING_ISSUES } from "@/lib/google-ads/constants";
 import {
   METRICS,
   accountBase,
+  accountSeries,
+  accountTotal,
+  adGroupBase,
   campaignBase,
   dailySeries,
   delta,
@@ -18,7 +21,7 @@ import {
 } from "@/lib/google-ads/metrics";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import { useGoogleAds } from "@/lib/google-ads/store";
-import type { MetricKey } from "@/lib/google-ads/types";
+import type { DateRange, MetricKey } from "@/lib/google-ads/types";
 import { GaChart } from "../ga-chart";
 import { ACCENT_BTN, Card, Delta, EmptyState, Pill, StatusDot, ViewHeader } from "../ga-ui";
 import { scopedCampaignIds, useGa } from "../use-ga";
@@ -33,16 +36,19 @@ export function OverviewView() {
 }
 
 function ScopeOverview() {
-  const { data, range, currency, campaign } = useGa();
+  const { data, range, currency, campaign, adGroup } = useGa();
+  const live = useGoogleAds((s) => s.mode === "live");
   const setScope = useGoogleAds((s) => s.setScope);
   const setView = useGoogleAds((s) => s.setView);
   const [tiles, setTiles] = useState<MetricKey[]>(["cost", "conversions", "conversionsValue", "roas"]);
   const [chart, setChart] = useState<[MetricKey, MetricKey]>(["cost", "conversions"]);
 
   const ids = useMemo(() => scopedCampaignIds(data, campaign), [data, campaign]);
-  const now = useMemo(() => derive(accountBase(data, range, ids)), [data, range, ids]);
-  const prev = useMemo(() => derive(accountBase(data, previousRange(range), ids)), [data, range, ids]);
-  const points = useMemo(() => dailySeries(data, range, ids), [data, range, ids]);
+  // Inside an ad group the numbers are the ad group's; the daily chart stays the campaign's (there is no daily series per ad group).
+  const totalFor = useCallback((r: DateRange) => (adGroup ? adGroupBase(data, adGroup.id, r) : campaign ? accountBase(data, r, ids) : accountTotal(data, r)), [data, ids, adGroup, campaign]);
+  const now = useMemo(() => derive(totalFor(range)), [totalFor, range]);
+  const prev = useMemo(() => derive(totalFor(previousRange(range))), [totalFor, range]);
+  const points = useMemo(() => (campaign ? dailySeries(data, range, ids) : accountSeries(data, range)), [data, range, ids, campaign]);
 
   if (!data.campaigns.length) {
     return (
@@ -56,7 +62,7 @@ function ScopeOverview() {
             <div className="flex flex-wrap justify-center gap-2">
               <button
                 type="button"
-                onClick={() => runAgentTurn("Create a Search campaign for running shoes in Saudi Arabia with $60/day")}
+                onClick={() => runAgentTurn(live ? "Help me create my first campaign. Ask me what to advertise, where and the budget if the business profile doesn't say, then research the keywords and build it for my approval." : "Create a Search campaign for running shoes in Saudi Arabia with $60/day")}
                 className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold", ACCENT_BTN)}
               >
                 <Bot className="h-3.5 w-3.5" /> Ask the agent to build it
@@ -73,12 +79,18 @@ function ScopeOverview() {
   return (
     <div className="space-y-4">
       <ViewHeader
-        title={campaign ? campaign.name : "Overview"}
-        subtitle={campaign ? `${CAMPAIGN_TYPES[campaign.type].label} campaign · ${BIDDING[campaign.bidding.type].label}` : `${data.account.name} · all campaigns`}
+        title={adGroup ? adGroup.name : campaign ? campaign.name : "Overview"}
+        subtitle={
+          adGroup && campaign
+            ? `Ad group in ${campaign.name}`
+            : campaign
+              ? `${CAMPAIGN_TYPES[campaign.type].label} campaign · ${BIDDING[campaign.bidding.type].label}`
+              : `${data.account.name} · all campaigns`
+        }
       />
 
       {campaign && <ExperimentNote campaignId={campaign.id} />}
-      {campaign && <CampaignSummary />}
+      {adGroup ? <AdGroupSummary /> : campaign && <CampaignSummary />}
 
       <Card className="overflow-hidden">
         <div className="grid grid-cols-2 border-b border-border/60 md:grid-cols-4">
@@ -118,6 +130,7 @@ function ScopeOverview() {
           })}
         </div>
         <div className="p-4">
+          {adGroup && <p className="mb-2 text-[11px] text-muted-foreground">Daily chart: the whole campaign. The numbers above are this ad group&apos;s.</p>}
           <GaChart points={points} primary={chart[0]} secondary={chart[1]} currency={currency} />
         </div>
       </Card>
@@ -235,11 +248,43 @@ function CampaignSummary() {
   );
 }
 
-function TopSearchTerms() {
-  const { data, range, currency, campaign } = useGa();
+/** Inside an ad group: what it is and holds, with a link to its settings. */
+function AdGroupSummary() {
+  const { data, adGroup, currency } = useGa();
   const setView = useGoogleAds((s) => s.setView);
+  if (!adGroup) return null;
+  const keywords = data.keywords.filter((k) => k.adGroupId === adGroup.id && k.status !== "REMOVED").length;
+  const ads = data.ads.filter((a) => a.adGroupId === adGroup.id && a.status !== "REMOVED").length;
+  const facts = [
+    ["Status", adGroup.status === "ENABLED" ? "Enabled" : adGroup.status === "PAUSED" ? "Paused" : "Removed"],
+    ["Default max. CPC", adGroup.defaultCpcBid ? money(adGroup.defaultCpcBid, currency) : "—"],
+    ["Keywords", String(keywords)],
+    ["Ads", String(ads)],
+  ];
+  return (
+    <Card className="flex flex-wrap items-center gap-x-8 gap-y-3 p-4">
+      {facts.map(([k, v]) => (
+        <div key={k}>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{k}</p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold">
+            {k === "Status" && <StatusDot status={adGroup.status} />} {v}
+          </p>
+        </div>
+      ))}
+      <button type="button" onClick={() => setView("adGroupSettings")} className="ml-auto text-[11px] font-semibold text-[#400095] hover:underline dark:text-violet-300">
+        Ad group settings
+      </button>
+    </Card>
+  );
+}
+
+function TopSearchTerms() {
+  const { data, range, currency, campaign, adGroup } = useGa();
+  const setView = useGoogleAds((s) => s.setView);
+  // Campaign types whose searches Google reports as search terms.
+  const hasTerms = !campaign || ["SEARCH", "SHOPPING", "PERFORMANCE_MAX"].includes(campaign.type);
   const terms = data.searchTerms
-    .filter((t) => !campaign || t.campaignId === campaign.id)
+    .filter((t) => (!campaign || t.campaignId === campaign.id) && (!adGroup || t.adGroupId === adGroup.id))
     .map((t) => ({ t, m: derive(searchTermBase(data, t.id, range)) }))
     .sort((a, b) => b.m.cost - a.m.cost)
     .slice(0, 8);
@@ -262,7 +307,9 @@ function TopSearchTerms() {
           ))}
         </div>
       ) : (
-        <p className="px-4 py-8 text-center text-xs text-muted-foreground">No search terms for this campaign type.</p>
+        <p className="px-4 py-8 text-center text-xs text-muted-foreground">
+          {hasTerms ? "No search terms in this period: the ads got no clicks." : "No search terms for this campaign type."}
+        </p>
       )}
     </Card>
   );
@@ -289,7 +336,7 @@ function ScoreCard() {
           </p>
           <p className="text-2xl font-black tabular-nums">{(score * 100).toFixed(1)}%</p>
           <p className="text-[11px] text-muted-foreground">
-            {recs.length} recommendations · up to +{uplift.toFixed(1)} pts
+            {recs.length} recommendations{uplift > 0 && ` · up to +${uplift.toFixed(1)} pts`}
           </p>
         </div>
       </div>
@@ -322,8 +369,8 @@ function Insights() {
     const poor = data.ads.filter((a) => a.adStrength === "POOR" && a.status === "ENABLED" && adGroupIds.has(a.adGroupId));
     if (poor.length)
       out.push({ icon: AlertTriangle, tone: "text-amber-600 bg-amber-500/10", title: `${poor.length} ad${poor.length > 1 ? "s" : ""} with Poor strength`, body: "More unique headlines would help Google serve better combinations.", prompt: "Write better ads for my weakest ad group" });
-    const total = derive(accountBase(data, range, campaign ? [campaign.id] : undefined));
-    const before = derive(accountBase(data, previousRange(range), campaign ? [campaign.id] : undefined));
+    const total = derive(campaign ? accountBase(data, range, [campaign.id]) : accountTotal(data, range));
+    const before = derive(campaign ? accountBase(data, previousRange(range), [campaign.id]) : accountTotal(data, previousRange(range)));
     const d = delta(total.conversionsValue, before.conversionsValue);
     if (d !== null && d > 0.05)
       out.push({ icon: TrendingUp, tone: "text-emerald-600 bg-emerald-500/10", title: `Conversion value up ${(d * 100).toFixed(0)}%`, body: "Compared with the previous period.", prompt: "How did my account perform in the last 30 days?" });

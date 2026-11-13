@@ -1,14 +1,16 @@
 "use client";
 
 import { create } from "zustand";
+import { signalAccountChanged } from "@/lib/store-agent/change-signal";
 import { emptyReply, reduceReply, type ReplyState } from "@/lib/store-agent/blocks";
+import { announceDoc } from "@/lib/store-agent/doc-links";
 import { requestLabel } from "@/lib/store-agent/mentions";
-import type { ModelParam, StoreAgentEvent } from "@/lib/store-agent/protocol";
-import { toast } from "sonner";
+import type { AgentDomain, ModelParam, StoreAgentEvent } from "@/lib/store-agent/protocol";
 import {
   ApiError,
   PLAN_TAB_PREFIX,
   readEvents,
+  setAgentDomain,
   storeAgentApi,
   type ApprovalState,
   type ChatFile,
@@ -62,9 +64,12 @@ type State = {
   availability: "checking" | "ready" | "off" | "no_store" | "error";
   /** Concrete gaps found in the store, for the new-chat screen. */
   insights: Insight[];
+  /** Which agent's chats are loaded: the Store Assistant's or the Google Ads page's. */
+  domain: AgentDomain;
 };
 
 const initial: State = {
+  domain: "store",
   availability: "checking",
   insights: [],
   workspaceId: null,
@@ -90,7 +95,8 @@ const replayUntil = new Map<string, number>();
 let onRunFinished: (() => void) | null = null;
 
 const isDraft = (id: string) => id.startsWith("draft-");
-const tabsKey = (ws: string) => `store-agent:tabs:${ws}`;
+// Store Assistant tabs keep their original key; Google Ads tabs are kept apart.
+const tabsKey = (ws: string) => (get().domain === "store" ? `store-agent:tabs:${ws}` : `store-agent:tabs:${get().domain}:${ws}`);
 
 function saveTabs() {
   const { workspaceId, openTabs, activeChatId } = get();
@@ -130,12 +136,14 @@ function defaultModel(): { modelId: string; modelParams: ModelParam[] } {
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
-export async function initStoreAgent(workspaceId: string, opts: { onRunFinished?: () => void } = {}) {
+export async function initStoreAgent(workspaceId: string, opts: { onRunFinished?: () => void; domain?: AgentDomain } = {}) {
   onRunFinished = opts.onRunFinished ?? null;
-  if (get().workspaceId === workspaceId && get().chatsLoaded) return;
+  const domain = opts.domain ?? "store";
+  if (get().workspaceId === workspaceId && get().domain === domain && get().chatsLoaded) return;
   for (const reader of readers.values()) reader.abort();
   readers.clear();
-  set({ ...initial, workspaceId });
+  setAgentDomain(domain);
+  set({ ...initial, workspaceId, domain });
 
   let catalog: Awaited<ReturnType<typeof storeAgentApi.models>>;
   try {
@@ -147,11 +155,13 @@ export async function initStoreAgent(workspaceId: string, opts: { onRunFinished?
   }
   const chats = await storeAgentApi.listChats(workspaceId).catch(() => ({ chats: [] as ChatSummary[] }));
   set({ chats: chats.chats, chatsLoaded: true, models: catalog.models, autoRun: catalog.prefs.autoRun, availability: "ready" });
+  watchStaleRunning();
   // Suggestions come from a quick scan of the store; the page does not wait for them.
-  void storeAgentApi
-    .insights(workspaceId)
-    .then((r) => get().workspaceId === workspaceId && set({ insights: r.insights ?? [] }))
-    .catch(() => undefined);
+  if (domain === "store")
+    void storeAgentApi
+      .insights(workspaceId)
+      .then((r) => get().workspaceId === workspaceId && get().domain === "store" && set({ insights: r.insights ?? [] }))
+      .catch(() => undefined);
 
   let saved: { tabs?: string[]; active?: string | null } = {};
   try {
@@ -160,7 +170,10 @@ export async function initStoreAgent(workspaceId: string, opts: { onRunFinished?
     saved = {};
   }
   const known = new Set(chats.chats.map((c) => c.id));
-  const tabs = (saved.tabs ?? []).filter((t) => known.has(t)).slice(0, 12);
+  // The newest 12 tabs come back (new tabs are added at the end), and always the
+  // one that was open, so a reload never hides the chat the user was working in.
+  let tabs = (saved.tabs ?? []).filter((t) => known.has(t)).slice(-12);
+  if (saved.active && known.has(saved.active) && !tabs.includes(saved.active)) tabs = [...tabs.slice(-11), saved.active];
   if (tabs.length) {
     set({ openTabs: tabs });
     const active = saved.active && tabs.includes(saved.active) ? saved.active : tabs[0]!;
@@ -297,6 +310,33 @@ export async function deleteChat(chatId: string) {
   readers.delete(chatId);
   set((state) => ({ chats: state.chats.filter((c) => c.id !== chatId) }));
   if (get().openTabs.includes(chatId)) closeTab(chatId);
+}
+
+/**
+ * A tab shows a chat as running from the events it followed. When a run ended
+ * in a chat nobody was following (another tab, a dropped stream), that "done"
+ * never arrived: ask the server for those chats' real status.
+ */
+let statusSync: ReturnType<typeof setInterval> | null = null;
+function watchStaleRunning() {
+  if (statusSync) return;
+  statusSync = setInterval(() => {
+    const { workspaceId, chats } = get();
+    if (!workspaceId || !chats.some((c) => c.status === "running" && !readers.has(c.id))) return;
+    void storeAgentApi
+      .listChats(workspaceId)
+      .then(({ chats: fresh }) => {
+        if (get().workspaceId !== workspaceId) return;
+        const byId = new Map(fresh.map((c) => [c.id, c]));
+        set((state) => ({
+          chats: state.chats.map((c) => {
+            const latest = byId.get(c.id);
+            return c.status === "running" && !readers.has(c.id) && latest && latest.status !== "running" ? { ...c, status: latest.status } : c;
+          }),
+        }));
+      })
+      .catch(() => undefined);
+  }, 15_000);
 }
 
 export async function refreshChats(search?: string) {
@@ -454,7 +494,10 @@ function applyEvent(chatId: string, event: StoreAgentEvent) {
   const replayed = event.seq <= (replayUntil.get(chatId) ?? 0);
   if (event.type === "approval" && !replayed) notifyUser(chatId, "Vera is waiting for your approval");
   if (event.type === "question" && !replayed) notifyUser(chatId, "Vera has a question for you");
+  if (event.type === "doc" && !replayed) announceDoc({ docId: event.docId, kind: event.kind, title: event.title, version: event.version });
   if (event.type === "approval_resolved") {
+    // Approved, then applied: the account changed, so pages showing it load again.
+    if (event.status === "approved" && !replayed) signalAccountChanged();
     patchChat(chatId, (s) => ({
       approvals: {
         ...s.approvals,
@@ -462,6 +505,8 @@ function applyEvent(chatId: string, event: StoreAgentEvent) {
       },
     }));
   }
+  if (event.type === "run" && stopWhenStarted.delete(chatId)) void stopRun(chatId);
+  if (event.type === "done") stopWhenStarted.delete(chatId);
   if (event.type === "run" || event.type === "done") {
     set((state) => ({
       chats: state.chats.map((c) =>
@@ -472,18 +517,13 @@ function applyEvent(chatId: string, event: StoreAgentEvent) {
 }
 
 /**
- * Tell the user when a chat needs them or is done and they are looking
- * elsewhere: a toast when on another chat or page, a system notification
- * when the browser tab is in the background.
+ * Tell the user when a chat needs them or is done while the browser tab is in
+ * the background (a system notification). No toast inside the page: the chat
+ * tabs already show it.
  */
 function notifyUser(chatId: string, label: string) {
-  const state = get();
-  const title = state.chats.find((c) => c.id === chatId)?.title || "Store Agent";
+  const title = get().chats.find((c) => c.id === chatId)?.title || "Store Agent";
   const hidden = typeof document !== "undefined" && document.hidden;
-  const onThisChat = state.activeChatId === chatId && typeof window !== "undefined" && window.location.pathname.endsWith("/store-assistant");
-  if (!hidden && !onThisChat) {
-    toast(label, { description: title, action: { label: "Open", onClick: () => void openChat(chatId) } });
-  }
   if (hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
     try {
       const n = new Notification(label, { body: title, tag: `store-agent-${chatId}` });
@@ -601,6 +641,7 @@ export async function sendMessage(
       patchChat(realId, { live: null });
       readers.delete(realId);
       if (res.status === 402) set({ blocked: body.error === "NO_SUBSCRIPTION" ? "NO_SUBSCRIPTION" : "NO_CREDITS" });
+      else if (res.status === 429) set({ notice: "Vera is still finishing the last request in this chat. Send it again in a moment." });
       else set({ notice: body.error || "The agent could not start." });
       return { restore: message };
     }
@@ -626,11 +667,18 @@ export async function sendMessage(
   }
 }
 
+/** Chats whose Stop was pressed before their run had an id: stopped as soon as it does. */
+const stopWhenStarted = new Set<string>();
+
 export async function stopRun(chatId: string) {
   const { workspaceId } = get();
-  const runId = get().chatStates[chatId]?.live?.runId;
-  if (!workspaceId || !runId) return;
-  await storeAgentApi.runAction(workspaceId, runId, "cancel").catch(() => undefined);
+  const live = get().chatStates[chatId]?.live;
+  if (!workspaceId || !live) return;
+  if (!live.runId) {
+    stopWhenStarted.add(chatId);
+    return;
+  }
+  await storeAgentApi.runAction(workspaceId, live.runId, "cancel").catch(() => undefined);
 }
 
 export async function steerRun(chatId: string, text: string): Promise<boolean> {
@@ -696,6 +744,7 @@ export async function undoChange(chatId: string, approvalId: string): Promise<st
   const { workspaceId } = get();
   if (!workspaceId) throw new Error("No workspace");
   const result = await storeAgentApi.undo(workspaceId, approvalId);
+  signalAccountChanged();
   patchChat(chatId, (s) => ({
     approvals: { ...s.approvals, [approvalId]: { ...(s.approvals[approvalId] ?? { status: "approved", kind: "write", applied: true }), undoable: false, undone: true } },
   }));

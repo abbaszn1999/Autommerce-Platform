@@ -30,7 +30,11 @@ export function previewToken(): string | null {
   return createHmac("sha256", secret).update(`google-ads-preview:v1:${password}`).digest("base64url");
 }
 
+/** Launch day: set GOOGLE_ADS_LAUNCHED=1 and Google Ads opens to everyone, pages and API alike. */
+export const googleAdsLaunched = () => process.env.GOOGLE_ADS_LAUNCHED === "1";
+
 export function hasPreviewAccess(cookieValue: string | undefined): boolean {
+  if (googleAdsLaunched()) return true;
   const token = previewToken();
   return !!token && !!cookieValue && sameBytes(Buffer.from(cookieValue), Buffer.from(token));
 }

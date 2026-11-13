@@ -206,6 +206,7 @@ function startStoreAgent(app: Hono, config: ServiceConfig): (() => Promise<void>
     cursorApiKey: config.cursorApiKey,
     workRoot: config.storeAgent.workDir,
     secret: config.secret,
+    platformUrl: config.platformUrl,
   };
   mountStoreAgentRoutes(app, deps);
   // Starting agents then never calls Cursor's rate-limited model list.

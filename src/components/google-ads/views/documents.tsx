@@ -7,6 +7,7 @@ import { DOC_FOLDERS, DOC_TYPES, type DocFolder, type DocType } from "@/lib/goog
 import { useGoogleAds } from "@/lib/google-ads/store";
 import { Card, EmptyState, Pill, Segmented, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
+import { LiveDocumentsView } from "../live-docs/live-documents";
 
 function ago(iso: string) {
   const s = Math.round((Date.now() - Date.parse(iso)) / 1000);
@@ -17,8 +18,14 @@ function ago(iso: string) {
 
 const FOLDERS = Object.keys(DOC_FOLDERS) as DocFolder[];
 
-/** Documents are organised in two folders: Reports (with the ready templates) and Plans. */
+/** Live accounts: Vera's saved plans and reports; the demo keeps its two folders. */
 export function DocumentsView() {
+  const live = useGoogleAds((s) => s.mode === "live");
+  return live ? <LiveDocumentsView /> : <DemoDocumentsView />;
+}
+
+/** Documents are organised in two folders: Reports (with the ready templates) and Plans. */
+function DemoDocumentsView() {
   const { acc } = useGa();
   const [folder, setFolder] = useState<DocFolder | null>(null);
   const countIn = (f: DocFolder) => acc.docs.filter((d) => DOC_TYPES[d.type].folder === f).length;

@@ -14,6 +14,7 @@ import { useGa } from "../use-ga";
 
 const pct = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}%`;
 const adj = (v?: number) => (v ? pct(v) : "None");
+const NOT_READ = "Couldn't read from Google";
 const title = (day: string) => day.charAt(0) + day.slice(1, 3).toLowerCase();
 const hour = (h: number) => `${h}:00`;
 const slotText = (s: AdScheduleSlot) => `${title(s.day)} ${hour(s.startHour)}–${hour(s.endHour)}`;
@@ -24,6 +25,7 @@ export function LocationsView() {
   const setScope = useGoogleAds((s) => s.setScope);
   const campaigns = data.campaigns.filter((c) => c.status !== "REMOVED");
   const metrics = useMemo(() => new Map(campaigns.map((c) => [c.id, derive(campaignBase(data, c.id, range))])), [campaigns, data, range]);
+  const locationsUnread = !!data.unavailable?.includes("locations");
 
   if (campaign) return <CampaignLocations campaign={campaign} />;
 
@@ -35,7 +37,7 @@ export function LocationsView() {
       label: "Targeted locations",
       render: (c) => {
         const list = c.locations.filter((l) => !l.excluded);
-        return list.length ? <span className="flex flex-wrap gap-1">{list.map((l) => <Pill key={l.id}>{l.name}</Pill>)}</span> : <span className="text-muted-foreground">All countries</span>;
+        return list.length ? <span className="flex flex-wrap gap-1">{list.map((l) => <Pill key={l.id}>{l.name}</Pill>)}</span> : <span className="text-muted-foreground">{locationsUnread ? NOT_READ : "All countries"}</span>;
       },
     },
     {
@@ -44,10 +46,10 @@ export function LocationsView() {
       label: "Excluded locations",
       render: (c) => {
         const list = c.locations.filter((l) => l.excluded);
-        return list.length ? <span className="flex flex-wrap gap-1">{list.map((l) => <Pill key={l.id} tone="bad">{l.name}</Pill>)}</span> : <span className="text-muted-foreground">None</span>;
+        return list.length ? <span className="flex flex-wrap gap-1">{list.map((l) => <Pill key={l.id} tone="bad">{l.name}</Pill>)}</span> : <span className="text-muted-foreground">{locationsUnread ? NOT_READ : "None"}</span>;
       },
     },
-    { id: "languages", header: "Languages", label: "Languages", render: (c) => <span className="text-muted-foreground">{c.languages.join(", ")}</span> },
+    { id: "languages", header: "Languages", label: "Languages", render: (c) => <span className="text-muted-foreground">{c.languages.join(", ") || (data.unavailable?.includes("languages") ? NOT_READ : "All languages")}</span> },
     ...metricColumns<Campaign>((c) => metrics.get(c.id)!, currency, { keys: ["cost", "conversions", "cpa", "roas"] }),
   ];
 
@@ -60,6 +62,7 @@ export function LocationsView() {
 }
 
 function CampaignLocations({ campaign }: { campaign: Campaign }) {
+  const { data } = useGa();
   // Performance Max has no bid adjustments: Google's bidding decides by itself.
   const noBids = campaign.type === "PERFORMANCE_MAX";
   const columns: GaColumn<LocationTarget>[] = [
@@ -71,7 +74,7 @@ function CampaignLocations({ campaign }: { campaign: Campaign }) {
   return (
     <div className="space-y-4">
       <ViewHeader title="Locations" subtitle={`Where ${campaign.name} shows. To change it, ask the agent.`} />
-      <GaTable rows={campaign.locations} columns={columns} rowKey={(l) => l.id} empty={<p className="px-3 py-4 text-xs text-muted-foreground">All countries and territories.</p>} />
+      <GaTable rows={campaign.locations} columns={columns} rowKey={(l) => l.id} empty={<p className="px-3 py-4 text-xs text-muted-foreground">{data.unavailable?.includes("locations") ? NOT_READ : "All countries and territories."}</p>} />
       <p className="text-[11px] text-muted-foreground">Languages: {campaign.languages.join(", ")}</p>
     </div>
   );
@@ -221,7 +224,7 @@ export function LanguagesView() {
         <Card className="p-4">
           <p className="mb-2 text-sm font-bold">Targeted languages</p>
           <div className="flex flex-wrap gap-1.5">
-            {campaign.languages.length ? campaign.languages.map((l) => <Pill key={l} tone="brand">{l}</Pill>) : <span className="text-xs text-muted-foreground">All languages</span>}
+            {campaign.languages.length ? campaign.languages.map((l) => <Pill key={l} tone="brand">{l}</Pill>) : <span className="text-xs text-muted-foreground">{data.unavailable?.includes("languages") ? NOT_READ : "All languages"}</span>}
           </div>
           <p className="mt-3 text-[11px] text-muted-foreground">Ads show to people whose Google language setting matches, or who use a matching language in their searches and browsing.</p>
         </Card>

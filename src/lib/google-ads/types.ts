@@ -519,7 +519,7 @@ export type OfflineImport = {
 
 // ─── Audiences ──────────────────────────────────────────────────────────────
 
-export type AudienceKind = "REMARKETING" | "CUSTOMER_MATCH" | "IN_MARKET" | "AFFINITY" | "CUSTOM" | "DEMOGRAPHIC";
+export type AudienceKind = "REMARKETING" | "CUSTOMER_MATCH" | "IN_MARKET" | "AFFINITY" | "CUSTOM" | "DEMOGRAPHIC" | "INTEREST";
 
 export type AudienceSegment = {
   id: string;
@@ -548,6 +548,7 @@ export type AudienceTarget = {
 // ─── Conversions ────────────────────────────────────────────────────────────
 
 export type ConversionCategory =
+  | "OTHER"
   | "PURCHASE"
   | "ADD_TO_CART"
   | "BEGIN_CHECKOUT"
@@ -561,7 +562,9 @@ export type ConversionAction = {
   id: string;
   name: string;
   category: ConversionCategory;
-  source: "WEBSITE" | "GOOGLE_ANALYTICS" | "IMPORT" | "PHONE_CALLS";
+  /** Live accounts: Google's own wording, for categories this app has no name for. */
+  categoryLabel?: string;
+  source: "WEBSITE" | "GOOGLE_ANALYTICS" | "IMPORT" | "PHONE_CALLS" | "GOOGLE";
   status: "ACTIVE" | "NO_RECENT_CONVERSIONS" | "UNVERIFIED" | "REMOVED";
   primary: boolean;
   countingType: "ONE_PER_CLICK" | "MANY_PER_CLICK";
@@ -631,9 +634,18 @@ export type DailyPoint = BaseMetrics & { date: string; searchImprShare?: number 
 
 export type MetricKey = keyof Metrics;
 
-export type DateRangePreset = "LAST_7_DAYS" | "LAST_14_DAYS" | "LAST_30_DAYS" | "LAST_90_DAYS";
+export type DateRangePreset =
+  | "TODAY"
+  | "YESTERDAY"
+  | "LAST_7_DAYS"
+  | "LAST_14_DAYS"
+  | "LAST_30_DAYS"
+  | "THIS_MONTH"
+  | "LAST_MONTH"
+  | "LAST_90_DAYS";
 
-export type DateRange = { preset: DateRangePreset; start: string; end: string };
+/** A preset, or "CUSTOM" for dates the user picked. */
+export type DateRange = { preset: DateRangePreset | "CUSTOM"; start: string; end: string };
 
 // ─── Mutations (proposed and applied changes) ──────────────────────────────
 
@@ -652,6 +664,8 @@ export type CampaignBundle = {
 };
 
 export type MutateOp =
+  | import("./live-create").CreateOp
+  | import("./live-experiment").ExperimentOp
   | { kind: "campaign.create"; bundle: CampaignBundle; tempId: string }
   | { kind: "campaign.update"; campaignId: string; patch: Partial<Omit<Campaign, "id">> }
   | { kind: "campaign.remove"; campaignId: string }
@@ -720,6 +734,8 @@ export type ProposedChange = {
   /** Conversation turn that proposed it. */
   messageId?: string;
   error?: string;
+  /** Live accounts: being sent to Google Ads right now. */
+  applying?: boolean;
 };
 
 export type ChangeEvent = {
@@ -735,6 +751,10 @@ export type ChangeEvent = {
   changeId?: string;
   /** Which campaigns, ad groups and asset groups the change touched, so history can be filtered to one of them. */
   touched?: ChangeTouched;
+  /** Live accounts: the server's record of this change; undo goes through it. */
+  serverId?: string;
+  undoing?: boolean;
+  undoError?: string;
 };
 
 export type ChangeTouched = { campaignIds: string[]; adGroupIds: string[]; assetGroupIds: string[] };
@@ -742,6 +762,14 @@ export type ChangeTouched = { campaignIds: string[]; adGroupIds: string[]; asset
 // ─── Account snapshot ──────────────────────────────────────────────────────
 
 export type AccountData = {
+  /** Live accounts: Google's own daily account totals (removed campaigns included). */
+  accountDaily?: DailyPoint[];
+  /** Live accounts: parts of the snapshot Google didn't return, by query name. */
+  unavailable?: string[];
+  /** Live accounts: the search terms are the top ones only, not all of them. */
+  searchTermsCapped?: boolean;
+  /** Live accounts too big to send whole: how many of each list are shown, out of how many. Totals are not affected. */
+  listsCapped?: { keywords?: { shown: number; total: number }; ads?: { shown: number; total: number }; negatives?: { shown: number; total: number }; queries?: string[] };
   account: GoogleAccount;
   campaigns: Campaign[];
   budgets: CampaignBudget[];
@@ -780,6 +808,11 @@ export type AccountData = {
    * reports child metrics directly.
    */
   weights: Record<string, { share: number; efficiency: number }>;
+  /**
+   * Live accounts: real totals per ad group, keyword, ad and search term for one
+   * date range. Used as-is for that range; other ranges fall back to `weights`.
+   */
+  exact?: { start: string; end: string; byId: Record<string, BaseMetrics> };
 };
 
 // ─── Agent conversation ────────────────────────────────────────────────────
@@ -858,7 +891,7 @@ export type GaView =
   | "productGroups"
   | "reports"
   | "rules"
-  | "keywordPlanner"
+  | "competitorAds"
   | "experiments"
   | "planner"
   | "content"

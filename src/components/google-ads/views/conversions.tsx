@@ -53,7 +53,7 @@ export function ConversionsView() {
       render: (c) => (
         <span>
           <span className="block font-semibold">{c.name}</span>
-          <span className="text-[10px] text-muted-foreground">{CONVERSION_CATEGORIES[c.category]} · {c.source.replace(/_/g, " ").toLowerCase()}</span>
+          <span className="text-[10px] text-muted-foreground">{c.categoryLabel ?? CONVERSION_CATEGORIES[c.category]} · {c.source.replace(/_/g, " ").toLowerCase()}</span>
         </span>
       ),
     },
@@ -145,7 +145,16 @@ export function ConversionsView() {
 function AdvancedMeasurement() {
   const { data } = useGa();
   const setView = useGoogleAds((s) => s.setView);
+  const live = useGoogleAds((s) => s.mode === "live");
   const ga4 = data.links.find((l) => l.kind === "GA4");
+
+  // None of this is read from a live account yet, so it must not claim "Off" or "Not linked".
+  if (live)
+    return (
+      <Card className="p-4 text-xs text-muted-foreground">
+        Enhanced conversions, Google Analytics links and conversion value rules aren&apos;t read from Google Ads here yet. You can see them in your Google Ads account.
+      </Card>
+    );
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
