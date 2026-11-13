@@ -20,7 +20,7 @@ import { applyPlpWriteBack, countRowsWithPlpContent } from "@/lib/plp-writeback"
 import { useSheetStore } from "@/store/sheet-store";
 import {
   buildProductGroupIndex,
-  partitionRowsForExport,
+  orderRowsForExport,
 } from "@/lib/catalog/product-groups";
 import {
   buildCatalogExport,
@@ -72,7 +72,6 @@ export function ExportDialog() {
     projectId,
     productGroupColumn,
     selectedRowIds,
-    activeSheet,
   } = useSheetStore();
 
   const [open, setOpen] = useState(false);
@@ -80,17 +79,9 @@ export function ExportDialog() {
   const [writingBack, setWritingBack] = useState(false);
 
   const isPlp = sessionKind === "plp";
-  const sectionNames = isPlp
-    ? { existing: "Existing pages", new: "New pages" }
-    : { existing: "Existing", new: "New" };
+  const sheetName = isPlp ? "Pages" : "Products";
   const totalRows = rows.length;
   const baseName = (fileName || "export").replace(/\.[^/.]+$/, "");
-
-  const partition = useMemo(
-    () => partitionRowsForExport(rows, productGroupColumn),
-    [rows, productGroupColumn]
-  );
-  const sheetRows = activeSheet === "existing" ? partition.existing : partition.new;
 
   // Grid selection holds product (primary) rows; export their variants too.
   const selectedRows = useMemo(() => {
@@ -104,8 +95,7 @@ export function ExportDialog() {
     return rows.filter((row) => ids.has(row.id));
   }, [rows, selectedRowIds, productGroupColumn]);
 
-  const rowsFor = (scope: ExportScope) =>
-    scope === "selected" ? selectedRows : scope === "sheet" ? sheetRows : rows;
+  const rowsFor = (scope: ExportScope) => (scope === "selected" ? selectedRows : rows);
 
   const scopes: ExportScopeOption[] = [
     {
@@ -118,15 +108,9 @@ export function ExportDialog() {
       count: selectedRows.length,
     },
     {
-      id: "sheet",
-      title: `${activeSheet === "existing" ? sectionNames.existing : sectionNames.new} sheet`,
-      description: "Every row in the sheet you are viewing",
-      count: sheetRows.length,
-    },
-    {
       id: "all",
       title: "Whole file",
-      description: `Existing and New together (${partition.existing.length} + ${partition.new.length})`,
+      description: "Every row in the file",
       count: totalRows,
     },
   ];
@@ -171,7 +155,7 @@ export function ExportDialog() {
     signal,
   }: ExportRequest) => {
     const exportRows = rowsFor(scope);
-    const suffix = scope === "selected" ? "selected" : scope === "sheet" ? activeSheet : "export";
+    const suffix = scope === "selected" ? "selected" : "export";
     const reportProgress = (unit: string) => ({ done, total, phase }: { done: number; total: number; phase: string }) =>
       onProgress(
         phase === "packaging"
@@ -202,13 +186,9 @@ export function ExportDialog() {
 
     const picked = new Set(columnKeys);
     const columns = columnsFor(scope).filter((column) => picked.has(exportColumnKey(column)));
-    const split = partitionRowsForExport(exportRows, productGroupColumn);
     const blob = await buildCatalogExport({
       format,
-      sections: [
-        { name: sectionNames.existing, rows: split.existing },
-        { name: sectionNames.new, rows: split.new },
-      ],
+      sections: [{ name: sheetName, rows: orderRowsForExport(exportRows, productGroupColumn) }],
       columns,
       isCancelled: () => signal.aborted,
       onProgress: reportProgress("rows"),

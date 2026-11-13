@@ -63,10 +63,9 @@ function allColumnLayoutKeys(state: Pick<SheetState, "originalColumns" | "enrich
   ];
 }
 
-function sheetRowsForState(state: Pick<SheetState, "rows" | "activeSheet" | "productGroupColumn">) {
+function sheetRowsForState(state: Pick<SheetState, "rows" | "productGroupColumn">) {
   return visibleCatalogRows(state.rows, {
     groupColumn: state.productGroupColumn,
-    activeSheet: state.activeSheet,
   });
 }
 
@@ -134,7 +133,7 @@ interface SheetActions {
   // Persistence
   restoreSession: () => Promise<boolean>;
   // Supabase project
-  loadProject: (workspaceId: string, projectId: string, fileName: string, columns: string[], rows: ProductRow[], sourceColumns: string[], enrichmentColumns: EnrichmentColumn[], enrichmentSettings: EnrichmentSettings, columnVisibility: Record<string, boolean>, sessionKind?: SessionKind, matchingSkipped?: boolean, productGroupColumn?: string | null, columnLayout?: ColumnLayout, view?: { sidebarMode?: CatalogSidebarMode; activeSheet?: "existing" | "new" }) => void;
+  loadProject: (workspaceId: string, projectId: string, fileName: string, columns: string[], rows: ProductRow[], sourceColumns: string[], enrichmentColumns: EnrichmentColumn[], enrichmentSettings: EnrichmentSettings, columnVisibility: Record<string, boolean>, sessionKind?: SessionKind, productGroupColumn?: string | null, columnLayout?: ColumnLayout, view?: { sidebarMode?: CatalogSidebarMode }) => void;
   moveColumnLayout: (fromKey: string, toKey: string) => void;
   toggleColumnLayoutHidden: (key: string) => void;
   applyProjectRows: (rows: ProductRow[], progress?: { completed: number; total: number; errors: number }) => void;
@@ -145,14 +144,8 @@ interface SheetActions {
   markUnsaved: () => void;
   // UI
   setSidebarOpen: (open: boolean) => void;
-  // Sheet toggle
-  setActiveSheet: (sheet: "existing" | "new") => void;
   setSidebarMode: (mode: CatalogSidebarMode) => void;
-  // Existing column enrichment
-  toggleExistingColumnEnrich: (col: string) => void;
-  clearExistingColumnEnrich: () => void;
-  setExistingColumnInstruction: (col: string, instruction: string) => void;
-  setEnrichingContext: (tab: "existing" | "new" | null, existingCols?: string[], newCols?: string[]) => void;
+  setEnrichingContext: (columns: string[]) => void;
 }
 
 type SheetStore = SheetState & SheetActions;
@@ -161,7 +154,6 @@ const initialState: SheetState = {
   workspaceId: null,
   projectId: null,
   sessionKind: "product",
-  matchingSkipped: false,
   productGroupColumn: null,
   fileName: null,
   rows: [],
@@ -180,13 +172,8 @@ const initialState: SheetState = {
   completedEnrich: 0,
   errorCount: 0,
   sidebarOpen: true,
-  activeSheet: "new" as "existing" | "new",
   sidebarMode: "enrich" as CatalogSidebarMode,
-  existingColumnsToEnrich: [],
-  existingColumnInstructions: {},
-  enrichingTab: null,
-  enrichingExistingColumns: [],
-  enrichingNewColumns: [],
+  enrichingColumns: [],
   undoVersion: 0,
   saveStatus: "saved",
   lastSavedAt: null,
@@ -783,7 +770,7 @@ export const useSheetStore = create<SheetStore>((set, get) => ({
   },
 
   // Supabase project
-  loadProject: (workspaceId, projectId, fileName, columns, rows, sourceColumns, enrichmentColumns, enrichmentSettings, columnVisibility, sessionKind, matchingSkipped, productGroupColumn, columnLayout, view) => {
+  loadProject: (workspaceId, projectId, fileName, columns, rows, sourceColumns, enrichmentColumns, enrichmentSettings, columnVisibility, sessionKind, productGroupColumn, columnLayout, view) => {
     const groupColumn = productGroupColumn ?? null;
     applyingStoredState = true;
     try {
@@ -791,7 +778,6 @@ export const useSheetStore = create<SheetStore>((set, get) => ({
         workspaceId,
         projectId,
         sessionKind: sessionKind ?? "product",
-        matchingSkipped: matchingSkipped ?? false,
         productGroupColumn: groupColumn,
         fileName,
         originalColumns: columns,
@@ -807,12 +793,11 @@ export const useSheetStore = create<SheetStore>((set, get) => ({
         enrichmentSettings: normalizeEnrichmentSettings(enrichmentSettings),
         columnVisibility,
         columnLayout: columnLayout ?? { order: [], hidden: [] },
-        // Reopen on the tool and sheet tab the user left (product sheets only have the modes).
+        // Reopen on the tool the user left (product sheets only have the modes).
         sidebarMode:
           (sessionKind ?? "product") === "plp"
             ? "enrich"
             : reopenSidebarMode(view?.sidebarMode, normalizeEnrichmentSettings(enrichmentSettings)),
-        activeSheet: view?.activeSheet === "existing" ? "existing" : "new",
         selectedRowIds: new Set<string>(),
         isEnriching: false,
         isPaused: false,
@@ -938,32 +923,9 @@ export const useSheetStore = create<SheetStore>((set, get) => ({
 
   // UI
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
-  setActiveSheet: (sheet) => set({ activeSheet: sheet }),
   setSidebarMode: (mode) => set({ sidebarMode: mode }),
 
-  // Existing column enrichment
-  toggleExistingColumnEnrich: (col) =>
-    set((state) => {
-      const current = state.existingColumnsToEnrich;
-      if (current.includes(col)) {
-        return { existingColumnsToEnrich: current.filter((c) => c !== col) };
-      }
-      return { existingColumnsToEnrich: [...current, col] };
-    }),
-  clearExistingColumnEnrich: () => set({ existingColumnsToEnrich: [] }),
-  setExistingColumnInstruction: (col, instruction) =>
-    set((state) => ({
-      existingColumnInstructions: {
-        ...state.existingColumnInstructions,
-        [col]: instruction,
-      },
-    })),
-  setEnrichingContext: (tab, existingCols = [], newCols = []) =>
-    set({
-      enrichingTab: tab,
-      enrichingExistingColumns: existingCols,
-      enrichingNewColumns: newCols,
-    }),
+  setEnrichingContext: (columns) => set({ enrichingColumns: columns }),
 }));
 
 // ─── Optimized Auto-save ─────────────────────────────────────────────────────
@@ -996,7 +958,6 @@ function storedRowChanged(a: ProductRow, b: ProductRow): boolean {
     a.enrichedData !== b.enrichedData ||
     a.status !== b.status ||
     a.errorMessage !== b.errorMessage ||
-    a.matchType !== b.matchType ||
     a.rowIndex !== b.rowIndex
   );
 }
@@ -1032,7 +993,6 @@ function toStoredRow(r: ProductRow) {
     errorMessage: r.errorMessage,
     originalData: r.originalData,
     enrichedData: r.enrichedData,
-    matchType: r.matchType,
   };
 }
 
@@ -1047,7 +1007,6 @@ function configHash(state: SheetState): string {
     cols: state.originalColumns,
     pg: state.productGroupColumn,
     sm: state.sidebarMode,
-    as: state.activeSheet,
   });
 }
 
@@ -1135,7 +1094,6 @@ async function persistProjectNow() {
 
     const meta = {
       kind: s.sessionKind,
-      matchingSkipped: s.matchingSkipped,
       productGroupColumn: s.productGroupColumn,
       columns: s.originalColumns,
       sourceColumns: s.sourceColumns,
@@ -1144,7 +1102,6 @@ async function persistProjectNow() {
       columnVisibility: s.columnVisibility,
       columnLayout: s.columnLayout,
       sidebarMode: s.sidebarMode,
-      activeSheet: s.activeSheet,
     };
 
     // Cell edits only send the rows that changed (and the settings when they

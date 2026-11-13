@@ -17,7 +17,6 @@ import {
   LayoutGrid,
   LayoutTemplate,
   Lock,
-  Package,
   Paintbrush,
   PlugZap,
   RefreshCw,
@@ -396,7 +395,6 @@ export default function WorkspaceDashboardPage() {
       surface: "from-[#400095]/15 via-card to-card",
       tools: [
         { name: "Catalog Intelligence", path: "/catalog-intelligence", icon: Upload, note: "Map and enrich spreadsheets with web research" },
-        { name: "Products", path: "/products", icon: Package, note: `${stats?.totalProducts ?? 0} products in the master catalog` },
         { name: "Categories", path: "/categories", icon: FolderTree, note: `${stats?.totalCategories ?? 0} categories in your taxonomy` },
       ],
     },
@@ -549,7 +547,6 @@ export default function WorkspaceDashboardPage() {
       <div className="relative z-10 border-b border-border/60 bg-card shadow-[0_10px_35px_rgba(15,23,42,.035)]">
         <div className="mx-auto flex max-w-[1450px] divide-x divide-border/60 overflow-x-auto px-3 lg:px-7">
           {[
-            { label: "Catalog", value: `${stats?.totalProducts ?? 0} products`, icon: Package, href: "/products" },
             { label: "Taxonomy", value: `${stats?.totalCategories ?? 0} categories`, icon: FolderTree, href: "/categories" },
             { label: "AI credits", value: `${formatCredits(credits.remaining)} available`, icon: Zap, href: "/usage" },
             { label: "Agent wallet", value: wallet ? formatMoney(wallet.balance) : "—", icon: Wallet, href: "/wallet" },

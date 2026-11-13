@@ -7,7 +7,6 @@ export interface ProductRow {
   errorMessage?: string;
   originalData: Record<string, string>;
   enrichedData: Record<string, any>;
-  matchType?: "existing" | "new" | null; // from import_rows.match_type
 }
 
 export interface EnrichedData {
@@ -449,22 +448,18 @@ export function ensureSourceUrlsColumn(
 }
 
 /** Which sidebar mode a run belongs to, from the column ids it generates. */
-export function catalogModeForRunColumns(
-  tab: "existing" | "new" | null,
-  columnIds: string[]
-): CatalogSidebarMode {
-  if (tab === "new" && columnIds.length === 1 && columnIds[0] === PRODUCT_MODE_COLUMN_IDS.categories) {
+export function catalogModeForRunColumns(columnIds: string[]): CatalogSidebarMode {
+  if (columnIds.length === 1 && columnIds[0] === PRODUCT_MODE_COLUMN_IDS.categories) {
     return "categories";
   }
   // The Lens Source Checker: Lens founds is the only column it writes.
-  if (tab === "new" && columnIds.length === 1 && columnIds[0] === LENS_FOUNDS_COLUMN_ID) {
+  if (columnIds.length === 1 && columnIds[0] === LENS_FOUNDS_COLUMN_ID) {
     return "lens";
   }
   // The "Source / Image Finder" tool: Images (with its Image sources column) or
   // Source URLs. Runs made before they became exclusive may hold both together;
   // they still belong to this tool.
   if (
-    tab === "new" &&
     columnIds.some((id) => id === PRODUCT_MODE_COLUMN_IDS.images || id === SOURCE_URLS_COLUMN_ID) &&
     columnIds.every(
       (id) =>
@@ -792,8 +787,6 @@ export interface SheetState {
   projectId: string | null;
   /** What this session enriches; drives columns, prompts and table labels. */
   sessionKind: SessionKind;
-  /** Step 2 was skipped, so autosave must not drop that decision. */
-  matchingSkipped: boolean;
   /**
    * When set, the enrich sheet shows one row per product and hides variant
    * siblings. `null` means grouping is off.
@@ -823,15 +816,10 @@ export interface SheetState {
   completedEnrich: number;
   errorCount: number;
   sidebarOpen: boolean;
-  activeSheet: "existing" | "new";
   /** Which sidebar tool is open; saved with the sheet so it reopens as left. */
   sidebarMode: CatalogSidebarMode;
-  existingColumnsToEnrich: string[];
-  existingColumnInstructions: Record<string, string>;
-  enrichingTab: "existing" | "new" | null;
-  enrichingExistingColumns: string[];
-  /** AI column ids the active "new" run is generating; other columns keep their values on screen. */
-  enrichingNewColumns: string[];
+  /** AI column ids the active run is generating; other columns keep their values on screen. */
+  enrichingColumns: string[];
   undoVersion: number;
   saveStatus: "saved" | "saving" | "unsaved" | "error";
   lastSavedAt: number | null;

@@ -1,5 +1,4 @@
 import {
-  Package,
   FolderTree,
   Upload,
   Image as ImageIcon,
@@ -199,15 +198,6 @@ export const TOOLS: ToolDefinition[] = [
     category: "data",
     billing: "credits",
     keywords: ["import", "excel", "csv", "spreadsheet", "enrich", "mapping"],
-  },
-  {
-    path: "/products",
-    name: "Products",
-    blurb: "Your master catalog — search, review and clean up every product you own.",
-    icon: Package,
-    category: "data",
-    billing: "free",
-    keywords: ["catalog", "table", "list", "skus"],
   },
   {
     path: "/categories",

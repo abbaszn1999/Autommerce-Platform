@@ -6,14 +6,11 @@ import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/brand/page-loader";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { getImportSession, type ImportSession } from "@/lib/supabase";
+import { getImportSession } from "@/lib/supabase";
 import { loadProjectJson } from "@/lib/storage-helpers";
 import { useWorkspaceContext } from "../../workspace-context";
 import { flushProjectSave, useSheetStore } from "@/store/sheet-store";
-import type { MatchingRule } from "@/lib/matching";
-import { applyMatchTypes, resolveTargetCategoryNames } from "@/lib/import-matching";
-import { shouldRecomputeMatchTypes } from "@/lib/catalog/session-rows";
-import { countGroupedMatchTypes, resolveProductGroupColumn } from "@/lib/catalog/product-groups";
+import { countGroupedRows, resolveProductGroupColumn } from "@/lib/catalog/product-groups";
 import { Sidebar } from "@/components/sidebar";
 import { DataTable } from "@/components/data-table";
 import {
@@ -79,28 +76,8 @@ export default function EnrichPage() {
           return;
         }
 
-        // 3. Match types are persisted; recompute only if they were never stored.
         const kind: SessionKind =
           (session.kind as SessionKind) ?? project.kind ?? "product";
-        const isPlp = kind === "plp";
-
-        // PLP has no matching step at all — every page is always "new".
-        if (isPlp) {
-          for (const row of project.rows) row.matchType = "new";
-        } else if (shouldRecomputeMatchTypes(project, kind)) {
-          await applyMatchTypes({
-            kind,
-            workspaceId: workspace!.id,
-            rows: project.rows,
-            sourceColumn: session.supplier_match_column || (project.columns?.[0] ?? ""),
-            masterColumn: session.master_match_column || "sku",
-            rules: (session.matching_rules as MatchingRule[]) || [],
-            targetCategoryNames: await resolveTargetCategoryNames(
-              workspace!.id,
-              session.target_category_ids
-            ),
-          });
-        }
 
         // Convert Storage rows to ProductRow[] for the sheet store
         const productRows: ProductRow[] = project.rows.map((r, idx) => ({
@@ -111,7 +88,6 @@ export default function EnrichPage() {
           errorMessage: r.errorMessage,
           originalData: r.originalData || {},
           enrichedData: r.enrichedData || {},
-          matchType: (r.matchType as "existing" | "new" | null) || "new",
         }));
 
         // 4. Use saved enrichment config from Storage, or defaults
@@ -141,10 +117,9 @@ export default function EnrichPage() {
           enrichSettings,
           project.columnVisibility || {},
           kind,
-          project.matchingSkipped ?? false,
           groupColumn,
           project.columnLayout,
-          { sidebarMode: project.sidebarMode, activeSheet: project.activeSheet },
+          { sidebarMode: project.sidebarMode },
         );
 
         setLoading(false);
@@ -198,12 +173,12 @@ export default function EnrichPage() {
           <div className="min-w-0">
             <div className="truncate text-xs font-black">{fileName || "Catalog enrichment"}</div>
             <div className="text-[8px] font-bold uppercase tracking-[.16em] text-[#6B358D] dark:text-[#C8A8D2]">
-              Step 04 · Enrichment workspace
+              Enrichment workspace
             </div>
           </div>
           <div className="ml-auto rounded-lg border border-border/60 bg-muted/35 px-2 py-1 text-[9px] text-muted-foreground">
             {(() => {
-              const stats = countGroupedMatchTypes(rows, productGroupColumn);
+              const stats = countGroupedRows(rows, productGroupColumn);
               return productGroupColumn && stats.products !== stats.rows ? (
                 <>
                   <strong className="text-foreground">{stats.products}</strong> products

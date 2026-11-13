@@ -25,8 +25,6 @@ import {
   Lock,
   Pencil,
   Trash2,
-  Search,
-  FileEdit,
   FolderTree,
   Image as ImageIcon,
   Globe,
@@ -110,7 +108,7 @@ import {
 import type { ProductRow } from "@/types";
 import { visibleCatalogRows } from "@/lib/catalog/product-groups";
 import {
-  catalogEnrichingContextFromRun,
+  catalogEnrichingColumnsFromRun,
   catalogPollShouldApplySnapshot,
   catalogRunFinishedCounts,
   enrichPollDelayMs,
@@ -204,7 +202,6 @@ function projectJsonToProductRows(project: ProjectJson): ProductRow[] {
     errorMessage: r.errorMessage,
     originalData: r.originalData || {},
     enrichedData: r.enrichedData || {},
-    matchType: r.matchType,
   }));
 }
 
@@ -306,7 +303,6 @@ export function Sidebar() {
     enrichmentColumns,
     enrichmentSettings,
     selectedRowIds,
-    activeSheet,
     sessionKind,
     productGroupColumn,
     workspaceId: sheetWorkspaceId,
@@ -321,11 +317,6 @@ export function Sidebar() {
     updateEnrichmentColumnConfig,
     toggleSourceColumn,
     setAllSourceColumns,
-    existingColumnsToEnrich,
-    toggleExistingColumnEnrich,
-    clearExistingColumnEnrich,
-    existingColumnInstructions,
-    setExistingColumnInstruction,
     updateCellValue,
     isEnriching,
     isPaused,
@@ -345,8 +336,7 @@ export function Sidebar() {
     sidebarOpen,
     setSidebarOpen,
     updateSettings,
-    enrichingTab,
-    enrichingNewColumns,
+    enrichingColumns,
     setEnrichingContext,
   } = useSheetStore();
 
@@ -377,12 +367,12 @@ export function Sidebar() {
   const mode: CatalogSidebarMode = hasModes ? sidebarMode : "enrich";
   const showFunctions = mode === "functions";
   const runningMode = isEnriching
-    ? catalogModeForRunColumns(enrichingTab, enrichingNewColumns)
+    ? catalogModeForRunColumns(enrichingColumns)
     : null;
   // The rail button that shows the running dot (the finder runs show it on Source Finder or Image Finder).
   const runningToolId =
     runningMode === "images"
-      ? enrichingNewColumns.includes(SOURCE_URLS_COLUMN_ID)
+      ? enrichingColumns.includes(SOURCE_URLS_COLUMN_ID)
         ? "sources"
         : "images"
       : runningMode;
@@ -495,10 +485,6 @@ export function Sidebar() {
   // Drag-to-reorder of the AI output columns: which one is being dragged, and which one it is over.
   const dragColumnIdRef = useRef<string | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
-  const [enrichOutputTab, setEnrichOutputTab] = useState<"new" | "existing">("new");
-  const [existingSearch, setExistingSearch] = useState("");
-  const [expandedExistingCols, setExpandedExistingCols] = useState<Set<string>>(new Set());
-  const [existingColDrafts, setExistingColDrafts] = useState<Record<string, string>>({});
   const [presets, setPresets] = useState<EnrichmentPreset[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState("");
 
@@ -704,11 +690,8 @@ export function Sidebar() {
     };
   }, [inCategoriesMode, categoryWorkspaceId]);
 
-  // Scope selection to active sheet
-  const sheetRows = visibleCatalogRows(rows, {
-    groupColumn: productGroupColumn,
-    activeSheet,
-  });
+  // Scope selection to the rows shown in the sheet
+  const sheetRows = visibleCatalogRows(rows, { groupColumn: productGroupColumn });
   const selectedRows = sheetRows.filter((r) => selectedRowIds.has(r.id));
   const enrichableRows = selectedRows.filter(
     (r) => r.status === "pending" || r.status === "error" || r.status === "done"
@@ -721,10 +704,7 @@ export function Sidebar() {
   // the whole active sheet so the list is not empty before rows are picked.
   // At run time each row sends only the ticked columns it actually has.
   const aiSources = useMemo(() => {
-    const sheet = visibleCatalogRows(rows, {
-      groupColumn: productGroupColumn,
-      activeSheet,
-    });
+    const sheet = visibleCatalogRows(rows, { groupColumn: productGroupColumn });
     const selected = sheet.filter((r) => selectedRowIds.has(r.id));
     const scope = selected.length > 0 ? selected : sheet;
     const counts: Record<string, number> = {};
@@ -738,7 +718,7 @@ export function Sidebar() {
       return count > 0;
     });
     return { columns, counts, total: scope.length, isSelection: selected.length > 0 };
-  }, [activeSheet, enrichmentColumns, productGroupColumn, rows, selectedRowIds]);
+  }, [enrichmentColumns, productGroupColumn, rows, selectedRowIds]);
   const enrichedColumnsWithData = aiSources.columns;
 
   // Lens searches with one picture per row. Its picture-column dropdown lists the
@@ -747,14 +727,14 @@ export function Sidebar() {
   // listed is used, and nothing is assumed when none looks like pictures.
   const lensImageOptions = useMemo(() => {
     if (!runsLens) return [];
-    const sheet = visibleCatalogRows(rows, { groupColumn: productGroupColumn, activeSheet });
+    const sheet = visibleCatalogRows(rows, { groupColumn: productGroupColumn });
     const selected = sheet.filter((r) => selectedRowIds.has(r.id));
     return listLensImageColumns(
       selected.length > 0 ? selected : sheet,
       originalColumns,
       enrichedColumnsWithData.map((col) => col.id)
     );
-  }, [runsLens, rows, productGroupColumn, activeSheet, selectedRowIds, originalColumns, enrichedColumnsWithData]);
+  }, [runsLens, rows, productGroupColumn, selectedRowIds, originalColumns, enrichedColumnsWithData]);
   const pickedLensImage =
     enrichmentSettings.lensImageColumn && lensImageOptions.includes(enrichmentSettings.lensImageColumn)
       ? enrichmentSettings.lensImageColumn
@@ -881,7 +861,7 @@ export function Sidebar() {
       enrichPollSawActiveRef.current = false;
       enrichRunIdRef.current = null;
       setIsEnriching(false);
-      setEnrichingContext(null, []);
+      setEnrichingContext([]);
       invalidateCredits();
       if (shouldToast && data.run?.status === "paused_no_credits") {
         setLastError("NO_CREDITS");
@@ -906,12 +886,7 @@ export function Sidebar() {
     if (run.cancel_requested && !useSheetStore.getState().isStoppingEnrich) {
       setStoppingEnrich(true);
     }
-    const enrichingContext = catalogEnrichingContextFromRun(run);
-    setEnrichingContext(
-      enrichingContext.tab,
-      enrichingContext.existingColumns,
-      enrichingContext.newColumns
-    );
+    setEnrichingContext(catalogEnrichingColumnsFromRun(run));
     // Progress itself is already set by applyStatusPayload above, computed
     // from actual row statuses rather than the run's own counters — do not
     // overwrite it here.
@@ -1018,7 +993,6 @@ export function Sidebar() {
   ]);
 
   const handleEnrich = useCallback(async () => {
-    const isNewTab = mode !== "enrich" || enrichOutputTab === "new";
     // Image Finder always writes two columns: the images and the pages they came from.
     const imageSourcesColumn =
       runsImages
@@ -1054,7 +1028,7 @@ export function Sidebar() {
     // Lens sends the one picture column; every other run sends the ticked source columns.
     const requestSourceColumns = runsLens ? (lensImageColumn ? [lensImageColumn] : []) : runSourceColumns;
     if (useSheetStore.getState().isStoppingEnrich) return;
-    if ((isNewTab ? runColumnIds.length === 0 : existingColumnsToEnrich.length === 0) || enrichableRows.length === 0) return;
+    if (runColumnIds.length === 0 || enrichableRows.length === 0) return;
     // Mode columns start hidden in the grid; show them once they are generated.
     if (mode === "images" || mode === "lens") {
       if (runsImages && modeColumn && !modeColumn.enabled) {
@@ -1093,11 +1067,7 @@ export function Sidebar() {
     setPaused(false);
     setEnrichProgress(0, enrichableRows.length);
     setLastError(null);
-    setEnrichingContext(
-      isNewTab ? "new" : "existing",
-      isNewTab ? [] : existingColumnsToEnrich,
-      isNewTab ? runColumnIds : []
-    );
+    setEnrichingContext(runColumnIds);
     // Show the per-cell spinners immediately instead of waiting for the first
     // status poll (~2.5 s) to report the run as running.
     for (const row of enrichableRows) {
@@ -1122,23 +1092,6 @@ export function Sidebar() {
         : {}),
     };
 
-    const existingAsEnrichCols = !isNewTab
-      ? existingColumnsToEnrich.map((col) => {
-          const displayLabel = col.replace("__EMPTY_", "Col ").replace("__EMPTY", "Col");
-          const customInstruction = existingColumnInstructions[col]?.trim();
-          return {
-            id: `existing__${col}`,
-            label: displayLabel,
-            description: customInstruction
-              ? customInstruction
-              : `Fill in the "${displayLabel}" field for this product. Use the available product data to generate an accurate and appropriate value.`,
-            type: "text" as const,
-            enabled: true,
-            isCustom: true,
-          };
-        })
-      : [];
-
     try {
       const response = await fetch("/api/catalog-intelligence/start", {
         method: "POST",
@@ -1147,10 +1100,8 @@ export function Sidebar() {
           workspaceId,
           sessionId: projectId,
           rowIds: enrichableRows.map((r) => r.id),
-          enabledColumns: isNewTab
-            ? runColumnIds
-            : existingColumnsToEnrich.map((c) => `existing__${c}`),
-          enrichmentColumns: isNewTab ? runColumns : existingAsEnrichCols,
+          enabledColumns: runColumnIds,
+          enrichmentColumns: runColumns,
           settings: enrichSettings,
           kind: sessionKind,
           cmsType: workspace?.cms_type || undefined,
@@ -1165,7 +1116,7 @@ export function Sidebar() {
 
       if (response.status === 402) {
         setIsEnriching(false);
-        setEnrichingContext(null, []);
+        setEnrichingContext([]);
         let errorCode = "NO_CREDITS";
         try {
           const errorBody = await response.json();
@@ -1198,7 +1149,7 @@ export function Sidebar() {
       setLastError(errMsg);
       toast.error("Enrichment failed", { description: errMsg });
       setIsEnriching(false);
-      setEnrichingContext(null, []);
+      setEnrichingContext([]);
     }
   }, [
     mode,
@@ -1211,9 +1162,6 @@ export function Sidebar() {
     sourceUrlsColumn,
     enrichListColumns,
     enrichableRows,
-    enrichOutputTab,
-    existingColumnsToEnrich,
-    existingColumnInstructions,
     updateEnrichmentColumnConfig,
     enrichmentSettings,
     runSourceColumns,
@@ -1539,151 +1487,9 @@ export function Sidebar() {
                 <Sparkles className="h-4 w-4 text-primary" />
                 <span className="text-xs font-semibold">AI Output Columns</span>
               </div>
-              <div className="flex items-center bg-muted rounded-lg p-0.5">
-                <button
-                  onClick={() => setEnrichOutputTab("new")}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all ${
-                    enrichOutputTab === "new"
-                      ? "bg-background shadow-sm text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Sparkles className="h-2.5 w-2.5" />
-                  New
-                </button>
-                <button
-                  onClick={() => setEnrichOutputTab("existing")}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all ${
-                    enrichOutputTab === "existing"
-                      ? "bg-background shadow-sm text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <FileEdit className="h-2.5 w-2.5" />
-                  Existing
-                </button>
-              </div>
             </div>
 
-            {enrichSectionOpen && enrichOutputTab === "existing" && (
-              <div className="mt-3 pl-6 space-y-2">
-                <p className="text-[10px] text-muted-foreground leading-tight">
-                  Select existing columns for AI to fill. Results overwrite the original cell values.
-                </p>
-                <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/50" />
-                  <input
-                    type="text"
-                    placeholder="Search columns..."
-                    value={existingSearch}
-                    onChange={(e) => setExistingSearch(e.target.value)}
-                    className="w-full h-7 pl-7 pr-2 text-[10px] rounded-md border bg-background/80 focus:outline-none focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground/40"
-                  />
-                </div>
-                <div className="space-y-1 max-h-64 overflow-y-auto custom-scrollbar">
-                  {originalColumns
-                    .filter((col) => !existingSearch || col.toLowerCase().includes(existingSearch.toLowerCase()) || col.replace("__EMPTY_", "Col ").replace("__EMPTY", "Col").toLowerCase().includes(existingSearch.toLowerCase()))
-                    .map((col) => {
-                      const isSelected = existingColumnsToEnrich.includes(col);
-                      const displayName = col.replace("__EMPTY_", "Col ").replace("__EMPTY", "Col");
-                      const isExpanded = expandedExistingCols.has(col);
-                      const savedInstruction = existingColumnInstructions[col] || "";
-                      const draft = existingColDrafts[col] ?? savedInstruction;
-                      const hasCustomInstruction = savedInstruction.trim().length > 0;
-
-                      const toggleExpand = (e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        setExpandedExistingCols((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(col)) {
-                            next.delete(col);
-                          } else {
-                            next.add(col);
-                            setExistingColDrafts((d) => ({ ...d, [col]: existingColumnInstructions[col] || "" }));
-                          }
-                          return next;
-                        });
-                      };
-
-                      return (
-                        <div key={col} className={`rounded-md border transition-all ${
-                          isSelected ? "border-primary/20 bg-primary/5" : "border-transparent"
-                        }`}>
-                          <div
-                            className={`flex items-center gap-2 px-2.5 py-1.5 cursor-pointer text-xs ${
-                              isSelected ? "text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md"
-                            }`}
-                            onClick={() => toggleExistingColumnEnrich(col)}
-                          >
-                            <div className={`h-3 w-3 rounded-sm border-2 flex items-center justify-center transition-all shrink-0 ${
-                              isSelected ? "bg-primary border-primary" : "border-muted-foreground/40"
-                            }`}>
-                              {isSelected && <CheckCircle2 className="h-2 w-2 text-white" />}
-                            </div>
-                            <span className="truncate font-medium flex-1">{displayName}</span>
-                            {hasCustomInstruction && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-primary/70 shrink-0" title="Has custom instruction" />
-                            )}
-                            <button
-                              onClick={toggleExpand}
-                              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded"
-                            >
-                              {isExpanded
-                                ? <ChevronDown className="h-3 w-3" />
-                                : <ChevronRight className="h-3 w-3" />
-                              }
-                            </button>
-                          </div>
-
-                          {isExpanded && (
-                            <div className="px-2.5 pb-2 space-y-1.5" onClick={(e) => e.stopPropagation()}>
-                              <textarea
-                                rows={3}
-                                placeholder={`Custom instruction for "${displayName}" (optional)…`}
-                                value={draft}
-                                onChange={(e) => setExistingColDrafts((d) => ({ ...d, [col]: e.target.value }))}
-                                className="w-full text-[10px] rounded-md border bg-background px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground/40 leading-relaxed"
-                              />
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  onClick={() => {
-                                    setExistingColumnInstruction(col, draft.trim());
-                                    setExpandedExistingCols((prev) => { const n = new Set(prev); n.delete(col); return n; });
-                                  }}
-                                  className="flex-1 h-6 text-[10px] font-semibold rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                                >
-                                  Save
-                                </button>
-                                {savedInstruction && (
-                                  <button
-                                    onClick={() => {
-                                      setExistingColumnInstruction(col, "");
-                                      setExistingColDrafts((d) => ({ ...d, [col]: "" }));
-                                    }}
-                                    className="h-6 px-2 text-[10px] rounded-md border text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
-                                  >
-                                    Clear
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
-                {existingColumnsToEnrich.length > 0 && (
-                  <button
-                    onClick={clearExistingColumnEnrich}
-                    className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    Clear all ({existingColumnsToEnrich.length} selected)
-                  </button>
-                )}
-              </div>
-            )}
-
-            {enrichSectionOpen && enrichOutputTab === "new" && (
+            {enrichSectionOpen && (
               <div className="mt-2.5 space-y-0.5 pl-6">
                 {enrichListColumns.map((col) => {
                   const isExpanded = expandedColumns.has(col.id);
@@ -2480,7 +2286,7 @@ export function Sidebar() {
                       : runningMode === "categories"
                         ? "Categorizing..."
                         : runningMode === "images" || runningMode === "lens"
-                          ? finderRunningLabel(enrichingNewColumns)
+                          ? finderRunningLabel(enrichingColumns)
                           : "Enriching..."}
                   </span>
                 </span>
@@ -2564,9 +2370,7 @@ export function Sidebar() {
                 ? !runsImages && !runsSourceUrls && !runsLens
                 : mode !== "enrich"
                 ? !modeColumn
-                : enrichOutputTab === "new"
-                  ? enabledColumns.length === 0
-                  : existingColumnsToEnrich.length === 0) ||
+                : enabledColumns.length === 0) ||
               enrichableRows.length === 0 ||
               (runsLens ? !lensImageColumn : runSourceColumns.length === 0)
             }

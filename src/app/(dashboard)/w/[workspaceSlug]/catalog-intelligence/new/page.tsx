@@ -25,7 +25,7 @@ import {
   updateImportSession,
 } from "@/lib/supabase";
 import { uploadWorkspaceFile } from "@/lib/supabase-storage";
-import { saveProjectJson, saveSuppliersJson, loadSuppliersJson, loadProductsJson, uploadImageToStorage, type ProjectJson, type ProjectRow, type SupplierJson } from "@/lib/storage-helpers";
+import { saveProjectJson, saveSuppliersJson, loadSuppliersJson, uploadImageToStorage, type ProjectJson, type ProjectRow, type SupplierJson } from "@/lib/storage-helpers";
 import { parseExcelFile } from "@/lib/excel";
 import { attachSheetImages, extractSheetImages, type ParsedSheetForImages, type SheetImage } from "@/lib/sheet-images";
 import {
@@ -33,7 +33,6 @@ import {
   assertRowCount,
   assertSpreadsheetFile,
 } from "@/lib/upload-limits";
-import { ImportStepper } from "@/components/catalog-intelligence/import-stepper";
 import {
   CMS_CATEGORY_COLUMNS,
   getDefaultEnrichmentColumns,
@@ -121,21 +120,6 @@ export default function NewImportPage() {
     loadSuppliers();
   }, [loadSuppliers]);
 
-  // Matching compares the upload with the workspace's products; with none,
-  // that step is hidden and the project goes straight to Review.
-  const [hasProducts, setHasProducts] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (!workspace) return;
-    let cancelled = false;
-    loadProductsJson(workspace.id)
-      .then((products) => !cancelled && setHasProducts(products.length > 0))
-      .catch(() => !cancelled && setHasProducts(true));
-    return () => {
-      cancelled = true;
-    };
-  }, [workspace]);
-  const noProducts = !isPlp && hasProducts === false;
-
   const detected = useMemo(
     () =>
       isPlp && fileData
@@ -210,11 +194,6 @@ export default function NewImportPage() {
     setLoading(true);
 
     try {
-      // Re-check if the product count had not loaded yet when Continue was clicked.
-      const noMasterCatalog =
-        !isPlp && (hasProducts ?? (await loadProductsJson(workspace.id)).length > 0) === false;
-      const skipMatching = isPlp || noMasterCatalog;
-
       // 1. Upload original file to storage (backup)
       await uploadWorkspaceFile(workspace.id, "supplier", file, file.name);
 
@@ -267,14 +246,10 @@ export default function NewImportPage() {
         status: "pending" as const,
         originalData: row,
         enrichedData: {},
-        matchType: "new" as const,
       }));
 
-      // Saved settings are now applied inside the workspace (step 4), so a new
-      // session always starts from the defaults for its kind.
-      // PLP has no matching step at all — every page starts as "new" and the
-      // user always supplies the categories to enrich in this very upload.
-      // A workspace without products has nothing to match against either.
+      // Saved settings are applied inside the workspace, so a new session
+      // always starts from the defaults for its kind.
       const projectJson: ProjectJson = {
         kind,
         columns: projectColumns,
@@ -283,23 +258,17 @@ export default function NewImportPage() {
         enrichmentColumns: getDefaultEnrichmentColumns(kind),
         enrichmentSettings: {},
         columnVisibility: {},
-        matchingSkipped: skipMatching,
-        ...(noMasterCatalog ? { noMasterCatalog: true } : {}),
       };
 
       const storagePath = await saveProjectJson(workspace.id, session.id, projectJson);
 
-      // 6. Update session with storage path (skipped matching goes straight to Review)
+      // 6. Update the session with its storage path and open the enrichment workspace.
       await updateImportSession(session.id, {
         storage_path: storagePath,
-        ...(skipMatching ? { status: "review", new_count: fileData.totalRows, existing_count: 0 } : {}),
+        status: "enriching",
       } as any);
 
-      router.push(
-        skipMatching
-          ? `/w/${slug}/catalog-intelligence/${session.id}/review`
-          : `/w/${slug}/catalog-intelligence/${session.id}/rules`
-      );
+      router.push(`/w/${slug}/catalog-intelligence/${session.id}`);
     } catch (err: any) {
       const msg = typeof err === "string" ? err : err?.message || err?.error_description || JSON.stringify(err);
       alert(msg || "Failed to create catalog intelligence project");
@@ -325,12 +294,12 @@ export default function NewImportPage() {
                 <Upload className="h-4 w-4" />
               </span>
               <span className="text-[9px] font-black uppercase tracking-[0.24em] text-[#400095] dark:text-[#F76D01]">
-                Step 01 · Source intake
+                Source intake
               </span>
             </div>
             <h1 className="text-3xl font-black tracking-[-0.035em]">New catalog intelligence project</h1>
             <p className="mt-2 max-w-xl text-xs leading-relaxed text-muted-foreground">
-              Define the source, choose your enrichment intelligence, and validate the worksheet before matching begins.
+              Define the source, choose your enrichment intelligence, and validate the worksheet before enrichment begins.
             </p>
           </div>
           <Button
@@ -346,15 +315,6 @@ export default function NewImportPage() {
       </section>
 
       <main className="mx-auto max-w-[1500px] space-y-5 p-5 sm:p-7 lg:p-10">
-        <motion.section
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.08 }}
-          className="overflow-hidden rounded-2xl border border-border/60 bg-card p-3 shadow-sm sm:p-4"
-        >
-          <ImportStepper currentStep={1} kind={kind} matching={!noProducts} />
-        </motion.section>
-
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           {/* Main Form */}
           <div className="space-y-4 lg:col-span-2">
@@ -595,8 +555,7 @@ export default function NewImportPage() {
                         </div>
                       ) : (
                         <div className="text-[10px] text-muted-foreground">
-                          Expected {detected.hint}. You can still continue — you will pick
-                          the matching column in the next step.
+                          Expected {detected.hint}. You can still continue.
                         </div>
                       )}
                     </div>
@@ -653,11 +612,7 @@ export default function NewImportPage() {
                 ) : (
                   <ArrowRight className="h-4 w-4" />
                 )}
-                {loading
-                  ? "Processing file..."
-                  : isPlp || noProducts
-                    ? "Continue to Review Results"
-                    : "Continue to Matching Rules"}
+                {loading ? "Processing file..." : "Continue to Enrichment"}
               </Button>
             </motion.section>
           </div>
@@ -706,7 +661,7 @@ export default function NewImportPage() {
                   ) : (
                     <span>
                       Include a <strong>SKU</strong> or <strong>Part Number</strong>{" "}
-                      column for best matching
+                      column so each product is easy to identify
                     </span>
                   )}
                 </div>

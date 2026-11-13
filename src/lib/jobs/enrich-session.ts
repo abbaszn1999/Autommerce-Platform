@@ -48,22 +48,6 @@ import {
 } from "@/lib/catalog/product-groups";
 import type { CatalogJobSettings } from "./types";
 
-function splitEnriched(data: Record<string, unknown>): {
-  enriched: Record<string, unknown>;
-  originalPatches: Record<string, string>;
-} {
-  const enriched: Record<string, unknown> = {};
-  const originalPatches: Record<string, string> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (key.startsWith("existing__")) {
-      originalPatches[key.replace("existing__", "")] = String(value ?? "");
-    } else {
-      enriched[key] = value;
-    }
-  }
-  return { enriched, originalPatches };
-}
-
 /**
  * Writes a row's new results over its old ones. One exception: a Source URLs
  * search that found nothing never empties a cell that already holds links (a
@@ -372,7 +356,6 @@ async function runCatalogWork(
             errorMessage: row.errorMessage,
             originalData: row.originalData,
             enrichedData: row.enrichedData,
-            matchType: row.matchType,
           }));
         if (patches.length > 0) {
           await withRetry("row save", () => patchCatalogSessionRows(admin, run.session_id, patches));
@@ -552,12 +535,8 @@ async function runCatalogWork(
           stopObserved = true;
         }
         processed.add(outcome.rowId);
-        const split = splitEnriched(outcome.data);
-        if (Object.keys(split.originalPatches).length > 0) {
-          row.originalData = { ...row.originalData, ...split.originalPatches };
-        }
-        if (Object.keys(split.enriched).length > 0) {
-          row.enrichedData = mergeKeepingSourceUrls(row.enrichedData, split.enriched);
+        if (Object.keys(outcome.data).length > 0) {
+          row.enrichedData = mergeKeepingSourceUrls(row.enrichedData, outcome.data);
         }
         row.status = "done";
         row.errorMessage = undefined;
@@ -670,7 +649,7 @@ async function runCatalogWork(
           if (!row) return [];
           row.enrichedData = {
             ...(row.enrichedData ?? {}),
-            ...splitEnriched(outcome.data).enriched,
+            ...outcome.data,
             // Found now: the first pass's "Not found" note no longer applies.
             [imageFinderNotFoundKey(SOURCE_URLS_COLUMN_ID)]: "",
           };
@@ -726,8 +705,7 @@ async function runCatalogWork(
         await commitOrFail(() => {
           const row = byId.get(rowId);
           if (!row) return [];
-          const split = splitEnriched(outcome.data);
-          row.enrichedData = { ...(row.enrichedData ?? {}), ...split.enriched };
+          row.enrichedData = { ...(row.enrichedData ?? {}), ...outcome.data };
           return [rowId, ...applyPrimaryEnrichmentToGroup(project!.rows, rowId, groupColumn)];
         });
         learner!.addRow(outcome.data);

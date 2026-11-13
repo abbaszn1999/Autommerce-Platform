@@ -36,7 +36,6 @@ interface CatalogSharePayload {
   enrichmentColumns: ReturnType<typeof getDefaultEnrichmentColumns>;
   columnVisibility: Record<string, boolean>;
   columnLayout?: { order: string[]; hidden: string[] };
-  matchingSkipped?: boolean;
   productGroupColumn?: string | null;
   view?: ShareView | null;
 }
@@ -68,10 +67,8 @@ function CatalogShareView({ payload }: { payload: CatalogSharePayload }) {
       DEFAULT_ENRICHMENT_SETTINGS,
       payload.columnVisibility,
       payload.kind,
-      payload.matchingSkipped,
       payload.productGroupColumn,
-      payload.columnLayout,
-      { activeSheet: payload.view?.activeSheet }
+      payload.columnLayout
     );
   }, [payload, loadProject]);
 

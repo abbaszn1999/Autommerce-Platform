@@ -74,13 +74,9 @@ function timeAgo(dateStr: string): string {
   return `Updated ${Math.floor(days / 30)}mo ago`;
 }
 
+// Every project opens straight on its enrichment workspace.
 function sessionHref(slug: string, session: ImportSession): string {
-  const base = `/w/${slug}/catalog-intelligence/${session.id}`;
-  if (session.status === "enriching" || session.status === "completed") {
-    return base;
-  }
-  if (session.status === "review") return `${base}/review`;
-  return `${base}/rules`;
+  return `/w/${slug}/catalog-intelligence/${session.id}`;
 }
 
 export default function ImportPage() {
@@ -334,7 +330,7 @@ export default function ImportPage() {
           <div className="h-1 bg-gradient-to-r from-[#F76D01] via-[#C40000] to-[#400095]" />
           <ProjectListToolbar
             title="Catalog Intelligence projects"
-            description="Open a project to continue matching, review, or enrichment."
+            description="Open a project to continue enriching it."
             search={projectSearch}
             onSearchChange={setProjectSearch}
             status={projectStatusFilter}
@@ -343,8 +339,6 @@ export default function ImportPage() {
               { value: "all", label: "All statuses" },
               { value: "ready", label: "Ready" },
               { value: "processing", label: "In progress" },
-              { value: "matching", label: "Matching" },
-              { value: "review", label: "Review" },
               { value: "enriching", label: "Enriching" },
               { value: "cancelled", label: "Cancelled" },
             ]}
@@ -382,8 +376,7 @@ export default function ImportPage() {
                 Create your first catalog intelligence project
               </h3>
               <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-                Upload an Excel or CSV product worksheet to start matching and
-                enrichment.
+                Upload an Excel or CSV product worksheet to start enrichment.
               </p>
               {canEdit && (
                 <Button size="sm" className="mt-5 gap-1.5 rounded-xl bg-[#400095] text-white dark:bg-[#F76D01]" asChild>

@@ -89,16 +89,6 @@ export interface ProjectJson {
   /** Full sheet layout across source + AI columns; see lib/sheet/column-layout.ts. */
   columnLayout?: import("@/types").ColumnLayout;
   /**
-   * The user chose "Skip matching" in step 2, so every row is new by decision.
-   * Later steps must not re-derive matchType, which would undo that choice.
-   */
-  matchingSkipped?: boolean;
-  /**
-   * The workspace had no products to match against, so matching was skipped
-   * and its step is hidden from the flow (every row is new).
-   */
-  noMasterCatalog?: boolean;
-  /**
    * Column used to collapse variant/attribute rows into one product
    * (typically Shopify `Handle`). `null` means grouping is explicitly off.
    * Absent means later steps may auto-detect.
@@ -106,8 +96,6 @@ export interface ProjectJson {
   productGroupColumn?: string | null;
   /** Which sidebar tool was open (Enrich / Categories / Image Finder), so the sheet reopens as left. */
   sidebarMode?: import("@/types").CatalogSidebarMode;
-  /** Which sheet tab was open (matched "existing" vs "new" products). */
-  activeSheet?: "existing" | "new";
 }
 
 export interface ProjectRow {
@@ -117,7 +105,6 @@ export interface ProjectRow {
   errorMessage?: string;
   originalData: Record<string, string>;
   enrichedData: Record<string, any>;
-  matchType?: "existing" | "new" | null;
 }
 
 export function getProjectStoragePath(workspaceId: string, sessionId: string): string {

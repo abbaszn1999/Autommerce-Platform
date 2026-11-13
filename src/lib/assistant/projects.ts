@@ -26,12 +26,9 @@ type Row = Record<string, unknown>;
 const str = (value: unknown) => (typeof value === "string" ? value : "");
 const num = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : undefined);
 
-/** Same rule as the Catalog Intelligence list: a project opens on the step it is at. */
-export function catalogProjectPath(slug: string, id: string, status: string): string {
-  const base = `/w/${slug}/catalog-intelligence/${id}`;
-  if (status === "enriching" || status === "completed") return base;
-  if (status === "review") return `${base}/review`;
-  return `${base}/rules`;
+/** A catalog project always opens straight on its enrichment workspace. */
+export function catalogProjectPath(slug: string, id: string, _status?: string): string {
+  return `/w/${slug}/catalog-intelligence/${id}`;
 }
 
 type Source = {

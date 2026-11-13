@@ -2,7 +2,7 @@ import type { ColumnFilters } from "@/lib/sheet/column-filters";
 
 /**
  * The part of the owner's sheet view a share link opens with: column filters,
- * sort, search, the status tab and the Existing/New tab. Stored on the share
+ * sort, search and the status tab. Stored on the share
  * link and re-applied as the starting view on the public page. Pure, so both
  * the owner sheets and the public API can use it.
  */
@@ -14,8 +14,6 @@ export interface ShareView {
   search?: string;
   /** Catalog status tab: "pending" | "done" | "error" (absent means all). */
   status?: string;
-  /** Catalog Existing / New sheet tab. */
-  activeSheet?: "existing" | "new";
 }
 
 const MAX_FILTER_COLUMNS = 60;
@@ -62,8 +60,6 @@ export function sanitizeShareView(raw: unknown): ShareView | null {
 
   if (typeof input.status === "string" && STATUS_VALUES.has(input.status)) view.status = input.status;
 
-  if (input.activeSheet === "existing" || input.activeSheet === "new") view.activeSheet = input.activeSheet;
-
   return Object.keys(view).length > 0 ? view : null;
 }
 
@@ -92,15 +88,12 @@ export function buildShareView(state: {
   sort?: { column: string; direction: "asc" | "desc" } | null;
   search?: string;
   status?: string;
-  activeSheet?: "existing" | "new";
 }): ShareView | null {
   return sanitizeShareView({
     columnFilters: state.columnFilters ? columnFiltersToView(state.columnFilters) : undefined,
     sort: state.sort ?? undefined,
     search: state.search,
     status: state.status && state.status !== "all" ? state.status : undefined,
-    // The shared page already opens on "new", so only "existing" is worth saving.
-    activeSheet: state.activeSheet === "existing" ? "existing" : undefined,
   });
 }
 
@@ -108,7 +101,6 @@ export function buildShareView(state: {
 export function describeShareView(view: ShareView | null | undefined): string {
   if (!view) return "";
   const parts: string[] = [];
-  if (view.activeSheet === "existing") parts.push("Existing sheet");
   const filterCount = Object.keys(view.columnFilters ?? {}).length;
   if (filterCount > 0) parts.push(`${filterCount} column filter${filterCount === 1 ? "" : "s"}`);
   if (view.status) parts.push(`${view.status} rows`);

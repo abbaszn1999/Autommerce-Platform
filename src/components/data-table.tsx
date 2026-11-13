@@ -118,7 +118,7 @@ import {
 /** Leading checkbox + row-number columns: the only place the row resize grip lives. */
 const ROW_HEADER_COLUMNS = new Set(["select", "rowNum"]);
 import type { ProductRow, EnrichmentColumn } from "@/types";
-import { FileSpreadsheet, Package, Cloud, CloudOff } from "lucide-react";
+import { Cloud, CloudOff } from "lucide-react";
 import { StoredImageCell } from "@/components/stored-image";
 import { hasStoredImageRef } from "@/lib/stored-image-ref";
 import {
@@ -1897,13 +1897,8 @@ export function DataTable({
     redo,
     canUndo,
     canRedo,
-    activeSheet,
-    setActiveSheet,
     saveStatus,
-    enrichingTab,
-    enrichingExistingColumns,
-    enrichingNewColumns,
-    sessionKind,
+    enrichingColumns,
     productGroupColumn,
     projectId,
     workspaceId,
@@ -1911,12 +1906,6 @@ export function DataTable({
 
   const { role } = useWorkspaceStore();
   const isViewer = readOnly || role === "viewer";
-
-  const isPlp = sessionKind === "plp";
-
-  const sheetLabels = isPlp
-    ? { existing: "Existing pages", new: "New pages" }
-    : { existing: "Existing", new: "New" };
 
   const [globalFilter, setGlobalFilter] = useState(initialView?.search ?? "");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(
@@ -1940,9 +1929,8 @@ export function DataTable({
         sort: sorting[0] ? { column: sorting[0].id, direction: sorting[0].desc ? "desc" : "asc" } : null,
         search: globalFilter,
         status: statusFilter,
-        activeSheet,
       }),
-    [columnFilters, sorting, globalFilter, statusFilter, activeSheet]
+    [columnFilters, sorting, globalFilter, statusFilter]
   );
   const searchInputRef = useRef<HTMLInputElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -1980,14 +1968,10 @@ export function DataTable({
     [rows, productGroupColumn]
   );
 
-  // Pre-filter rows by active sheet (existing/new), collapsing variant rows
-  // when a product group column is set.
+  // Collapse variant rows when a product group column is set.
   const sheetFilteredRows = useMemo(() => {
-    return visibleCatalogRows(rows, {
-      groupColumn: productGroupColumn,
-      activeSheet,
-    });
-  }, [rows, activeSheet, productGroupColumn]);
+    return visibleCatalogRows(rows, { groupColumn: productGroupColumn });
+  }, [rows, productGroupColumn]);
 
   // Selection state scoped to current sheet only
   const sheetSelectedCount = useMemo(() => {
@@ -2009,20 +1993,6 @@ export function DataTable({
       selectRowsByIds(pageRowIds);
     }
   }, [pageAllSelected, pageRowIds, selectedRowIds, selectRowsByIds]);
-
-  // Count rows per sheet
-  const sheetCounts = useMemo(() => {
-    return {
-      existing: visibleCatalogRows(rows, {
-        groupColumn: productGroupColumn,
-        activeSheet: "existing",
-      }).length,
-      new: visibleCatalogRows(rows, {
-        groupColumn: productGroupColumn,
-        activeSheet: "new",
-      }).length,
-    };
-  }, [rows, productGroupColumn]);
 
   // Pre-filter rows by status
   const statusFilteredRows = useMemo(() => {
@@ -2257,15 +2227,6 @@ export function DataTable({
           </div>
         ),
         cell: ({ row }) => {
-          if (row.original.status === "processing" && enrichingTab === "existing" && enrichingExistingColumns.includes(colName)) {
-            return (
-              <div className="py-1 space-y-1.5 w-full">
-                <div className="h-1.5 w-3/4 bg-primary/10 animate-pulse rounded-full" />
-                <div className="h-1.5 w-1/2 bg-primary/10 animate-pulse rounded-full" />
-                <div className="h-1.5 w-5/6 bg-primary/10 animate-pulse rounded-full" />
-              </div>
-            );
-          }
           const canEdit =
             !isViewer &&
             (!isEnriching ||
@@ -2333,10 +2294,10 @@ export function DataTable({
         ),
         cell: ({ row }) => {
           const isGenerating =
-            enrichingNewColumns.length > 0
-              ? enrichingNewColumns.includes(enrichCol.id)
+            enrichingColumns.length > 0
+              ? enrichingColumns.includes(enrichCol.id)
               : enrichCol.enabled;
-          if (row.original.status === "processing" && isGenerating && enrichingTab === "new") {
+          if (row.original.status === "processing" && isGenerating) {
             return (
               <div className="py-1 space-y-1.5 w-full">
                 <div className="h-1.5 w-3/4 bg-primary/10 animate-pulse rounded-full" />
@@ -2413,10 +2374,7 @@ export function DataTable({
     selectRowsByIds,
     sheetFilteredRows,
     renameColumn,
-    activeSheet,
-    enrichingTab,
-    enrichingExistingColumns,
-    enrichingNewColumns,
+    enrichingColumns,
     groupIndex,
     productGroupColumn,
   ]);
@@ -2452,7 +2410,7 @@ export function DataTable({
   // Back to the first page only when the user changes what is shown.
   useEffect(() => {
     setPagination((prev) => (prev.pageIndex === 0 ? prev : { ...prev, pageIndex: 0 }));
-  }, [globalFilter, statusFilter, columnFilters, sorting, activeSheet]);
+  }, [globalFilter, statusFilter, columnFilters, sorting]);
 
   // If rows are deleted or filtered away so the current page no longer exists,
   // show the last page that does. While no rows are loaded the page is kept.
@@ -2608,41 +2566,6 @@ export function DataTable({
                 );
               })}
             </div>
-
-            {/* Sheet toggle tabs — PLP has no "existing" concept, so it never shows this */}
-            {!isPlp && (
-              <div className="flex items-center border rounded-lg overflow-hidden mx-2">
-                <button
-                  onClick={() => setActiveSheet("existing")}
-                  disabled={sheetCounts.existing === 0}
-                  className={`flex items-center gap-1.5 px-3 py-1 text-[10px] font-medium transition-colors ${
-                    activeSheet === "existing"
-                      ? "bg-primary text-primary-foreground"
-                      : sheetCounts.existing === 0
-                      ? "bg-background text-muted-foreground/40 cursor-not-allowed"
-                      : "bg-background text-muted-foreground hover:bg-muted/50"
-                  }`}
-                >
-                  <Package className="h-3 w-3" />
-                  {sheetLabels.existing} ({sheetCounts.existing})
-                </button>
-                <div className="w-px h-5 bg-border" />
-                <button
-                  onClick={() => setActiveSheet("new")}
-                  disabled={sheetCounts.new === 0}
-                  className={`flex items-center gap-1.5 px-3 py-1 text-[10px] font-medium transition-colors ${
-                    activeSheet === "new"
-                      ? "bg-primary text-primary-foreground"
-                      : sheetCounts.new === 0
-                      ? "bg-background text-muted-foreground/40 cursor-not-allowed"
-                      : "bg-background text-muted-foreground hover:bg-muted/50"
-                  }`}
-                >
-                  <FileSpreadsheet className="h-3 w-3" />
-                  {sheetLabels.new} ({sheetCounts.new})
-                </button>
-              </div>
-            )}
 
             {/* Row count */}
             <span className="text-[10px] text-muted-foreground font-mono">

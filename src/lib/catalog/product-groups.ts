@@ -12,7 +12,6 @@ export type GroupableRow = {
   id: string;
   rowIndex?: number;
   originalData?: Record<string, string>;
-  matchType?: "existing" | "new" | null;
   status?: "pending" | "processing" | "done" | "error";
   errorMessage?: string;
   enrichedData?: Record<string, unknown>;
@@ -223,55 +222,23 @@ export function buildProductGroupIndex<T extends GroupableRow>(
   return index;
 }
 
-export function groupMatchType(
-  memberIds: string[],
-  byId: Map<string, GroupableRow>
-): "existing" | "new" {
-  return memberIds.some((id) => byId.get(id)?.matchType === "existing")
-    ? "existing"
-    : "new";
-}
-
+/** The rows the sheet shows: one per product (variant rows are hidden when grouping is on). */
 export function visibleCatalogRows<T extends GroupableRow>(
   rows: T[],
   options: {
     groupColumn?: string | null;
-    activeSheet?: "existing" | "new" | "all";
   }
 ): T[] {
   const index = buildProductGroupIndex(rows, options.groupColumn);
-  const byId = new Map(rows.map((row) => [row.id, row]));
-  const primaries = index.enabled
-    ? rows.filter((row) => index.primaryIds.has(row.id))
-    : rows;
-  const sheet = options.activeSheet ?? "all";
-  if (sheet === "all") return primaries;
-
-  return primaries.filter((row) => {
-    const members = index.enabled
-      ? (index.memberIdsByPrimary.get(row.id) ?? [row.id])
-      : [row.id];
-    const type = groupMatchType(members, byId);
-    return sheet === "existing" ? type === "existing" : type !== "existing";
-  });
+  return index.enabled ? rows.filter((row) => index.primaryIds.has(row.id)) : rows;
 }
 
-export function countGroupedMatchTypes(
+export function countGroupedRows(
   rows: GroupableRow[],
   column: string | null | undefined
-): { existing: number; new: number; products: number; rows: number } {
-  const primaries = visibleCatalogRows(rows, {
-    groupColumn: column,
-    activeSheet: "all",
-  });
-  const existing = visibleCatalogRows(rows, {
-    groupColumn: column,
-    activeSheet: "existing",
-  }).length;
+): { products: number; rows: number } {
   return {
-    existing,
-    new: primaries.length - existing,
-    products: primaries.length,
+    products: visibleCatalogRows(rows, { groupColumn: column }).length,
     rows: rows.length,
   };
 }
@@ -348,21 +315,19 @@ export function applyPrimaryEnrichmentToGroup<T extends GroupableRow>(
   return siblingIds;
 }
 
-export function partitionRowsForExport<T extends GroupableRow>(
+/**
+ * Rows in export order: each product's variant rows sit right after each other
+ * (the product's own row first), in the order the products appear in the sheet.
+ */
+export function orderRowsForExport<T extends GroupableRow>(
   rows: T[],
   column: string | null | undefined
-): { existing: T[]; new: T[] } {
-  if (!column) {
-    return {
-      existing: rows.filter((row) => row.matchType === "existing"),
-      new: rows.filter((row) => row.matchType !== "existing"),
-    };
-  }
+): T[] {
+  if (!column) return rows;
 
   const index = buildProductGroupIndex(rows, column);
   const byId = new Map(rows.map((row) => [row.id, row]));
-  const existing: T[] = [];
-  const next: T[] = [];
+  const ordered: T[] = [];
   const assigned = new Set<string>();
 
   for (const row of rows) {
@@ -371,18 +336,11 @@ export function partitionRowsForExport<T extends GroupableRow>(
     const members = (index.memberIdsByPrimary.get(primaryId) ?? [row.id])
       .map((id) => byId.get(id))
       .filter((member): member is T => Boolean(member));
-    const bucket =
-      groupMatchType(
-        members.map((member) => member.id),
-        byId
-      ) === "existing"
-        ? existing
-        : next;
     for (const member of members) {
       assigned.add(member.id);
-      bucket.push(member);
+      ordered.push(member);
     }
   }
 
-  return { existing, new: next };
+  return ordered;
 }

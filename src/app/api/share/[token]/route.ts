@@ -73,7 +73,6 @@ export async function GET(request: NextRequest, context: Ctx) {
         errorMessage: hideProviderNames(r.errorMessage),
         originalData: r.originalData || {},
         enrichedData: r.enrichedData || {},
-        matchType: (r.matchType as "existing" | "new" | null) || "new",
       }));
       const enrichmentColumns =
         project.enrichmentColumns?.length > 0 ? project.enrichmentColumns : getDefaultEnrichmentColumns(kind);
@@ -95,7 +94,6 @@ export async function GET(request: NextRequest, context: Ctx) {
         enrichmentColumns,
         columnVisibility: project.columnVisibility || {},
         columnLayout: project.columnLayout,
-        matchingSkipped: project.matchingSkipped ?? false,
         productGroupColumn,
         view,
       });

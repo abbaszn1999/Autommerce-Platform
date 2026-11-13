@@ -32,7 +32,6 @@ import {
   Search,
   Paintbrush,
   RefreshCw,
-  LayoutTemplate,
   Wallet,
   Bot,
   Apple,
@@ -266,19 +265,13 @@ export default function WorkspaceLayout({
 
   const sidebarLinksBeforeMedia = [
     { href: `${basePath}`, label: "Dashboard", icon: LayoutDashboard },
-    { href: `${basePath}/products`, label: "Products", icon: Package },
     { href: `${basePath}/categories`, label: "Categories", icon: FolderTree },
     { href: `${basePath}/catalog-intelligence`, label: "Catalog Intelligence", icon: Upload },
   ];
 
+  // Website restructure is hidden from the sidebar for now (its page and API
+  // still exist); add its link back here to show it again.
   const agentLinks = [
-    {
-      href: toolLocks["website-restructure"] ? "" : `${basePath}/website-restructure`,
-      label: "Website restructure",
-      icon: LayoutTemplate,
-      disabled: !!toolLocks["website-restructure"],
-      tool: "website-restructure" as const,
-    },
     {
       href: toolLocks["store-assistant"] ? "" : `${basePath}/store-assistant`,
       label: "Store assistant",
