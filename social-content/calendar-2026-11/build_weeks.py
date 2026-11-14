@@ -269,27 +269,36 @@ def m11():
     N = 5
     pages = {}
     css0 = """
-.wrap{padding:48px 56px 0}
+.wrap{padding:40px 56px 0}
 .lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
-.count{position:absolute;right:56px;top:56px;font-size:15px}
+.count{position:absolute;right:56px;top:48px;font-size:15px}
 .count b{color:#F76D01;font-weight:500}
-h1{margin-top:28px;font-size:52px;width:900px}
-.stack{margin-top:28px;display:grid;gap:14px}
-.band{padding:28px 32px;display:flex;align-items:center;justify-content:space-between;min-height:170px}
-.band b{font-size:92px;font-weight:800;letter-spacing:-.07em;line-height:.85}
-.band span{font-size:22px;font-weight:650;letter-spacing:-.02em;max-width:280px;line-height:1.25;text-align:right}
+h1{margin-top:18px;font-size:48px;width:900px}
+.stack{margin-top:18px;display:grid;gap:12px}
+.band{padding:28px 30px;display:grid;grid-template-columns:240px 1fr;gap:24px;align-items:center;min-height:260px}
+.band .word{font-size:100px;font-weight:800;letter-spacing:-.07em;line-height:.82}
+.band .meta small{display:block;font-size:13px;letter-spacing:.14em;margin-bottom:10px;opacity:.85}
+.band .meta b{display:block;font-size:28px;font-weight:750;letter-spacing:-.03em;line-height:1.2}
+.band .meta p{margin-top:10px;font-size:20px;font-weight:550;line-height:1.3;opacity:.9;max-width:560px}
 .b1{background:#F76D01;color:#0B0A10}
 .b2{background:#400095;color:#fff}
 .b3{background:#0B0A10;color:#fff}
-.b3 b{color:#F76D01}
+.b3 .word{color:#F76D01}
+.b3 .meta small{color:#F76D01;opacity:1}
+.fix{margin-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
+.fix div{background:#fff;border:1.5px solid rgba(11,10,16,.1);padding:16px 14px;min-height:110px}
+.fix b{display:block;font-size:12px;letter-spacing:.12em;color:#F76D01;margin-bottom:8px;font-weight:500}
+.fix span{font-size:18px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
 """
     body0 = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div><div class="count mono"><b>01</b> / {N:02d}</div>
 <h1>Three ways a product gets&nbsp;found.</h1>
 <div class="stack">
-<div class="band b1"><b>SEO</b><span>People typing a query</span></div>
-<div class="band b2"><b>AEO</b><span>People asking a question</span></div>
-<div class="band b3"><b>GEO</b><span>Answers that cite a source</span></div>
-</div></div>{foot(0, N)}'''
+<div class="band b1"><div class="word">SEO</div><div class="meta"><small class="mono">Search</small><b>People typing a query</b><p>Titles, headings and links decide who gets listed.</p></div></div>
+<div class="band b2"><div class="word">AEO</div><div class="meta"><small class="mono">Answers</small><b>People asking a question</b><p>Plain-text specs get picked. Pictures do not.</p></div></div>
+<div class="band b3"><div class="word">GEO</div><div class="meta"><small class="mono">Cite</small><b>Answers that cite a source</b><p>Facts written out are what generative engines quote.</p></div></div>
+</div>
+<div class="fix"><div><b class="mono">01</b><span>Exact titles</span></div><div><b class="mono">02</b><span>Specs as text</span></div><div><b class="mono">03</b><span>Real answers</span></div><div><b class="mono">04</b><span>One price</span></div></div>
+</div>{foot(0, N)}'''
     pages['week-3/M11-seo-aeo-geo/slide_01'] = doc(body0, css0)
 
     css1 = """
@@ -510,12 +519,12 @@ h1{margin-top:8px;font-size:52px;width:920px}
 .banner{{margin-top:14px;background:{accent};color:{accent_fg};padding:26px 28px}}
 .banner h1{{font-size:52px;width:auto}}
 .p{{margin-top:18px;font-size:26px;line-height:1.35;letter-spacing:-.02em;width:920px;color:#3B3742;font-weight:600}}
-.stats{{margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}}
-.stats div{{background:#fff;border:1.5px solid rgba(11,10,16,.1);padding:22px 20px;min-height:150px}}
-.stats b{{display:block;font-size:34px;font-weight:800;letter-spacing:-.04em;line-height:1;color:{accent}}}
-.stats span{{display:block;margin-top:12px;font-size:18px;font-weight:600;letter-spacing:-.02em;line-height:1.25;color:#3B3742}}
-.rows{{margin-top:16px;background:#fff;border:1.5px solid rgba(11,10,16,.1)}}
-.rows .r{{display:grid;grid-template-columns:160px 1fr;gap:16px;padding:18px 22px;border-top:1px solid rgba(11,10,16,.08);align-items:center}}
+.stats{{margin-top:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}}
+.stats div{{background:#fff;border:1.5px solid rgba(11,10,16,.1);padding:24px 20px;min-height:180px}}
+.stats b{{display:block;font-size:36px;font-weight:800;letter-spacing:-.04em;line-height:1;color:{accent}}}
+.stats span{{display:block;margin-top:14px;font-size:18px;font-weight:600;letter-spacing:-.02em;line-height:1.25;color:#3B3742}}
+.rows{{margin-top:14px;background:#fff;border:1.5px solid rgba(11,10,16,.1)}}
+.rows .r{{display:grid;grid-template-columns:160px 1fr;gap:16px;padding:22px 22px;border-top:1px solid rgba(11,10,16,.08);align-items:center;min-height:78px}}
 .rows .r:first-child{{border-top:0}}
 .rows .r b{{font-size:14px;letter-spacing:.14em;color:{accent};font-weight:500;font-family:'Geist Mono',monospace;text-transform:uppercase}}
 .rows .r span{{font-size:24px;font-weight:650;letter-spacing:-.025em}}
@@ -1055,7 +1064,7 @@ def m15():
 h1{margin-top:18px;font-size:48px;width:940px}
 .sub{margin-top:10px;font-size:20px;color:#3B3742;letter-spacing:-.015em;max-width:900px}
 .stages{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.st{padding:24px 22px;min-height:250px;display:flex;flex-direction:column;justify-content:space-between}
+.st{padding:24px 22px;min-height:310px;display:flex;flex-direction:column;justify-content:space-between}
 .st .n{font-size:13px;letter-spacing:.14em}
 .st b{font-size:38px;font-weight:800;letter-spacing:-.04em;line-height:1}
 .st span{margin-top:12px;font-size:20px;font-weight:600;letter-spacing:-.02em;line-height:1.3}
