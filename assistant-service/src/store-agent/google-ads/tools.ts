@@ -235,9 +235,15 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
         "\"add Qatar\"): they are saved as confirmed, at once; the user can change them on the Business profile page. " +
         "statedByUser: false for what you found yourself (website, account data): saved only as suggestions the owner confirms, only into empty or " +
         "suggested fields, and never for margin, target ROAS, monthly budget cap or goal (only the owner sets those). " +
-        "Fields: businessName, website, languages, brandTerms, markets, categories, focusProducts, goal (profit | growth | new_customers), margin (e.g. 40 for 40%), " +
-        "targetRoas (e.g. 4 for 400%), monthlyBudgetCap, averageOrderValue (amounts in the account currency), keySellingPoints, competitiveAdvantages, " +
-        "competitors ([{ name, url }]), shippingReturns, peakSeasons, neverAdvertise, brandIdentity, brandVoice, visualDirection, logoUrl, palette ([{ name, hex, role }]). " +
+        "The profile is a fixed document with these sections and fields. " +
+        "Key facts: businessName, website, languages. Business overview: overview (text: what it is, story, model). Brand and search names: brandTerms. " +
+        "Markets and customers: markets, audience (text). Goals and economics: goal (profit | growth | new_customers), margin (e.g. 40 for 40%), targetRoas (e.g. 4 for 400%), " +
+        "monthlyBudgetCap, averageOrderValue (amounts in the account currency). Products and catalog: categories, focusProducts. " +
+        "Positioning: usp (text), keySellingPoints, competitiveAdvantages, proof (text). Offers, shipping and returns: shippingReturns (text). " +
+        "Competitors: competitors ([{ name, url }]). Seasonality: peakSeasons. Guardrails: neverAdvertise, restrictions (text). " +
+        "Brand guidelines: brandIdentity, brandVoice, visualDirection, logoUrl, palette ([{ name, hex, role }]). " +
+        "Marketing history and learnings: marketingHistory (text). Sources and uploaded files: sources (text: the files and pages this was written from). Open questions: openQuestions (list). " +
+        "Texts may use short Markdown (bullets, bold) and are shown as written in a document. " +
         "Lists are arrays and REPLACE the whole list: to add one item, send the current items plus the new one. value null clears a field.",
       inputSchema: {
         type: "object",
@@ -245,7 +251,7 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
           edits: {
             type: "array",
             minItems: 1,
-            maxItems: 23,
+            maxItems: 40,
             items: { type: "object", properties: { field: { type: "string" }, value: {} }, required: ["field", "value"] },
           },
           statedByUser: { type: "boolean" },
@@ -262,6 +268,31 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
           });
           if (!res.ok) return failure(`Not saved: ${res.error}`);
           return text(JSON.stringify({ ...res, ok: undefined }));
+        } catch (error) {
+          return failure((error as Error).message);
+        }
+      },
+    },
+
+    onboarding_stage: {
+      description:
+        "First-run onboarding only (your rules say when it applies). The board on the right is locked while the user is being onboarded. " +
+        "stage \"filling\": the interview is over (the user gave the context or asked to unlock), you are now doing the final fill: the board stays locked. " +
+        "stage \"done\": the Business profile and the Competitor ads are filled in: the board unlocks. The platform refuses \"done\" until the profile overview, " +
+        "the competitors and at least one competitor lookup exist (if the competitor data source is unavailable, pass competitorsUnavailable: true).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          stage: { type: "string", enum: ["filling", "done"] },
+          competitorsUnavailable: { type: "boolean", description: "Only with \"done\": every competitor lookup failed because the data source is unavailable." },
+        },
+        required: ["stage"],
+      },
+      execute: async (args) => {
+        try {
+          const res = await call<{ ok: boolean; error?: string; stage?: string; note?: string }>("onboarding", { stage: args.stage, competitorsUnavailable: args.competitorsUnavailable === true });
+          if (!res.ok) return failure(res.error ?? "The stage was not changed.");
+          return text(JSON.stringify({ stage: res.stage, note: res.note }));
         } catch (error) {
           return failure((error as Error).message);
         }

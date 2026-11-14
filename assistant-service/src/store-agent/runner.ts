@@ -20,7 +20,7 @@ import { grantedScopes } from "./shopify/client";
 import { missingScopes } from "./shopify/guard";
 import { SCOPE_LABELS, STORE_AGENT_SCOPES } from "./shopify/scopes";
 import { plainMentions } from "../../../src/lib/store-agent/mentions";
-import { PROFILE_UNREADABLE, profileBrief } from "../../../src/lib/business-profile";
+import { PROFILE_UNREADABLE, boardLocked, onboardingStageOf, profileBrief } from "../../../src/lib/business-profile";
 import { loadProfile } from "../../../src/lib/business-profile.server";
 import { mentionContext, type MentionContext } from "./mentions";
 import { createDocumentTool } from "./document-tool";
@@ -209,10 +209,11 @@ async function loadAdsAccount(
 async function loadBusinessContext(db: SupabaseClient, workspaceId: string, currency: string, log: (m: string, e?: unknown) => void) {
   try {
     const profile = await loadProfile(db, workspaceId);
-    return { brief: profileBrief(profile, currency), filled: Object.keys(profile.values).length > 0 };
+    const stage = onboardingStageOf(profile.values);
+    return { brief: profileBrief(profile, currency), filled: Object.keys(profile.values).length > 0, onboarding: boardLocked(stage) ? (stage as "interview" | "filling") : null };
   } catch (error) {
     log("reading the business profile failed", error);
-    return { brief: PROFILE_UNREADABLE, filled: false };
+    return { brief: PROFILE_UNREADABLE, filled: false, onboarding: null };
   }
 }
 
@@ -559,7 +560,7 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     await fs.writeFile(
       path.join(cwd, ".cursor", "rules", "vera.mdc"),
       adsAccount
-        ? veraAdsRule({ ...adsAccount, profile: business.brief, mode: req.mode })
+        ? veraAdsRule({ ...adsAccount, profile: business.brief, onboarding: business.onboarding, mode: req.mode })
         : veraRule({
             businessProfile: business.filled ? business.brief : "",
             platform,

@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   userStatedValue,
   ProfileEditError,
+  DOC_FIELDS,
+  SECTIONS,
+  PROFILE_FIELDS,
+  boardLocked,
+  onboardingStageOf,
   completeness,
   missingRequired,
   normalizeValue,
@@ -174,5 +179,41 @@ describe("profileBrief", () => {
   it("has a notice for a profile that couldn't be read, which never says empty", () => {
     expect(PROFILE_UNREADABLE).toContain("NOT empty");
     expect(PROFILE_UNREADABLE).not.toMatch(/nothing filled/);
+  });
+});
+
+describe("the profile document", () => {
+  it("has the same fifteen headings for everyone, and every field sits under one", () => {
+    expect(SECTIONS).toHaveLength(15);
+    expect(SECTIONS[0]!.id).toBe("facts");
+    const ids = new Set(SECTIONS.map((s) => s.id));
+    for (const f of DOC_FIELDS) expect(ids.has(PROFILE_FIELDS[f].section)).toBe(true);
+  });
+
+  it("keeps the onboarding stage out of the document and out of every agent's reach", () => {
+    expect(DOC_FIELDS).not.toContain("onboardingStage");
+    expect(() => planProfileEdits(empty(), [{ field: "onboardingStage", value: "done" }], owner, NOW)).toThrow(/Unknown field/);
+    expect(() => planProfileEdits(empty(), [{ field: "onboardingStage", value: "done" }], website, NOW)).toThrow(/Unknown field/);
+    expect(profileForAgent(empty()).fields.some((f) => f.field === "onboardingStage")).toBe(false);
+    const withStage: BusinessProfileData = { values: { onboardingStage: "interview", businessName: "Kalema" }, meta: {}, updatedAt: null };
+    expect(profileBrief(withStage)).not.toContain("Onboarding");
+    expect(completeness(withStage.values).total).toBe(DOC_FIELDS.length);
+  });
+
+  it("lets the platform move the stage, and locks the board only while Vera works", () => {
+    const plan = planProfileEdits(empty(), [{ field: "onboardingStage", value: "interview" }], owner, NOW, { allowHidden: true });
+    expect(onboardingStageOf(plan.next.values)).toBe("interview");
+    expect(boardLocked("interview")).toBe(true);
+    expect(boardLocked("filling")).toBe(true);
+    expect(boardLocked("done")).toBe(false);
+    expect(boardLocked(null)).toBe(false);
+    expect(onboardingStageOf({})).toBeNull();
+  });
+
+  it("holds the long texts Vera writes", () => {
+    const text = "- point\n".repeat(200);
+    expect(normalizeValue("overview", text)).toContain("- point");
+    expect(() => normalizeValue("overview", "x".repeat(3001))).toThrow(/too long/);
+    expect(normalizeValue("openQuestions", ["Which countries?", "Margin on shoes?"])).toHaveLength(2);
   });
 });

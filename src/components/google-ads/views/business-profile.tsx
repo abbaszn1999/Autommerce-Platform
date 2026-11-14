@@ -1,14 +1,15 @@
 "use client";
 
-// Live mode: the workspace's real business profile, shared by every agent.
-// Owners and admins edit it here or tell Vera in chat; what Vera finds herself
-// shows as a suggestion to confirm.
+// Live mode: the workspace's business profile, shared by every agent, as one
+// fixed document: the same numbered headings for every business, filled by Vera
+// from the owner's answers, files and her own research. Owners and admins edit it
+// here or tell Vera in chat; what Vera finds herself shows as a suggestion to confirm.
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Bot, Building2, Check, ExternalLink, Globe2, Loader2, Palette, Pencil, RefreshCw, ShieldBan, Swords, Wallet, X } from "lucide-react";
+import { AlertTriangle, Bot, Building2, CalendarDays, Check, ExternalLink, FileText, Globe2, History, Info, ListChecks, Loader2, Palette, Paperclip, Pencil, RefreshCw, ShieldBan, ShoppingBag, Sparkles, Swords, Tag, Truck, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  FIELD_KEYS,
+  DOC_FIELDS,
   REQUIRED,
   SECTIONS,
   completeness,
@@ -22,6 +23,7 @@ import {
   type ProfileSource,
   type ProfileValue,
 } from "@/lib/business-profile";
+import { Markdown } from "@/components/store-agent/markdown";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import { useGoogleAds } from "@/lib/google-ads/store";
 import { ACCENT_BTN, Card, Pill, SelectBox, ViewHeader } from "../ga-ui";
@@ -29,7 +31,23 @@ import { RowsSkeleton } from "../ga-skeleton";
 
 type Loaded = { profile: BusinessProfileData; canEdit: boolean; currency: string | null };
 
-const ICONS: Record<ProfileSection, typeof Building2> = { business: Building2, markets: Globe2, economics: Wallet, positioning: Swords, guardrails: ShieldBan, brand: Palette };
+const ICONS: Record<ProfileSection, typeof Building2> = {
+  facts: Info,
+  overview: Building2,
+  names: Tag,
+  markets: Globe2,
+  economics: Wallet,
+  catalog: ShoppingBag,
+  positioning: Sparkles,
+  offers: Truck,
+  competitors: Swords,
+  seasonality: CalendarDays,
+  guardrails: ShieldBan,
+  brand: Palette,
+  history: History,
+  sources: Paperclip,
+  questions: ListChecks,
+};
 const SOURCE_LABEL: Record<ProfileSource, string> = {
   owner: "you, on this page",
   chat: "you, in chat with Vera",
@@ -187,6 +205,7 @@ function ValueView({ field, value, currency }: { field: ProfileField; value: Pro
         {field === "margin" && <span className="ml-2 text-[11px] font-normal text-muted-foreground">break-even ROAS {(1 / Number(value)).toFixed(2)}×</span>}
       </p>
     );
+  if (kind === "longtext") return <Markdown text={String(value)} className="text-[13px] leading-relaxed" />;
   return <p className="whitespace-pre-line text-xs leading-relaxed">{formatValue(field, value, currency)}</p>;
 }
 
@@ -229,7 +248,7 @@ function FieldRow({
   const inputCls = "w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30";
 
   return (
-    <div className={cn("rounded-xl border p-3", suggested ? "border-amber-500/40 bg-amber-500/[0.04]" : missingRequired ? "border-dashed border-amber-500/50" : "border-border/60")}>
+    <div className={cn("rounded-r-lg border-s-2 py-1.5 ps-3.5 pe-2", suggested ? "border-amber-500 bg-amber-500/[0.05]" : missingRequired ? "border-dashed border-amber-500/60" : "border-border/70 hover:border-[#400095]/50")}>
       <div className="mb-1.5 flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">
@@ -277,7 +296,7 @@ function FieldRow({
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              rows={d.kind === "longtext" ? 4 : 5}
+              rows={d.kind === "longtext" ? 9 : 5}
               placeholder={PLACEHOLDER[field] ?? (d.kind === "list" ? "One per line" : "")}
               className={cn(inputCls, "resize-y py-2")}
               autoFocus
@@ -370,13 +389,20 @@ export function LiveProfileView() {
   const { profile, canEdit } = data;
   const currency = data.currency ?? "";
   const { sections, filled, total, missing } = completeness(profile.values);
-  const suggestions = FIELD_KEYS.filter((f) => profile.values[f] != null && profile.meta[f]?.status === "suggested").length;
+  const suggestionsIn = (id: ProfileSection) => DOC_FIELDS.filter((f) => fieldDef(f).section === id && profile.values[f] != null && profile.meta[f]?.status === "suggested");
+  const suggestions = DOC_FIELDS.filter((f) => profile.values[f] != null && profile.meta[f]?.status === "suggested").length;
+  const title = typeof profile.values.businessName === "string" ? profile.values.businessName : "Your business";
+
+  const confirmAll = async (fields: ProfileField[]) => {
+    await api({ method: "PATCH", body: JSON.stringify({ workspaceId, edits: fields.map((field) => ({ field, value: profile.values[field] })) }) });
+    await load();
+  };
 
   return (
     <div className="space-y-4">
       <ViewHeader
         title="Business profile"
-        subtitle="What Vera and every Autommerce agent in this workspace know about your business. Vera reads it before every plan, report and change. Edit it here, or just tell Vera in chat."
+        subtitle="One document every Autommerce agent reads before it plans, reports or changes anything. The headings are the same for every business; Vera fills them from your answers, your files and her research. Edit any part here, or just tell Vera in chat."
         actions={
           <>
             <span className="text-[11px] text-muted-foreground">Updated {ago(profile.updatedAt)}</span>
@@ -387,12 +413,12 @@ export function LiveProfileView() {
               type="button"
               onClick={() =>
                 runAgentTurn(
-                  "Fill in my business profile: read my website and my Google Ads account (and Merchant Center if connected) and save what you find as suggestions. Ask me only for required values that are still empty; never ask again about values already saved."
+                  "Update my business profile document: re-read my website and my files, research anything that is missing, and fill the empty sections as suggestions. Ask me only for what you cannot find; never ask again about values already saved."
                 )
               }
               className={cn("inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold", ACCENT_BTN)}
             >
-              <Bot className="h-3.5 w-3.5" /> Ask Vera to fill it
+              <Bot className="h-3.5 w-3.5" /> Ask Vera to update it
             </button>
           </>
         }
@@ -412,56 +438,88 @@ export function LiveProfileView() {
         </Card>
       )}
 
-      <Card className="p-4">
-        <div className="mb-2.5 flex items-center justify-between gap-3">
-          <p className="text-xs font-bold">
-            Knowledge base{" "}
-            <span className="font-normal text-muted-foreground">
-              · {filled} of {total} fields filled{suggestions ? ` · ${suggestions} suggestion${suggestions > 1 ? "s" : ""} to confirm` : ""}
-            </span>
-          </p>
-          <div className="h-1.5 w-40 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-gradient-to-r from-[#400095] to-[#F76D01]" style={{ width: `${(filled / total) * 100}%` }} />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {sections.map((s) => (
-            <Pill key={s.id} tone={s.filled === s.total ? "good" : "neutral"}>
-              {s.filled === s.total ? "✓ " : ""}
-              {s.label} {s.filled}/{s.total}
-            </Pill>
-          ))}
-        </div>
-        {!canEdit && <p className="mt-2.5 text-[11px] text-muted-foreground">Only workspace owners and admins can change the profile.</p>}
-      </Card>
-
-      <div>
-        <div className="space-y-4">
-          {SECTIONS.map((s) => {
-            const Icon = ICONS[s.id];
-            const fields = FIELD_KEYS.filter((f) => fieldDef(f).section === s.id);
-            return (
-              <Card key={s.id} className="p-5">
-                <div className="mb-3 flex items-start gap-2.5">
-                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#400095]/10 text-[#400095] dark:bg-violet-500/15 dark:text-violet-300">
-                    <Icon className="h-3.5 w-3.5" />
+      <div className="grid items-start gap-5 lg:grid-cols-[210px_minmax(0,1fr)]">
+        {/* Contents: the fixed headings, with what is filled. */}
+        <nav aria-label="Document sections" className="sticky top-2 hidden rounded-2xl border border-border/60 bg-card p-3 lg:block">
+          <p className="mb-2 px-2 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Contents</p>
+          <ol className="space-y-0.5">
+            {sections.map((s, i) => (
+              <li key={s.id}>
+                <a href={`#profile-${s.id}`} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] font-medium hover:bg-muted">
+                  <span className={cn("flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-black", s.filled === s.total ? "bg-emerald-500 text-white" : s.filled ? "bg-[#400095]/15 text-[#400095] dark:text-violet-300" : "bg-muted text-muted-foreground")}>
+                    {s.filled === s.total ? <Check className="h-2.5 w-2.5" /> : i}
                   </span>
-                  <div>
-                    <p className="text-sm font-bold leading-tight">{s.label}</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">{s.hint}</p>
-                  </div>
+                  <span className="truncate">{s.label}</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+
+        {/* The document. */}
+        <article className="min-w-0 rounded-2xl border border-border/60 bg-card shadow-sm">
+          <header className="border-b border-border/60 px-6 py-5">
+            <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-[#400095] dark:text-violet-300">
+              <FileText className="h-3.5 w-3.5" /> Business knowledge base
+            </p>
+            <h2 className="mt-1 text-2xl font-black tracking-tight">{title}</h2>
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-40 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-gradient-to-r from-[#400095] to-[#F76D01]" style={{ width: `${(filled / total) * 100}%` }} />
                 </div>
-                <div className={cn("grid gap-3", s.id !== "brand" && "sm:grid-cols-2")}>
-                  {fields.map((f) => (
-                    <div key={f} className={cn(["longtext", "competitors", "palette"].includes(fieldDef(f).kind) && "sm:col-span-2")}>
-                      <FieldRow field={f} data={profile} canEdit={canEdit} currency={currency} onSave={saveField} />
+                <span className="text-[11px] text-muted-foreground">
+                  {filled} of {total} fields filled{suggestions ? ` · ${suggestions} suggestion${suggestions > 1 ? "s" : ""} to confirm` : ""}
+                </span>
+              </div>
+              {!canEdit && <span className="text-[11px] text-muted-foreground">Only workspace owners and admins can change this document.</span>}
+            </div>
+          </header>
+
+          <div className="divide-y divide-border/60">
+            {SECTIONS.map((s, i) => {
+              const Icon = ICONS[s.id];
+              const fields = DOC_FIELDS.filter((f) => fieldDef(f).section === s.id);
+              const suggested = suggestionsIn(s.id);
+              const filledHere = fields.filter((f) => profile.values[f] != null).length;
+              return (
+                <section key={s.id} id={`profile-${s.id}`} className="scroll-mt-4 px-6 py-5">
+                  <div className="mb-3 flex flex-wrap items-start gap-2.5">
+                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#400095]/10 text-[#400095] dark:bg-violet-500/15 dark:text-violet-300">
+                      <Icon className="h-3.5 w-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-black leading-tight tracking-tight">
+                        <span className="me-1.5 text-muted-foreground">{i}</span>
+                        {s.label}
+                      </h3>
+                      <p className="mt-0.5 text-[11.5px] text-muted-foreground">{s.hint}</p>
                     </div>
-                  ))}
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+                    {suggested.length > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <Pill tone="warn">{suggested.length} suggested by Vera</Pill>
+                        {canEdit && (
+                          <button type="button" onClick={() => void confirmAll(suggested)} className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700">
+                            <Check className="h-3 w-3" /> Confirm section
+                          </button>
+                        )}
+                      </div>
+                    ) : filledHere === 0 ? (
+                      <Pill tone="neutral">Empty</Pill>
+                    ) : (
+                      <Pill tone="good">Confirmed</Pill>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    {fields.map((f) => (
+                      <FieldRow key={f} field={f} data={profile} canEdit={canEdit} currency={currency} onSave={saveField} />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </article>
       </div>
     </div>
   );

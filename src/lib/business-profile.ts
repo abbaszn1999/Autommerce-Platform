@@ -8,12 +8,30 @@ export type PaletteColor = { name: string; hex: string; role: string };
 
 type Kind = "text" | "longtext" | "url" | "list" | "choice" | "percent" | "ratio" | "money" | "competitors" | "palette";
 
-export type ProfileSection = "business" | "markets" | "economics" | "positioning" | "guardrails" | "brand";
+/** The document's headings, in order. Every workspace's business profile has exactly these. */
+export type ProfileSection =
+  | "facts"
+  | "overview"
+  | "names"
+  | "markets"
+  | "economics"
+  | "catalog"
+  | "positioning"
+  | "offers"
+  | "competitors"
+  | "seasonality"
+  | "guardrails"
+  | "brand"
+  | "history"
+  | "sources"
+  | "questions";
 
 type FieldDef = {
   label: string;
   kind: Kind;
   section: ProfileSection;
+  /** Platform state, not part of the document: never shown, never written by an agent or the page. */
+  hidden?: boolean;
   /** Shown under the field on the page, and to the agent. */
   hint?: string;
   /** Money and goals: only the owner knows them, so an agent never suggests them. */
@@ -29,33 +47,64 @@ export const GOALS = [
 ] as const;
 
 export const PROFILE_FIELDS = {
-  businessName: { label: "Business name", kind: "text", section: "business", max: 120 },
-  website: { label: "Website", kind: "url", section: "business" },
-  languages: { label: "Languages", kind: "list", section: "business", hint: "The website's languages, and the languages ads are written in." },
-  brandTerms: { label: "Brand names", kind: "list", section: "business", hint: "Every way people search for the brand, in every language and spelling." },
+  businessName: { label: "Business name", kind: "text", section: "facts", max: 120 },
+  website: { label: "Website", kind: "url", section: "facts" },
+  languages: { label: "Languages", kind: "list", section: "facts", hint: "The website's languages, and the languages ads are written in." },
+  overview: { label: "What the business is", kind: "longtext", section: "overview", max: 3000, hint: "What it sells, its story, its business model and who it sells to." },
+  brandTerms: { label: "Brand names", kind: "list", section: "names", hint: "Every way people search for the brand, in every language and spelling." },
   markets: { label: "Countries you sell and ship to", kind: "list", section: "markets", hint: "Ads outside these countries waste money." },
-  categories: { label: "Product categories", kind: "list", section: "markets" },
-  focusProducts: { label: "Products to push", kind: "list", section: "markets", hint: "Best sellers or products you want to grow." },
+  audience: { label: "Target audience", kind: "longtext", section: "markets", max: 3000, hint: "Who buys, and the problems they want solved." },
+  categories: { label: "Product categories", kind: "list", section: "catalog" },
+  focusProducts: { label: "Products to push", kind: "list", section: "catalog", hint: "Best sellers or products you want to grow." },
   goal: { label: "Main goal", kind: "choice", section: "economics", ownerOnly: true, choices: GOALS },
   margin: { label: "Gross margin", kind: "percent", section: "economics", ownerOnly: true, hint: "After product cost, before ads. Break-even ROAS = 1 ÷ margin." },
   targetRoas: { label: "Target ROAS", kind: "ratio", section: "economics", ownerOnly: true, hint: "Sales per 1 spent on ads, e.g. 4 = 400%." },
   monthlyBudgetCap: { label: "Monthly budget cap", kind: "money", section: "economics", ownerOnly: true, hint: "Vera warns before any change that would go above it." },
   averageOrderValue: { label: "Average order value", kind: "money", section: "economics" },
+  usp: { label: "Unique selling proposition", kind: "longtext", section: "positioning", max: 1500, hint: "The one reason customers pick this business over the others." },
   keySellingPoints: { label: "Key selling points", kind: "list", section: "positioning" },
   competitiveAdvantages: { label: "Competitive advantages", kind: "list", section: "positioning" },
-  competitors: { label: "Competitors", kind: "competitors", section: "positioning" },
-  shippingReturns: { label: "Shipping and returns", kind: "longtext", section: "positioning", max: 1000, hint: "Delivery times, costs and the returns policy, as customers see them." },
-  peakSeasons: { label: "Peak seasons", kind: "list", section: "guardrails" },
+  proof: { label: "Proof", kind: "longtext", section: "positioning", max: 1500, hint: "Reviews, awards, certifications, guarantees and numbers that back the claims." },
+  shippingReturns: { label: "Shipping and returns", kind: "longtext", section: "offers", max: 1500, hint: "Delivery times, costs, the returns policy and payment options, as customers see them." },
+  competitors: { label: "Competitors", kind: "competitors", section: "competitors", hint: "Their paid keywords are on the Competitor ads tab." },
+  peakSeasons: { label: "Peak seasons", kind: "list", section: "seasonality" },
   neverAdvertise: { label: "Never advertise", kind: "list", section: "guardrails", hint: "Products, words or claims Vera must never use." },
+  restrictions: { label: "Legal and brand-safety limits", kind: "longtext", section: "guardrails", max: 1500, hint: "Regulated claims, countries or topics to stay away from." },
   brandIdentity: { label: "Identity", kind: "longtext", section: "brand", max: 1500 },
   brandVoice: { label: "Brand voice", kind: "longtext", section: "brand", max: 1500 },
   visualDirection: { label: "Visual direction", kind: "longtext", section: "brand", max: 1500 },
   logoUrl: { label: "Logo", kind: "url", section: "brand" },
   palette: { label: "Colour palette", kind: "palette", section: "brand" },
+  marketingHistory: { label: "Marketing history and learnings", kind: "longtext", section: "history", max: 4000, hint: "What was tried, what worked, what did not. Grows as Vera learns." },
+  sources: { label: "Sources and uploaded files", kind: "longtext", section: "sources", max: 4000, hint: "The files and pages this document was written from." },
+  openQuestions: { label: "Open questions", kind: "list", section: "questions", hint: "What Vera still needs to know." },
+  onboardingStage: {
+    label: "Onboarding",
+    kind: "choice",
+    section: "facts",
+    hidden: true,
+    ownerOnly: true,
+    choices: [
+      { value: "interview", label: "Vera is asking questions" },
+      { value: "filling", label: "Vera is filling in the workspace" },
+      { value: "done", label: "Done" },
+    ],
+  },
 } as const satisfies Record<string, FieldDef>;
 
 export type ProfileField = keyof typeof PROFILE_FIELDS;
 export const FIELD_KEYS = Object.keys(PROFILE_FIELDS) as ProfileField[];
+/** The fields that make up the document (everything but platform state). */
+export const DOC_FIELDS: ProfileField[] = FIELD_KEYS.filter((f) => !(PROFILE_FIELDS[f] as FieldDef).hidden);
+
+/** First-run onboarding: Vera interviews the owner, then fills the workspace; the board is locked until it is done. */
+export const ONBOARDING_STAGES = ["interview", "filling", "done"] as const;
+export type OnboardingStage = (typeof ONBOARDING_STAGES)[number];
+export const isOnboardingStage = (v: unknown): v is OnboardingStage => ONBOARDING_STAGES.includes(v as OnboardingStage);
+/** The stage saved in the profile; null for workspaces that never started it. */
+export const onboardingStageOf = (values: ProfileValues): OnboardingStage | null => (isOnboardingStage(values.onboardingStage) ? values.onboardingStage : null);
+/** The board stays locked while Vera interviews the owner or fills the workspace. */
+export const boardLocked = (stage: OnboardingStage | null | undefined) => stage === "interview" || stage === "filling";
 export const isProfileField = (v: unknown): v is ProfileField => typeof v === "string" && Object.prototype.hasOwnProperty.call(PROFILE_FIELDS, v);
 const def = (f: ProfileField): FieldDef => PROFILE_FIELDS[f];
 
@@ -70,13 +119,23 @@ export type ProfileMeta = Partial<Record<ProfileField, FieldMeta>>;
 
 export type BusinessProfileData = { values: ProfileValues; meta: ProfileMeta; updatedAt: string | null };
 
+/** The document's headings, in the order every business profile shows them. */
 export const SECTIONS: { id: ProfileSection; label: string; hint: string }[] = [
-  { id: "business", label: "Business", hint: "Who you are, and how people search for you." },
-  { id: "markets", label: "Markets & catalog", hint: "Where you sell and what you sell." },
-  { id: "economics", label: "Economics", hint: "Vera judges every plan and change against these numbers." },
-  { id: "positioning", label: "Positioning", hint: "Why customers choose you, and who you compete with." },
-  { id: "guardrails", label: "Guardrails", hint: "Timing to plan around, and what must never be advertised." },
+  { id: "facts", label: "Key facts", hint: "The basics every agent needs first." },
+  { id: "overview", label: "Business overview", hint: "What the business is and who it sells to." },
+  { id: "names", label: "Brand and search names", hint: "Every spelling and language people use to search for you." },
+  { id: "markets", label: "Markets and customers", hint: "Where you sell, and who buys." },
+  { id: "economics", label: "Goals and economics", hint: "Vera judges every plan and change against these numbers." },
+  { id: "catalog", label: "Products and catalog", hint: "What you sell and what to push." },
+  { id: "positioning", label: "Positioning", hint: "Why customers choose you." },
+  { id: "offers", label: "Offers, shipping and returns", hint: "What customers are promised." },
+  { id: "competitors", label: "Competitors", hint: "Who you compete with." },
+  { id: "seasonality", label: "Seasonality", hint: "Timing to plan around." },
+  { id: "guardrails", label: "Guardrails", hint: "What must never be advertised or claimed." },
   { id: "brand", label: "Brand guidelines", hint: "Vera follows these when she writes ads and picks images." },
+  { id: "history", label: "Marketing history and learnings", hint: "What was tried and what worked." },
+  { id: "sources", label: "Sources and uploaded files", hint: "Where this document comes from." },
+  { id: "questions", label: "Open questions", hint: "What Vera still needs to know." },
 ];
 
 /**
@@ -243,7 +302,7 @@ export type ProfileChange = { field: ProfileField; before: ProfileValue | null; 
  */
 export type Editor = { source: ProfileSource; status: "confirmed" | "suggested" };
 
-export function planProfileEdits(current: BusinessProfileData, edits: ProfileEdit[], editor: Editor, now = new Date().toISOString()) {
+export function planProfileEdits(current: BusinessProfileData, edits: ProfileEdit[], editor: Editor, now = new Date().toISOString(), opts: { allowHidden?: boolean } = {}) {
   if (!edits.length) throw new ProfileEditError("Nothing to change.");
   if (edits.length > FIELD_KEYS.length) throw new ProfileEditError("Too many edits at once.");
   const values: ProfileValues = { ...current.values };
@@ -252,7 +311,7 @@ export function planProfileEdits(current: BusinessProfileData, edits: ProfileEdi
   const skipped: { field: ProfileField; reason: string }[] = [];
 
   for (const edit of edits) {
-    if (!isProfileField(edit.field)) throw new ProfileEditError(`Unknown field "${String(edit.field)}". Fields: ${FIELD_KEYS.join(", ")}.`);
+    if (!isProfileField(edit.field) || (def(edit.field).hidden && !opts.allowHidden)) throw new ProfileEditError(`Unknown field "${String(edit.field)}". Fields: ${DOC_FIELDS.join(", ")}.`);
     const { field } = edit;
     if (changes.some((c) => c.field === field)) throw new ProfileEditError(`${def(field).label} is edited twice.`);
     const after = normalizeValue(field, edit.value);
@@ -299,10 +358,10 @@ export function missingRequired(values: ProfileValues): string[] {
 
 export function completeness(values: ProfileValues) {
   const sections = SECTIONS.map((s) => {
-    const fields = FIELD_KEYS.filter((f) => def(f).section === s.id);
+    const fields = DOC_FIELDS.filter((f) => def(f).section === s.id);
     return { ...s, filled: fields.filter((f) => values[f] != null).length, total: fields.length };
   });
-  return { sections, filled: sections.reduce((n, s) => n + s.filled, 0), total: FIELD_KEYS.length, missing: missingRequired(values) };
+  return { sections, filled: sections.reduce((n, s) => n + s.filled, 0), total: DOC_FIELDS.length, missing: missingRequired(values) };
 }
 
 /** A value as one line of text, for the agents and the change history. */
@@ -342,7 +401,7 @@ export const PROFILE_UNREADABLE =
  */
 export function profileBrief(profile: BusinessProfileData, currency = ""): string {
   const lines: string[] = [];
-  for (const f of FIELD_KEYS) {
+  for (const f of DOC_FIELDS) {
     const v = profile.values[f];
     if (v == null) continue;
     let text = formatValue(f, v, currency);
@@ -361,7 +420,7 @@ export function profileBrief(profile: BusinessProfileData, currency = ""): strin
 /** Every field with its value, source and status, for the agent's read tool. */
 export function profileForAgent(profile: BusinessProfileData, currency = "") {
   return {
-    fields: FIELD_KEYS.map((f) => ({
+    fields: DOC_FIELDS.map((f) => ({
       field: f,
       label: def(f).label,
       section: def(f).section,

@@ -7,6 +7,7 @@ import {
   type Editor,
   type FieldMeta,
   type ProfileEdit,
+  type OnboardingStage,
   type ProfileField,
   type ProfileMeta,
   type ProfileSource,
@@ -126,4 +127,18 @@ export async function saveSetupStatus(admin: SupabaseClient, workspaceId: string
     .from("business_profiles")
     .upsert({ workspace_id: workspaceId, setup_status: status, setup_at: new Date().toISOString(), updated_by: userId }, { onConflict: "workspace_id" });
   if (error) throw new Error(`business profile: ${error.message}`);
+}
+
+/**
+ * Moves the first-run onboarding on (interview, filling, done). Platform state,
+ * not an edit of the document, so it is not in the change history.
+ */
+export async function setOnboardingStage(admin: SupabaseClient, workspaceId: string, stage: OnboardingStage, userId: string | null) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const current = await loadProfile(admin, workspaceId);
+    const plan = planProfileEdits(current, [{ field: "onboardingStage", value: stage }], { source: "owner", status: "confirmed" }, undefined, { allowHidden: true });
+    if (!plan.changes.length) return;
+    if (await writeProfile(admin, workspaceId, current.revision, plan.next, userId)) return;
+  }
+  throw new ProfileEditError("The profile is being changed by someone else right now. Try again.");
 }

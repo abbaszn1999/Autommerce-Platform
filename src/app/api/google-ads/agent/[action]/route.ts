@@ -13,15 +13,15 @@ import { runReport } from "@/lib/google-ads/live-reports.server";
 import { MerchantPlanError, merchantOverview, type MerchantOp } from "@/lib/google-ads/merchant-live";
 import { applyMerchantChange, loadMerchantSnapshot, previewMerchantChange } from "@/lib/google-ads/merchant.server";
 import { rangeFor, todayIn } from "@/lib/google-ads/metrics";
-import { PROFILE_SOURCES, ProfileEditError, fieldLabel, formatValue, isProfileField, missingRequired, profileForAgent, userStatedValue, type ProfileEdit, type ProfileSource } from "@/lib/business-profile";
-import { editProfile, loadProfile } from "@/lib/business-profile.server";
+import { PROFILE_SOURCES, ProfileEditError, fieldLabel, formatValue, isProfileField, missingRequired, onboardingStageOf, profileForAgent, userStatedValue, type ProfileEdit, type ProfileSource } from "@/lib/business-profile";
+import { editProfile, loadProfile, setOnboardingStage } from "@/lib/business-profile.server";
 import { DocInputError, parsePlanInput, parseReportInput } from "@/lib/google-ads/live-docs";
 import { approvalBinding, type ApprovalTarget } from "@/lib/google-ads/approval-binding";
 import { KeywordInputError, regionNameIndex, rowsForAgent } from "@/lib/google-ads/keyword-planner";
 import { keywordForecast, keywordResearch } from "@/lib/google-ads/keyword-planner.server";
 import { docConnections, getDoc, savePlan, saveReport } from "@/lib/google-ads/live-docs.server";
 import { CompetitorInputError, analysisForAgent, parseTarget } from "@/lib/google-ads/competitor-ads";
-import { CompetitorCreditsError, CompetitorUnavailableError, quoteAnalysis, runAnalysis } from "@/lib/google-ads/competitor-ads.server";
+import { CompetitorCreditsError, CompetitorUnavailableError, listAnalyses, quoteAnalysis, runAnalysis } from "@/lib/google-ads/competitor-ads.server";
 import type { MutateOp } from "@/lib/google-ads/types";
 
 export const runtime = "nodejs";
@@ -39,6 +39,7 @@ const ACTIONS = new Set([
   "merchant_apply",
   "profile",
   "profile_update",
+  "onboarding",
   "doc_plan",
   "doc_report",
   "doc_read",
@@ -86,6 +87,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (!chat) return NextResponse.json({ error: "not_found" }, { status: 404 });
     if (action.startsWith("merchant")) return await merchantAction(action, body, { admin, workspaceId, chatId });
     if (action === "profile" || action === "profile_update") return await profileAction(action, body, { admin, workspaceId, chatId }, caller.userId);
+    if (action === "onboarding") return await onboardingAction(body, { admin, workspaceId, chatId }, caller.userId);
     if (action.startsWith("doc_")) return await docAction(action, body, { admin, workspaceId, chatId }, caller.userId);
     if (action === "competitor_ads") return await competitorAction(body, { admin, workspaceId, chatId }, caller.userId);
     const row = await loadConnection(admin, workspaceId, "ads");
@@ -248,6 +250,32 @@ async function profileAction(action: string, body: Record<string, unknown>, { ad
     if (err instanceof ProfileEditError) return NextResponse.json({ ok: false, error: err.message });
     throw err;
   }
+}
+
+/**
+ * First-run onboarding: Vera moves it from the interview to the final fill, then
+ * unlocks the board. The page stays locked until the business profile and the
+ * competitor ads are both filled in, so "done" is refused until they are.
+ */
+async function onboardingAction(body: Record<string, unknown>, { admin, workspaceId }: Ctx, userId: string) {
+  const stage = onboardingStageOf((await loadProfile(admin, workspaceId)).values);
+  if (!stage || stage === "done") return NextResponse.json({ ok: true, stage: stage ?? "done", note: "No onboarding is in progress; nothing to change." });
+  if (body.stage === "filling") {
+    if (stage === "filling") return NextResponse.json({ ok: true, stage });
+    await setOnboardingStage(admin, workspaceId, "filling", userId);
+    return NextResponse.json({ ok: true, stage: "filling" });
+  }
+  if (body.stage !== "done") return NextResponse.json({ ok: false, error: 'stage must be "filling" or "done".' });
+  if (stage !== "filling") return NextResponse.json({ ok: false, error: 'Set the stage to "filling" first, do the final fill, then set "done".' });
+  const { values } = await loadProfile(admin, workspaceId);
+  const missing: string[] = [];
+  if (values.overview == null) missing.push("the Business overview (field overview)");
+  if (values.competitors == null) missing.push("the competitors (field competitors)");
+  if (!(await listAnalyses(admin, workspaceId)).length && body.competitorsUnavailable !== true)
+    missing.push("the competitor ads lookups (run competitor_ads for each competitor; if the data source is unavailable, pass competitorsUnavailable: true)");
+  if (missing.length) return NextResponse.json({ ok: false, error: `The board cannot be unlocked yet. Still missing: ${missing.join("; ")}.` });
+  await setOnboardingStage(admin, workspaceId, "done", userId);
+  return NextResponse.json({ ok: true, stage: "done" });
 }
 
 /**
