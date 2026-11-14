@@ -61,7 +61,7 @@ describe("presetRowToPreset", () => {
       created_at: "2026-09-30T00:00:00Z",
       updated_at: "2026-09-30T01:00:00Z",
     });
-    expect(preset).toMatchObject({ id: "p1", name: "SEO", kind: "plp", updatedAt: "2026-09-30T01:00:00Z" });
+    expect(preset).toMatchObject({ id: "p1", name: "SEO", kind: "product", updatedAt: "2026-09-30T01:00:00Z" });
     expect(preset.settings.sourceColumns).toEqual(["Name"]);
     expect(preset.settings.enrichmentSettings.outputLanguage).toBe("English");
   });

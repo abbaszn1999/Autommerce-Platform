@@ -6,7 +6,6 @@
  * Variant rows stay in storage for export. Grouping only changes which rows
  * are visible / enrichable, then copies product-level results onto siblings.
  */
-import type { SessionKind } from "@/types";
 
 export type GroupableRow = {
   id: string;
@@ -151,9 +150,7 @@ export function resolveProductGroupColumn(params: {
   saved?: string | null;
   columns: string[];
   rows: GroupableRow[];
-  kind?: SessionKind;
 }): string | null {
-  if (params.kind === "plp") return null;
   if (params.saved === null) return null;
   if (typeof params.saved === "string" && params.saved.trim()) {
     return resolveColumnName(params.columns, params.saved);

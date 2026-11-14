@@ -354,16 +354,14 @@ export function Sidebar() {
     abortControllerRef.current = new AbortController();
     return enrichEpochRef.current;
   }, []);
-  const isPlp = sessionKind === "plp";
 
   // Kept in the store (and saved with the sheet) so the sheet reopens on the tool it was left on.
   const sidebarMode = useSheetStore((s) => s.sidebarMode);
   const setSidebarMode = useSheetStore((s) => s.setSidebarMode);
 
-  // Categories, the finders and Sheet Tools (Math, Generate, Clean, Copy & Fill
-  // act on matched product rows) are product-only; PLP and viewers keep the
-  // single-panel layout, which is always Enrichment.
-  const hasModes = !isPlp && !isViewer;
+  // Categories, the finders and Sheet Tools (Math, Generate, Clean, Copy & Fill)
+  // are for editors; viewers keep the single-panel layout, which is always Enrichment.
+  const hasModes = !isViewer;
   const mode: CatalogSidebarMode = hasModes ? sidebarMode : "enrich";
   const showFunctions = mode === "functions";
   const runningMode = isEnriching
@@ -1337,7 +1335,7 @@ export function Sidebar() {
               <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <span className="text-[11px] font-semibold text-muted-foreground">View Only</span>
             </div>
-          ) : isPlp || mode === "enrich" ? (
+          ) : mode === "enrich" ? (
             <div className="flex flex-1 items-center gap-1.5 px-2 py-1.5">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
               <span className="text-[11px] font-semibold">AI Enrichment</span>
@@ -1506,7 +1504,7 @@ export function Sidebar() {
                   // control: its custom instruction.
                   const hasSettings = true;
                   // Source URLs (found with Google AI Mode) stands out from the writing columns.
-                  const isSourceUrls = col.id === SOURCE_URLS_COLUMN_ID && sessionKind !== "plp";
+                  const isSourceUrls = col.id === SOURCE_URLS_COLUMN_ID;
                   const isDragOver = dragOverColumnId === col.id;
                   const canReorder = !isEnriching && !isViewer;
 
@@ -2542,7 +2540,7 @@ export function Sidebar() {
                   void confirmSavePreset();
                 }
               }}
-              placeholder="e.g. PLP SEO defaults"
+              placeholder="e.g. Toys store defaults"
               disabled={savingPreset}
             />
           </div>

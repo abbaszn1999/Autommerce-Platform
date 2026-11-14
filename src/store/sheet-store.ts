@@ -794,10 +794,7 @@ export const useSheetStore = create<SheetStore>((set, get) => ({
         columnVisibility,
         columnLayout: columnLayout ?? { order: [], hidden: [] },
         // Reopen on the tool the user left (product sheets only have the modes).
-        sidebarMode:
-          (sessionKind ?? "product") === "plp"
-            ? "enrich"
-            : reopenSidebarMode(view?.sidebarMode, normalizeEnrichmentSettings(enrichmentSettings)),
+        sidebarMode: reopenSidebarMode(view?.sidebarMode, normalizeEnrichmentSettings(enrichmentSettings)),
         selectedRowIds: new Set<string>(),
         isEnriching: false,
         isPaused: false,

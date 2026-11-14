@@ -255,7 +255,6 @@ describe("Categories mode agent: one call, GPT-6.1 Sol medium, no web search", (
   it("is recognised only for a run whose one column is categories", () => {
     expect(isCategoriesModeRun("product", ["categories"])).toBe(true);
     expect(isCategoriesModeRun("product", ["categories", "enhancedTitle"])).toBe(false);
-    expect(isCategoriesModeRun("plp", ["categories"])).toBe(false);
   });
 
   it("sends gpt-6.1-sol with medium reasoning and no tools at all, whatever tier was saved", async () => {

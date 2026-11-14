@@ -15,23 +15,8 @@ import {
   PRODUCT_IDENTITY_RULES,
   PRODUCT_ROLE,
 } from "./prompts/product";
-import {
-  PLP_CONSTRAINT_RULES,
-  PLP_DATA_HEADING,
-  PLP_ROLE,
-  PLP_ROLE_RULES,
-  PLP_SEARCH_RULES,
-} from "./prompts/plp";
 
-function kindPreamble(kind: SessionKind): { role: string; rules: string[]; dataHeading: string } {
-  if (kind === "plp") {
-    return {
-      role: PLP_ROLE,
-      // Web search is always on for Enrich runs, so the search rules always apply.
-      rules: [...PLP_ROLE_RULES, "", ...PLP_CONSTRAINT_RULES, "", ...PLP_SEARCH_RULES],
-      dataHeading: PLP_DATA_HEADING,
-    };
-  }
+function kindPreamble(): { role: string; rules: string[]; dataHeading: string } {
   return {
     role: PRODUCT_ROLE,
     rules: PRODUCT_IDENTITY_RULES,
@@ -115,7 +100,7 @@ export function buildEnrichPrompt(params: {
     if (appendix) appendices.push(appendix);
   }
 
-  const preamble = kindPreamble(kind);
+  const preamble = kindPreamble();
 
   const globalInstruction = params.settings?.globalInstruction?.trim();
 

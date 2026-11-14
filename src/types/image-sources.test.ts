@@ -18,9 +18,8 @@ describe("Image sources column", () => {
     expect(column.label).toBe("Image sources");
   });
 
-  it("is a product-mode column for product sheets only", () => {
+  it("is a product-mode column", () => {
     expect(isProductModeColumn(IMAGE_SOURCES_COLUMN_ID, "product")).toBe(true);
-    expect(isProductModeColumn(IMAGE_SOURCES_COLUMN_ID, "plp")).toBe(false);
   });
 
   it("is added to an older session after Image URLs, once", () => {
@@ -32,9 +31,8 @@ describe("Image sources column", () => {
     expect(ensureImageSourcesColumn(upgraded, "product")).toBe(upgraded);
   });
 
-  it("leaves PLP sessions and sheets without Image URLs alone", () => {
+  it("leaves sheets without Image URLs alone", () => {
     const old = DEFAULT_ENRICHMENT_COLUMNS.filter((col) => col.id !== IMAGE_SOURCES_COLUMN_ID);
-    expect(ensureImageSourcesColumn(old, "plp")).toBe(old);
     const withoutImages = old.filter((col) => col.id !== "imageUrls");
     expect(ensureImageSourcesColumn(withoutImages, "product")).toBe(withoutImages);
   });
@@ -71,9 +69,8 @@ describe("isImageFinderRun", () => {
     expect(isImageFinderRun("product", ["sourceUrls", "enhancedTitle"])).toBe(false);
   });
 
-  it("is false when anything else is enabled, for PLP, and for sources alone", () => {
+  it("is false when anything else is enabled, and for sources alone", () => {
     expect(isImageFinderRun("product", ["imageUrls", "enhancedTitle"])).toBe(false);
-    expect(isImageFinderRun("plp", ["imageUrls"])).toBe(false);
     expect(isImageFinderRun("product", [IMAGE_SOURCES_COLUMN_ID])).toBe(false);
   });
 });

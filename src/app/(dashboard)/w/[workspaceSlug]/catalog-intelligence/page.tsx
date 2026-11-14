@@ -11,7 +11,6 @@ import {
   Database,
   FileSpreadsheet,
   FolderOpen,
-  FolderTree,
   Loader2,
   Plus,
   Sparkles,
@@ -39,7 +38,6 @@ import {
   catalogSessionIsUnfinished,
   catalogSessionProgress,
 } from "@/lib/catalog/session-progress";
-import type { SessionKind } from "@/types";
 
 const STATUS_LABEL: Record<string, string> = {
   matching: "Matching",
@@ -49,16 +47,6 @@ const STATUS_LABEL: Record<string, string> = {
   completed: "Ready",
   cancelled: "Cancelled",
 };
-
-function sessionKindOf(session: ImportSession): SessionKind {
-  return (session.kind as SessionKind) ?? "product";
-}
-
-const KIND_FILTERS: { value: "all" | SessionKind; label: string }[] = [
-  { value: "all", label: "All types" },
-  { value: "product", label: "Products" },
-  { value: "plp", label: "PLP pages" },
-];
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -100,7 +88,6 @@ export default function ImportPage() {
   const [projectSort, setProjectSort] =
     useState<ProjectSortOption>("updated_desc");
   const [projectPage, setProjectPage] = useState(1);
-  const [kindFilter, setKindFilter] = useState<"all" | SessionKind>("all");
   const [deleteTarget, setDeleteTarget] = useState<ImportSession | null>(null);
   const [deletingProject, setDeletingProject] = useState(false);
 
@@ -138,9 +125,6 @@ export default function ImportPage() {
         catalogSessionIsActivelyProcessing(s, activeJobSessionIds)
       ).length,
       products: sessions.reduce((sum, s) => sum + (s.total_rows || 0), 0),
-      // A workspace mixing both kinds cannot call this total "Products".
-      hasPlp: sessions.some((s) => sessionKindOf(s) === "plp"),
-      hasProduct: sessions.some((s) => sessionKindOf(s) === "product"),
     }),
     [activeJobSessionIds, sessions]
   );
@@ -163,13 +147,6 @@ export default function ImportPage() {
     return () => window.clearInterval(timer);
   }, [projectStats.processing, workspace]);
 
-  const rowsMetricLabel =
-    projectStats.hasPlp && projectStats.hasProduct
-      ? "Rows"
-      : projectStats.hasPlp
-        ? "Pages"
-        : "Products";
-
   const filteredProjects = useMemo(() => {
     const query = projectSearch.trim().toLowerCase();
     const filtered = sessions.filter((session) => {
@@ -178,10 +155,6 @@ export default function ImportPage() {
         session.name.toLowerCase().includes(query) ||
         (session.notes || "").toLowerCase().includes(query);
       if (!matchesSearch) return false;
-
-      if (kindFilter !== "all" && sessionKindOf(session) !== kindFilter) {
-        return false;
-      }
 
       if (projectStatusFilter === "ready") {
         if (session.status !== "completed") return false;
@@ -200,7 +173,6 @@ export default function ImportPage() {
     });
     return sortProjectsByOption(filtered, projectSort);
   }, [
-    kindFilter,
     projectDateFilter,
     projectSearch,
     projectSort,
@@ -219,7 +191,7 @@ export default function ImportPage() {
 
   useEffect(() => {
     setProjectPage(1);
-  }, [projectSearch, projectStatusFilter, projectDateFilter, projectSort, kindFilter]);
+  }, [projectSearch, projectStatusFilter, projectDateFilter, projectSort]);
 
   useEffect(() => {
     if (projectPage !== safeProjectPage) setProjectPage(safeProjectPage);
@@ -271,7 +243,7 @@ export default function ImportPage() {
                 </span>
               </h1>
               <p className="mt-2 max-w-xl text-xs leading-relaxed text-muted-foreground">
-                Upload, match, review, and enrich product data through one guided workflow.
+                Upload a product sheet and enrich it, parent products or variable products.
                 Every project preserves its progress so your team can continue at any time.
               </p>
             </div>
@@ -294,7 +266,7 @@ export default function ImportPage() {
               { label: "Projects", value: projectStats.total, icon: FolderOpen },
               { label: "Ready", value: projectStats.ready, icon: Check },
               { label: "Processing", value: projectStats.processing, icon: Loader2 },
-              { label: rowsMetricLabel, value: projectStats.products.toLocaleString(), icon: Database },
+              { label: "Products", value: projectStats.products.toLocaleString(), icon: Database },
             ].map((metric, index) => (
               <motion.div
                 key={metric.label}
@@ -348,23 +320,6 @@ export default function ImportPage() {
             onSortChange={setProjectSort}
           />
 
-          <div className="flex items-center gap-1.5 border-b bg-muted/10 px-4 py-2">
-            {KIND_FILTERS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setKindFilter(option.value)}
-                className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors ${
-                  kindFilter === option.value
-                    ? "bg-[#400095] text-white dark:bg-[#F76D01]"
-                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-
           {loading ? (
             <PageLoader className="h-64" size="sm" />
           ) : sessions.length === 0 ? (
@@ -398,8 +353,6 @@ export default function ImportPage() {
                     STATUS_LABEL[session.status] ?? session.status;
                   const isReady = session.status === "completed";
                   const progress = catalogSessionProgress(session);
-                  const kind = sessionKindOf(session);
-                  const isPlp = kind === "plp";
 
                   return (
                     <motion.article
@@ -423,19 +376,12 @@ export default function ImportPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#F76D01]/10 to-[#400095]/10 text-[#6B358D] transition-transform group-hover:scale-105 dark:text-[#C8A8D2]">
-                            {isPlp ? (
-                              <FolderTree className="h-4 w-4" />
-                            ) : (
-                              <FileSpreadsheet className="h-4 w-4" />
-                            )}
+                            <FileSpreadsheet className="h-4 w-4" />
                           </div>
                           <div className="min-w-0">
                             <h3 className="truncate text-sm font-black transition-colors group-hover:text-[#400095] dark:group-hover:text-[#F76D01]">
                               {session.name}
                             </h3>
-                            <span className="mt-0.5 inline-block rounded-full bg-muted/60 px-1.5 py-px text-[8px] font-bold uppercase tracking-wider text-muted-foreground">
-                              {isPlp ? "PLP pages" : "Products"}
-                            </span>
                           </div>
                         </div>
                         <Badge
@@ -452,20 +398,14 @@ export default function ImportPage() {
                         </Badge>
                       </div>
 
-                      <div className="mt-5 grid grid-cols-3 gap-2 text-center">
+                      <div className="mt-5 grid grid-cols-2 gap-2 text-center">
                         <div className="rounded-lg bg-muted/35 px-2 py-2">
                           <p className="text-xs font-semibold">
                             {session.total_rows || 0}
                           </p>
                           <p className="text-[9px] text-muted-foreground">
-                            {isPlp ? "Pages" : "Products"}
+                            Products
                           </p>
-                        </div>
-                        <div className="rounded-lg bg-muted/35 px-2 py-2">
-                          <p className="text-xs font-semibold text-blue-600">
-                            {session.new_count || 0}
-                          </p>
-                          <p className="text-[9px] text-muted-foreground">New</p>
                         </div>
                         <div className="rounded-lg bg-muted/35 px-2 py-2">
                           <p className="text-xs font-semibold text-emerald-600">

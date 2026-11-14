@@ -510,12 +510,11 @@ describe("Source URLs routing in enrichRow", () => {
     vi.restoreAllMocks();
   });
 
-  it("only routes the `sourceUrls` id of a product sheet to Google, never Image sources or PLP", () => {
+  it("only routes the `sourceUrls` id of a product sheet to Google, never Image sources", () => {
     expect(usesGoogleSourceUrls("product", ["sourceUrls"])).toBe(true);
     expect(usesGoogleSourceUrls("product", ["titleTag", "sourceUrls"])).toBe(true);
     expect(usesGoogleSourceUrls("product", ["imageUrls", "imageSourceUrls"])).toBe(false);
     expect(usesGoogleSourceUrls("product", ["titleTag"])).toBe(false);
-    expect(usesGoogleSourceUrls("plp", ["sourceUrls"])).toBe(false);
   });
 
   it("makes no OpenAI call when Source URLs is the only column", async () => {
@@ -654,29 +653,6 @@ describe("Source URLs routing in enrichRow", () => {
     expect(error).toBeInstanceOf(Error);
     // One OpenAI attempt plus the three SearchApi searches.
     expect(billedCostsOf(error)).toHaveLength(4);
-  });
-
-  it("leaves PLP sheets on the OpenAI call", async () => {
-    const fetchMock = stubBoth({
-      openAi: {
-        id: "r1",
-        status: "completed",
-        usage,
-        output: [
-          { type: "web_search_call", action: { type: "search", query: "x" } },
-          { type: "message", content: [{ type: "output_text", text: JSON.stringify({ sourceUrls: [], notes: "" }) }] },
-        ],
-      },
-    });
-    const plpSourceUrls = getDefaultEnrichmentColumns("plp").find((c) => c.id === "sourceUrls")!;
-    await enrichRow({
-      ...baseParams,
-      kind: "plp",
-      enabledColumns: ["sourceUrls"],
-      enrichmentColumns: [{ ...plpSourceUrls, enabled: true }],
-    });
-    expect(callsTo(fetchMock, SEARCHAPI_HOST)).toHaveLength(0);
-    expect(callsTo(fetchMock, OPENAI_RESPONSES_URL)).toHaveLength(1);
   });
 });
 

@@ -80,7 +80,6 @@ export async function GET(request: NextRequest, context: Ctx) {
         saved: project.productGroupColumn,
         columns: project.columns,
         rows: productRows,
-        kind,
       });
       return NextResponse.json({
         resourceType: "catalog",

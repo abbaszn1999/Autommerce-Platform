@@ -32,11 +32,18 @@ export interface ColumnMapping {
 }
 
 /**
- * What a Catalog Intelligence session enriches:
- * - "product": supplier catalog rows matched against master products
- * - "plp": category / collection listing pages
+ * What a Catalog Intelligence session enriches. Only product sheets exist now;
+ * how their rows are treated (one row per product, or variation rows under a
+ * parent) is `ProductMode`.
  */
-export type SessionKind = "product" | "plp";
+export type SessionKind = "product";
+
+/**
+ * - "parent": every row is its own product.
+ * - "variable": rows sharing a parent key (Handle, Parent SKU...) are one product;
+ *   the sheet shows the parent row and its variation rows expand beneath it.
+ */
+export type ProductMode = "parent" | "variable";
 
 export const DEFAULT_SESSION_KIND: SessionKind = "product";
 
@@ -195,146 +202,11 @@ export const DEFAULT_ENRICHMENT_COLUMNS: EnrichmentColumn[] = [
   },
 ];
 
-/**
- * PLP (category page) output columns. The first eight are on by default; the
- * rest are opt-in. There is deliberately no imageUrls column here — web image
- * search returns product packshots, which are wrong for a listing page banner.
- */
-export const PLP_ENRICHMENT_COLUMNS: EnrichmentColumn[] = [
-  {
-    id: "seoTitle",
-    label: "SEO Title",
-    description:
-      "Write the meta title (title tag) for this category listing page.",
-    type: "text",
-    enabled: true,
-    maxChars: 60,
-    writingTone: "professional",
-    contentLength: "short",
-  },
-  {
-    id: "metaDescription",
-    label: "Meta Description",
-    description:
-      "Write the meta description for this category listing page, ending with a soft call to action.",
-    type: "text",
-    enabled: true,
-    maxChars: 160,
-    writingTone: "persuasive",
-  },
-  {
-    id: "h1",
-    label: "H1 Heading",
-    description:
-      "Write the on-page H1 heading. It should read naturally for shoppers and may differ from the meta title.",
-    type: "text",
-    enabled: true,
-    maxChars: 70,
-    writingTone: "professional",
-  },
-  {
-    id: "introCopy",
-    label: "Intro Copy",
-    description:
-      "Write the short introduction shown above the product grid (roughly 40-80 words).",
-    type: "text",
-    enabled: true,
-    maxChars: 600,
-    writingTone: "persuasive",
-    contentLength: "short",
-  },
-  {
-    id: "seoCopy",
-    label: "SEO Copy",
-    description:
-      "Write the longer supporting copy shown below the product grid (roughly 300-600 words), organised into short paragraphs.",
-    type: "text",
-    enabled: true,
-    writingTone: "professional",
-    contentLength: "long",
-  },
-  {
-    id: "targetKeyword",
-    label: "Target Keyword",
-    description:
-      "Identify the single primary search keyword this category page should rank for.",
-    type: "text",
-    enabled: true,
-    maxChars: 80,
-  },
-  {
-    id: "secondaryKeywords",
-    label: "Secondary Keywords",
-    description:
-      "List supporting keywords and close variants this page should also cover.",
-    type: "keywords",
-    enabled: true,
-    itemCount: 5,
-  },
-  {
-    id: "faq",
-    label: "FAQ",
-    description:
-      "Write frequently asked questions with answers for this category, suitable for FAQPage structured data.",
-    type: "faq",
-    enabled: true,
-    itemCount: 4,
-  },
-  {
-    id: "parentCategory",
-    label: "Parent Category",
-    description:
-      "Pick the parent category this page belongs under, from the store category list.",
-    type: "categories",
-    enabled: false,
-    maxCategories: 1,
-  },
-  {
-    id: "internalLinks",
-    label: "Internal Links",
-    description:
-      "Suggest related sibling or child categories to link to from this page.",
-    type: "internalLinks",
-    enabled: false,
-    itemCount: 5,
-  },
-  {
-    id: "slug",
-    label: "URL Slug",
-    description:
-      "Write the URL slug for this category page: lowercase words separated by hyphens, no spaces or punctuation.",
-    type: "text",
-    enabled: false,
-    maxChars: 75,
-  },
-  {
-    id: "breadcrumbLabel",
-    label: "Breadcrumb Label",
-    description:
-      "Write a very short label for this category in breadcrumb navigation.",
-    type: "text",
-    enabled: false,
-    maxChars: 30,
-  },
-  {
-    id: "sourceUrls",
-    label: "Source URLs",
-    description: "Web sources used to research this category page.",
-    type: "sourceUrls",
-    enabled: false,
-    sourceCount: 3,
-    customInstruction:
-      "Find competitor category pages and authoritative references",
-  },
-];
-
 /** Default output columns for a session, by kind. */
 export function getDefaultEnrichmentColumns(
   kind: SessionKind | null | undefined
 ): EnrichmentColumn[] {
-  const source =
-    kind === "plp" ? PLP_ENRICHMENT_COLUMNS : DEFAULT_ENRICHMENT_COLUMNS;
-  return source.map((col) => ({ ...col }));
+  return DEFAULT_ENRICHMENT_COLUMNS.map((col) => ({ ...col }));
 }
 
 /**
@@ -368,13 +240,12 @@ export function isProductModeColumn(
   kind: SessionKind | null | undefined
 ): boolean {
   return (
-    kind !== "plp" &&
-    (id === PRODUCT_MODE_COLUMN_IDS.categories ||
-      id === PRODUCT_MODE_COLUMN_IDS.images ||
-      id === IMAGE_SOURCES_COLUMN_ID ||
-      id === LENS_FOUNDS_COLUMN_ID ||
-      // Source URLs runs from the "Source & Image Finder" tab, not the Enrichment list.
-      id === SOURCE_URLS_COLUMN_ID)
+    id === PRODUCT_MODE_COLUMN_IDS.categories ||
+    id === PRODUCT_MODE_COLUMN_IDS.images ||
+    id === IMAGE_SOURCES_COLUMN_ID ||
+    id === LENS_FOUNDS_COLUMN_ID ||
+    // Source URLs runs from the "Source & Image Finder" tab, not the Enrichment list.
+    id === SOURCE_URLS_COLUMN_ID
   );
 }
 
@@ -387,14 +258,14 @@ export const LENS_FOUNDS_COLUMN_ID = "lensFounds";
 
 /**
  * Sessions saved before the Lens finder existed lack the column. Adds it,
- * switched OFF, right after Image sources (or at the end); leaves PLP sessions
- * and sheets that already have it alone.
+ * switched OFF, right after Image sources (or at the end); leaves sheets that
+ * already have it alone.
  */
 export function ensureLensFoundsColumn(
   columns: EnrichmentColumn[],
   kind: SessionKind | null | undefined
 ): EnrichmentColumn[] {
-  if (kind === "plp" || columns.some((col) => col.id === LENS_FOUNDS_COLUMN_ID)) return columns;
+  if (columns.some((col) => col.id === LENS_FOUNDS_COLUMN_ID)) return columns;
   const template = DEFAULT_ENRICHMENT_COLUMNS.find((col) => col.id === LENS_FOUNDS_COLUMN_ID);
   if (!template) return columns;
   const after = columns.findIndex((col) => col.id === IMAGE_SOURCES_COLUMN_ID);
@@ -406,13 +277,13 @@ export function ensureLensFoundsColumn(
 /**
  * Sessions saved before the Image sources column existed (and presets that
  * predate it) lack it. Adds it right after Image URLs so Image Finder always
- * has a place to write; leaves PLP sessions and columns already present alone.
+ * has a place to write; leaves columns already present alone.
  */
 export function ensureImageSourcesColumn(
   columns: EnrichmentColumn[],
   kind: SessionKind | null | undefined
 ): EnrichmentColumn[] {
-  if (kind === "plp" || columns.some((col) => col.id === IMAGE_SOURCES_COLUMN_ID)) return columns;
+  if (columns.some((col) => col.id === IMAGE_SOURCES_COLUMN_ID)) return columns;
   const template = DEFAULT_ENRICHMENT_COLUMNS.find((col) => col.id === IMAGE_SOURCES_COLUMN_ID);
   if (!template) return columns;
   const at = columns.findIndex((col) => col.id === PRODUCT_MODE_COLUMN_IDS.images);
@@ -430,14 +301,14 @@ export const SOURCE_URLS_COLUMN_ID = "sourceUrls";
 /**
  * Sessions saved before the Source URLs column existed (and presets that
  * predate it) lack the column. Adds it, switched OFF so nothing changes
- * for that session, next to the other content columns; leaves PLP sessions and
- * sheets that already have it alone.
+ * for that session, next to the other content columns; leaves sheets that already
+ * have it alone.
  */
 export function ensureSourceUrlsColumn(
   columns: EnrichmentColumn[],
   kind: SessionKind | null | undefined
 ): EnrichmentColumn[] {
-  if (kind === "plp" || columns.some((col) => col.id === SOURCE_URLS_COLUMN_ID)) return columns;
+  if (columns.some((col) => col.id === SOURCE_URLS_COLUMN_ID)) return columns;
   const template = DEFAULT_ENRICHMENT_COLUMNS.find((col) => col.id === SOURCE_URLS_COLUMN_ID);
   if (!template) return columns;
   const after = columns.findIndex((col) => col.id === "faq");

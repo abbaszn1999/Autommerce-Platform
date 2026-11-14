@@ -146,12 +146,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Project data not found" }, { status: 404, headers });
   }
 
-  const kind: SessionKind = body.kind === "plp" ? "plp" : "product";
+  const kind: SessionKind = "product";
   const groupColumn = resolveProductGroupColumn({
     saved: project.productGroupColumn,
     columns: project.columns,
     rows: project.rows,
-    kind,
   });
   const requested = body.rowIds?.length
     ? [...new Set(body.rowIds)]

@@ -12,7 +12,7 @@ import {
   Zap,
   Users,
   Package,
-  LayoutList,
+  Layers,
   CheckCircle2,
   AlertTriangle,
 } from "lucide-react";
@@ -33,55 +33,30 @@ import {
   assertRowCount,
   assertSpreadsheetFile,
 } from "@/lib/upload-limits";
-import {
-  CMS_CATEGORY_COLUMNS,
-  getDefaultEnrichmentColumns,
-  type SessionKind,
-} from "@/types";
+import { buildProductGroupIndex, suggestProductGroupColumn } from "@/lib/catalog/product-groups";
+import { getDefaultEnrichmentColumns, type ProductMode, type SessionKind } from "@/types";
 
-const KIND_OPTIONS: Array<{
-  value: SessionKind;
+const MODE_OPTIONS: Array<{
+  value: ProductMode;
   label: string;
   description: string;
   icon: typeof Package;
 }> = [
   {
-    value: "product",
-    label: "Product enrichment",
+    value: "parent",
+    label: "Parent products",
     description:
-      "Upload a supplier catalog and enrich product titles, descriptions, categories and images.",
+      "Every row is its own product. Upload a supplier catalog and enrich titles, descriptions, categories and images.",
     icon: Package,
   },
   {
-    value: "plp",
-    label: "PLP enrichment",
+    value: "variable",
+    label: "Variable products",
     description:
-      "Upload your categories and generate SEO content for each category listing page.",
-    icon: LayoutList,
+      "Rows that share a parent key (Handle, Parent SKU...) are variations of one product. Enrich the parent; expand it to see its variations.",
+    icon: Layers,
   },
 ];
-
-/** Which uploaded columns look like the category name / parent / description. */
-function detectCategoryColumns(columns: string[], cmsType: string | undefined) {
-  const cms =
-    CMS_CATEGORY_COLUMNS[(cmsType || "").toLowerCase()] ||
-    CMS_CATEGORY_COLUMNS.custom;
-  const lower = new Map(columns.map((c) => [c.trim().toLowerCase(), c]));
-  const find = (candidates: string[]) => {
-    for (const candidate of candidates) {
-      const hit = lower.get(candidate.toLowerCase());
-      if (hit) return hit;
-    }
-    return null;
-  };
-  return {
-    name: find(cms.nameColumns),
-    parent: find(cms.parentColumns),
-    description: find(cms.descColumns),
-    id: find(cms.idColumns),
-    hint: cms.hint,
-  };
-}
 
 export default function NewImportPage() {
   const router = useRouter();
@@ -89,7 +64,9 @@ export default function NewImportPage() {
   const slug = params.workspaceSlug as string;
   const { workspace } = useWorkspaceContext();
 
-  const [kind, setKind] = useState<SessionKind>("product");
+  const kind: SessionKind = "product";
+  const [productMode, setProductMode] = useState<ProductMode>("parent");
+  const [parentKeyColumn, setParentKeyColumn] = useState("");
   const [sessionName, setSessionName] = useState("");
   const [supplier, setSupplier] = useState("");
   const [newSupplierName, setNewSupplierName] = useState("");
@@ -106,8 +83,6 @@ export default function NewImportPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isPlp = kind === "plp";
-
   // Load suppliers from Storage
   const loadSuppliers = useCallback(async () => {
     if (!workspace || suppliersLoaded) return;
@@ -120,13 +95,20 @@ export default function NewImportPage() {
     loadSuppliers();
   }, [loadSuppliers]);
 
-  const detected = useMemo(
-    () =>
-      isPlp && fileData
-        ? detectCategoryColumns(fileData.columns, workspace?.cms_type)
-        : null,
-    [isPlp, fileData, workspace?.cms_type]
-  );
+  // Variable mode: how the uploaded rows group under their parent product.
+  const groupPreview = useMemo(() => {
+    if (productMode !== "variable" || !parentKeyColumn || fullRows.length === 0) return null;
+    const index = buildProductGroupIndex(
+      fullRows.map((row, i) => ({
+        id: String(i),
+        rowIndex: i,
+        originalData: row as Record<string, string>,
+      })),
+      parentKeyColumn
+    );
+    return { products: index.primaryIds.size, rows: fullRows.length };
+  }, [productMode, parentKeyColumn, fullRows]);
+  const variableKeyMissing = productMode === "variable" && !parentKeyColumn;
 
   const handleFileSelect = async (selectedFile: File) => {
     try {
@@ -174,6 +156,15 @@ export default function NewImportPage() {
           rows: allRows.slice(0, 3),
           totalRows: parsed.rows.length,
         });
+        // Variable mode starts from the parent key the sheet already has (Handle, Parent SKU...).
+        setParentKeyColumn(
+          suggestProductGroupColumn(
+            parsed.columns,
+            allRows.map((row, i) => ({ id: String(i), originalData: row as Record<string, string> }))
+          ) ??
+            parsed.columns.find((col) => /^(handle|parent[ _]?sku|product[ _]?id)$/i.test(col.trim())) ??
+            ''
+        );
       }
     } catch (err) {
       console.error("Failed to parse file:", err);
@@ -197,8 +188,8 @@ export default function NewImportPage() {
       // 1. Upload original file to storage (backup)
       await uploadWorkspaceFile(workspace.id, "supplier", file, file.name);
 
-      // 2. Register a newly typed supplier (product mode only)
-      if (!isPlp && supplier === "__new__" && newSupplierName.trim()) {
+      // 2. Register a newly typed supplier
+      if (supplier === "__new__" && newSupplierName.trim()) {
         const existing = await loadSuppliersJson(workspace.id);
         const newSupplier: SupplierJson = {
           id: crypto.randomUUID(),
@@ -252,6 +243,7 @@ export default function NewImportPage() {
       // always starts from the defaults for its kind.
       const projectJson: ProjectJson = {
         kind,
+        productGroupColumn: productMode === "variable" ? parentKeyColumn : null,
         columns: projectColumns,
         rows: projectRows,
         sourceColumns: [...projectColumns],
@@ -330,15 +322,15 @@ export default function NewImportPage() {
               <div className="space-y-2">
                 <Label className="text-xs font-medium">What do you want to enrich?</Label>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {KIND_OPTIONS.map((option) => {
+                  {MODE_OPTIONS.map((option) => {
                     const Icon = option.icon;
-                    const active = kind === option.value;
+                    const active = productMode === option.value;
                     return (
                       <button
                         key={option.value}
                         type="button"
-                        data-agent-id={`ci.new.kind.${option.value}`}
-                        onClick={() => setKind(option.value)}
+                        data-agent-id={`ci.new.mode.${option.value}`}
+                        onClick={() => setProductMode(option.value)}
                         className={`flex flex-col gap-1.5 rounded-xl border p-3 text-left transition-colors ${
                           active
                             ? "border-[#400095]/40 bg-[#400095]/5 dark:border-[#F76D01]/40 dark:bg-[#F76D01]/5"
@@ -376,8 +368,7 @@ export default function NewImportPage() {
                 />
               </div>
 
-              {/* Supplier — product sessions only */}
-              {!isPlp && (
+              {/* Supplier */}
               <div className="space-y-2">
                 <Label className="text-xs font-medium">Supplier</Label>
                 <select
@@ -404,7 +395,6 @@ export default function NewImportPage() {
                   />
                 )}
               </div>
-              )}
 
               {/* Notes */}
               <div className="space-y-2">
@@ -424,7 +414,7 @@ export default function NewImportPage() {
               {/* File Upload */}
               <div className="space-y-2">
                 <Label className="text-xs font-medium">
-                  {isPlp ? "Categories File" : "Supplier File"}
+                  Supplier File
                 </Label>
                 <div
                   onDragOver={(e) => {
@@ -513,51 +503,45 @@ export default function NewImportPage() {
                     </div>
                   )}
 
-                  {detected && (
+                  {productMode === "variable" && (
                     <div
-                      className={`space-y-1.5 rounded-xl border p-3 ${
-                        detected.name
-                          ? "border-green-500/30 bg-green-50/40 dark:bg-green-950/10"
-                          : "border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/10"
+                      className={`space-y-2 rounded-xl border p-3 ${
+                        variableKeyMissing
+                          ? "border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/10"
+                          : "border-green-500/30 bg-green-50/40 dark:bg-green-950/10"
                       }`}
                     >
                       <div className="flex items-center gap-1.5 text-xs font-semibold">
-                        {detected.name ? (
-                          <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                        ) : (
+                        {variableKeyMissing ? (
                           <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
                         )}
-                        {detected.name
-                          ? "Category columns detected"
-                          : "Could not find a category name column"}
+                        Parent key column
                       </div>
-                      {detected.name ? (
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-muted-foreground sm:grid-cols-4">
-                          <span>
-                            Name: <strong className="text-foreground">{detected.name}</strong>
-                          </span>
-                          <span>
-                            Parent:{" "}
-                            <strong className="text-foreground">
-                              {detected.parent || "—"}
-                            </strong>
-                          </span>
-                          <span>
-                            Description:{" "}
-                            <strong className="text-foreground">
-                              {detected.description || "—"}
-                            </strong>
-                          </span>
-                          <span>
-                            ID:{" "}
-                            <strong className="text-foreground">{detected.id || "—"}</strong>
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="text-[10px] text-muted-foreground">
-                          Expected {detected.hint}. You can still continue.
-                        </div>
-                      )}
+                      <select
+                        data-agent-id="ci.new.parent-key"
+                        value={parentKeyColumn}
+                        onChange={(e) => setParentKeyColumn(e.target.value)}
+                        className="h-9 w-full rounded-lg border border-border/60 bg-background px-3 text-xs focus:outline-none focus:ring-2 focus:ring-[#6B358D]/25"
+                      >
+                        <option value="">Choose the column that groups variations...</option>
+                        {fileData.columns.map((col) => (
+                          <option key={col} value={col}>
+                            {col}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="text-[10px] text-muted-foreground">
+                        {groupPreview ? (
+                          <>
+                            <strong className="text-foreground">{groupPreview.products}</strong> products ·{" "}
+                            {groupPreview.rows} rows. Rows with an empty key stay separate products.
+                          </>
+                        ) : (
+                          "Rows with the same value in this column are variations of one product (for example Handle or Parent SKU)."
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -604,7 +588,7 @@ export default function NewImportPage() {
               <Button
                 data-agent-id="ci.new.submit"
                 onClick={handleSubmit}
-                disabled={!sessionName || !file || !fileData || loading}
+                disabled={!sessionName || !file || !fileData || variableKeyMissing || loading}
                 className="h-11 w-full gap-2 rounded-xl bg-[#400095] text-white shadow-[0_10px_26px_rgba(64,0,149,.2)] hover:bg-[#6B358D] dark:bg-[#F76D01] dark:hover:bg-[#F76D01]/90"
               >
                 {loading ? (
@@ -619,7 +603,7 @@ export default function NewImportPage() {
 
           {/* Right Sidebar */}
           <div className="space-y-4">
-            {!isPlp && suppliers.length > 0 && (
+            {suppliers.length > 0 && (
               <motion.section initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
                 <h3 className="mb-3 flex items-center gap-1.5 text-xs font-semibold">
                   <Users className="h-3.5 w-3.5" /> Recent Suppliers
@@ -653,17 +637,10 @@ export default function NewImportPage() {
               <div className="space-y-2 text-[10px] text-muted-foreground">
                 <div className="flex items-start gap-2">
                   <span className="shrink-0 font-bold text-[#6B358D] dark:text-[#F76D01]">1.</span>
-                  {isPlp ? (
-                    <span>
-                      Include a <strong>Category name</strong>, and ideally{" "}
-                      <strong>URL</strong> or <strong>Parent</strong> columns
-                    </span>
-                  ) : (
-                    <span>
-                      Include a <strong>SKU</strong> or <strong>Part Number</strong>{" "}
-                      column so each product is easy to identify
-                    </span>
-                  )}
+                  <span>
+                    Include a <strong>SKU</strong> or <strong>Part Number</strong>{" "}
+                    column so each product is easy to identify
+                  </span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="shrink-0 font-bold text-[#6B358D] dark:text-[#F76D01]">2.</span>

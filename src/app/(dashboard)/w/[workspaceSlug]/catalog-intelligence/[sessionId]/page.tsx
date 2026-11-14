@@ -102,7 +102,6 @@ export default function EnrichPage() {
           saved: project.productGroupColumn,
           columns: project.columns,
           rows: productRows,
-          kind,
         });
 
         // 5. Load into the sheet store

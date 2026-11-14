@@ -44,7 +44,7 @@ function pickSourcesFromSelection(
 
 export const sourceUrlsSpec: ColumnSpec = {
   id: "sourceUrls",
-  kinds: ["product", "plp"],
+  kinds: ["product"],
   needs: { search: true, sources: true },
   buildSchemaProperty(ctx) {
     return {

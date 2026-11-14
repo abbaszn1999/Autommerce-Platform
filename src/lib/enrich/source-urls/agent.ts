@@ -30,7 +30,7 @@ import { searchSourceUrls } from "./search";
  */
 export const SOURCE_URLS_SETUP_FAILURE_NOTE = "The web search failed, so no pages were found.";
 
-/** Whether this run's Source URLs column is answered by Google AI Mode. Product sheets only; PLP keeps its own flow. */
+/** Whether this run's Source URLs column is answered by Google AI Mode. Product sheets only. */
 export function usesGoogleSourceUrls(kind: SessionKind, enabledColumns: string[]): boolean {
   return kind === "product" && enabledColumns.includes(SOURCE_URLS_COLUMN_ID);
 }

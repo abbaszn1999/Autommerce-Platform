@@ -72,7 +72,7 @@ export function presetRowToPreset(row: PresetRow): EnrichmentPreset {
     name: row.name,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    kind: (row.kind === "plp" ? "plp" : "product") as SessionKind,
+    kind: "product" as SessionKind,
     settings: {
       sourceColumns: Array.isArray(payload.sourceColumns) ? (payload.sourceColumns as string[]) : [],
       enrichmentColumns: Array.isArray(payload.enrichmentColumns) ? (payload.enrichmentColumns as EnrichmentColumn[]) : [],

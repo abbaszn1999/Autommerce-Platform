@@ -184,7 +184,6 @@ async function runCatalogWork(
     saved: project.productGroupColumn,
     columns: project.columns,
     rows: project.rows,
-    kind: settings.kind,
   });
   const byId = new Map(project.rows.map((row) => [row.id, row]));
   // Rows this run already finished. Recorded right after each row is saved

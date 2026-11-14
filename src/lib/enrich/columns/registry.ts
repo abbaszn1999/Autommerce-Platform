@@ -3,11 +3,9 @@ import type { EnrichColumnConfig } from "../types";
 import type { ColumnSpec } from "./types";
 import { genericTextSpec } from "./shared/text";
 import { productColumnSpecs } from "./product";
-import { plpColumnSpecs } from "./plp";
 
 const SPECS_BY_KIND: Record<SessionKind, Map<string, ColumnSpec>> = {
   product: new Map(productColumnSpecs.map((s) => [s.id, s])),
-  plp: new Map(plpColumnSpecs.map((s) => [s.id, s])),
 };
 
 /**
@@ -28,7 +26,8 @@ export function hasColumnSpec(kind: SessionKind, columnId: string): boolean {
 }
 
 export function listColumnSpecs(kind: SessionKind): ColumnSpec[] {
-  return kind === "plp" ? plpColumnSpecs : productColumnSpecs;
+  void kind;
+  return productColumnSpecs;
 }
 
 /**
