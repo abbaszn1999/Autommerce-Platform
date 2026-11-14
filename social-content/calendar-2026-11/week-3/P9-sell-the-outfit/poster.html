@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../week-1/brand.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1350px;overflow:hidden}
+body{background:#0B0A10;color:#fff;font-family:'Geist',system-ui,sans-serif;-webkit-font-smoothing:antialiased;position:relative}
+.mono{font-family:'Geist Mono',ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase}
+.bg{position:absolute;inset:0;width:1080px;height:1350px;object-fit:cover;object-position:right center}
+.scrim{position:absolute;inset:0;background:
+  linear-gradient(90deg,rgba(11,10,16,.55) 0%,rgba(11,10,16,.18) 42%,rgba(11,10,16,0) 58%),
+  linear-gradient(180deg,rgba(11,10,16,.45) 0%,rgba(11,10,16,0) 18%,rgba(11,10,16,0) 70%,rgba(11,10,16,.55) 100%)}
+.bar{position:absolute;left:64px;right:64px;top:52px;display:flex;align-items:center;justify-content:space-between;z-index:3}
+.lock{display:flex;align-items:center;gap:14px}
+.lock img{width:42px;height:36px;object-fit:contain}
+.lock b{font-size:26px;font-weight:800;letter-spacing:-.03em}
+.lock small{display:block;margin-top:2px;font-size:11px;letter-spacing:.18em;opacity:.7}
+.chip{display:inline-flex;align-items:center;gap:10px;padding:12px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.28);background:rgba(11,10,16,.35);font-size:12px;backdrop-filter:blur(8px)}
+.chip i{width:7px;height:7px;border-radius:50%;background:#F76D01;display:block}
+.copy{position:absolute;left:64px;top:430px;z-index:3;width:560px}
+.kicker{display:flex;align-items:center;gap:14px;color:#F76D01;font-size:15px;margin-bottom:28px}
+.kicker i{width:42px;height:2px;background:#F76D01;display:block}
+h1{font-weight:800;font-size:112px;line-height:.86;letter-spacing:-.06em}
+.not{margin-top:28px;font-size:52px;font-weight:650;letter-spacing:-.04em;color:#F76D01}
+.ticket{position:absolute;left:64px;bottom:118px;width:470px;z-index:3}
+.line{display:flex;align-items:flex-end;justify-content:space-between;padding:18px 0 16px;border-top:1px solid rgba(255,255,255,.28)}
+.line small{display:block;font-size:13px;color:rgba(255,255,255,.62);margin-bottom:6px}
+.line b{font-size:32px;font-weight:650;letter-spacing:-.03em}
+.line em{font-style:normal;font-size:56px;font-weight:800;letter-spacing:-.05em;line-height:.8}
+.line.hot{border-top-color:#F76D01}
+.line.hot em{background:linear-gradient(135deg,#F76D01,#C40000);-webkit-background-clip:text;background-clip:text;color:transparent;padding-right:.08em}
+.note{position:absolute;left:64px;bottom:52px;z-index:3;font-size:13px;color:rgba(255,255,255,.55)}
+</style></head>
+<body>
+<img class="bg" src="campaign.jpg" alt="">
+<div class="scrim"></div>
+<div class="bar">
+  <div class="lock"><img src="../../week-1/assets/autommerce-white.png" alt=""><div><b>Persona AI</b><small class="mono">By Autommerce</small></div></div>
+  <div class="chip mono"><i></i>Complete the look</div>
+</div>
+<div class="copy">
+  <div class="kicker mono"><i></i>For fashion retailers</div>
+  <h1>Sell the<br>outfit.</h1>
+  <div class="not">Not the item.</div>
+</div>
+<div class="ticket">
+  <div class="line"><div><small class="mono">The piece they liked</small><b>One blazer</b></div><em>$90</em></div>
+  <div class="line hot"><div><small class="mono">The look Persona built</small><b>Three pieces</b></div><em>$149</em></div>
+</div>
+<div class="note mono">Live demo store · campaign still, not a customer</div>
+</body></html>
