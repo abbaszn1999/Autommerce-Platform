@@ -12,22 +12,39 @@ h1{font-weight:800;letter-spacing:-.055em;line-height:.92}
 .prog i.on{background:#F76D01!important}
 .swipe{font-family:'Geist Mono',monospace;font-size:14px;letter-spacing:.14em;text-transform:uppercase}
 
-.wrap{padding:56px 72px 0}
-.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:26px}
-h1{margin-top:36px;font-size:64px;width:940px}
-.pair{position:absolute;left:72px;right:72px;top:430px;display:grid;grid-template-columns:1fr 1fr;gap:24px}
-.card{background:#fff;border-radius:28px;padding:32px 32px 12px;border:1px solid rgba(11,10,16,.08)}
-.card small{font-size:14px;color:rgba(11,10,16,.5)}
-.card.good{border:2px solid #F76D01}
+.wrap{padding:44px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
+h1{margin-top:18px;font-size:48px;width:940px}
+.bubble{margin-top:16px;background:#0B0A10;color:#fff;border-radius:18px 18px 18px 6px;padding:18px 22px;max-width:960px}
+.bubble small{color:#F76D01;font-size:12px;letter-spacing:.14em}
+.bubble p{margin-top:8px;font-size:24px;font-weight:650;letter-spacing:-.025em;line-height:1.3}
+.pair{margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card{border-radius:16px;padding:20px 22px 8px;min-height:520px}
+.card.bad{background:#ECE8E2;border:1.5px solid rgba(11,10,16,.1)}
+.card.good{background:#fff;border:2px solid #F76D01}
+.card small{font-size:13px}
+.card.bad small{color:rgba(11,10,16,.5)}
 .card.good small{color:#F76D01}
-.item{font-size:32px;font-weight:650;letter-spacing:-.03em;padding:22px 0;border-bottom:1px solid rgba(11,10,16,.08)}
+.item{font-size:30px;font-weight:650;letter-spacing:-.03em;padding:22px 0;border-bottom:1px solid rgba(11,10,16,.1)}
 .card .item:last-child{border-bottom:0}
-.bad .item{color:rgba(11,10,16,.45);text-decoration:line-through;text-decoration-thickness:2px}
-.note{position:absolute;left:72px;bottom:48px;font-size:15px;color:rgba(11,10,16,.5)}
+.bad .item{color:rgba(11,10,16,.42);text-decoration:line-through;text-decoration-thickness:2px}
+.bottom{margin-top:16px;display:grid;grid-template-columns:1.2fr .9fr .9fr;gap:12px}
+.bottom div{padding:18px 18px;min-height:140px}
+.bottom b{display:block;font-size:13px;letter-spacing:.14em;margin-bottom:10px}
+.bottom span{font-size:22px;font-weight:700;letter-spacing:-.025em;line-height:1.25}
+.b1{background:#F76D01;color:#0B0A10}
+.b2{background:#400095;color:#fff}
+.b3{background:#0B0A10;color:#fff}
+.b3 b{color:#F76D01}
 body{background:#F8F6F3}</style></head><body><div class="wrap"><div class="lock"><img src="../../week-1/assets/autommerce-natural.png" alt="" style="width:42px;height:36px;object-fit:contain"> Autommerce</div>
-<h1>Rebuild the menu by talking to&nbsp;it.</h1></div>
+<h1>Rebuild the menu by talking to&nbsp;it.</h1>
+<div class="bubble"><small class="mono">You said</small><p>Rebuild the menu around how people shop: by room, by use, gifts, and replacement parts. Drop Misc and Other.</p></div>
 <div class="pair">
-<div class="card bad"><small class="mono">Before · illustrative</small><div class="item ">Sale</div><div class="item ">New</div><div class="item ">Brands</div><div class="item ">Misc</div><div class="item ">Other</div></div>
-<div class="card good"><small class="mono">After · you approve</small><div class="item ">Shop by room</div><div class="item ">Shop by use</div><div class="item ">Gifts</div><div class="item ">Replacement parts</div></div>
+<div class="card bad"><small class="mono">Before · illustrative</small><div class="item">Sale</div><div class="item">New</div><div class="item">Brands</div><div class="item">Misc</div><div class="item">Other</div></div>
+<div class="card good"><small class="mono">After · you approve</small><div class="item">Shop by room</div><div class="item">Shop by use</div><div class="item">Gifts</div><div class="item">Replacement parts</div></div>
 </div>
-<div class="note mono">Website Restructure · live preview · version history</div></body></html>
+<div class="bottom">
+<div class="b1"><b class="mono">Live preview</b><span>See the new menu before anything ships.</span></div>
+<div class="b2"><b class="mono">Version history</b><span>Roll back any change.</span></div>
+<div class="b3"><b class="mono">Your gate</b><span>Nothing publishes until you approve.</span></div>
+</div></div></body></html>

@@ -13,16 +13,41 @@ h1{font-weight:800;letter-spacing:-.055em;line-height:.92}
 .swipe{font-family:'Geist Mono',monospace;font-size:14px;letter-spacing:.14em;text-transform:uppercase}
 
 body{color:#fff}
-.glow{position:absolute;width:700px;height:700px;right:-200px;top:-180px;border-radius:50%;background:rgba(247,109,1,.35);filter:blur(40px)}
-.wrap{position:relative;padding:64px 72px 0}
-.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:26px}
-.when{position:absolute;right:72px;top:72px;font-size:15px;color:rgba(255,255,255,.7)}
-h1{margin-top:160px;font-size:92px;width:900px}
-.o{color:#F76D01}
-.p{margin-top:36px;font-size:32px;line-height:1.35;width:760px;color:rgba(255,255,255,.82);letter-spacing:-.02em}
-.line{position:absolute;left:72px;bottom:64px;font-size:22px;font-weight:600}
-body{background:#400095}</style></head><body><div class="glow"></div><div class="wrap"><div class="lock"><img src="../../week-1/assets/autommerce-white.png" alt="" style="width:42px;height:36px;object-fit:contain"> Autommerce</div><div class="when mono">White Friday</div>
+.wrap{position:relative;padding:40px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
+.when{margin-left:auto;font-size:14px;letter-spacing:.14em;color:#F76D01}
+h1{margin-top:20px;font-size:56px;width:940px}
+.h2{margin-top:6px;font-size:56px;font-weight:800;letter-spacing:-.055em;line-height:.92;color:#F76D01}
+.p{margin-top:14px;font-size:24px;line-height:1.35;width:900px;color:rgba(255,255,255,.82);letter-spacing:-.02em}
+.grid{margin-top:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.tile{padding:20px 18px;min-height:170px;display:flex;flex-direction:column;justify-content:space-between}
+.tile small{font-size:12px;letter-spacing:.14em}
+.tile b{font-size:26px;font-weight:800;letter-spacing:-.03em;line-height:1.1}
+.t1{background:#F76D01;color:#0B0A10}
+.t2{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16)}
+.t2 small{color:#F76D01}
+.t3{background:#0B0A10;border:1px solid rgba(255,255,255,.16)}
+.t3 small{color:#F76D01}
+.ask{margin-top:14px;background:#fff;color:#0B0A10;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;gap:20px}
+.ask .l small{display:block;font-size:12px;letter-spacing:.14em;color:#6B358D}
+.ask .l b{display:block;margin-top:6px;font-size:22px;letter-spacing:-.025em}
+.ask .r{padding:12px 16px;background:#400095;color:#fff;font-weight:700;font-size:15px;white-space:nowrap}
+.log{margin-top:14px;border:1px solid rgba(255,255,255,.16);overflow:hidden}
+.log .bar{display:flex;justify-content:space-between;padding:12px 18px;background:rgba(0,0,0,.25);font-size:12px;letter-spacing:.14em}
+.log .bar span{color:#F76D01}
+.log .r{display:grid;grid-template-columns:80px 1fr 140px;gap:12px;padding:16px 18px;border-top:1px solid rgba(255,255,255,.1);align-items:center;font-size:20px;font-weight:650;letter-spacing:-.02em}
+.log .r em{font-style:normal;font-family:'Geist Mono',monospace;font-size:13px;color:#F76D01;letter-spacing:.08em;font-weight:500}
+.log .r span{font-size:14px;letter-spacing:.1em;color:rgba(255,255,255,.7);font-family:'Geist Mono',monospace;justify-self:end;text-transform:uppercase}
+.line{margin-top:14px;font-size:15px;color:rgba(255,255,255,.7)}
+body{background:#400095}</style></head><body><div class="wrap"><div class="lock"><img src="../../week-1/assets/autommerce-white.png" alt="" style="width:42px;height:36px;object-fit:contain"> Autommerce<div class="when mono">White Friday</div></div>
 <h1>Your store is open all&nbsp;night.</h1>
-<h1 style="margin-top:8px" class="o">So is the assistant.</h1>
-<div class="p">Ask what broke. Stock, a title, a price. Nothing changes until you&nbsp;approve&nbsp;it.</div></div>
-<div class="line">Store Assistant · autommerce.com/contact</div></body></html>
+<div class="h2">So is the assistant.</div>
+<div class="p">Ask what broke. Stock, a title, a price. Nothing changes until you&nbsp;approve&nbsp;it.</div>
+<div class="grid">
+<div class="tile t1"><small class="mono">01 · Stock</small><b>Which SKU went dark?</b></div>
+<div class="tile t2"><small class="mono">02 · Title</small><b>Which draft is waiting?</b></div>
+<div class="tile t3"><small class="mono">03 · Price</small><b>What drifted overnight?</b></div>
+</div>
+<div class="ask"><div class="l"><small class="mono">You ask at 2:14am</small><b>Show me everything that broke since midnight.</b></div><div class="r">Approve later</div></div>
+<div class="log"><div class="bar mono"><b>Overnight queue</b><span>3 waiting</span></div><div class="r"><em>00:41</em><b>SKU-5512 went out of stock</b><span>Waiting</span></div><div class="r"><em>01:18</em><b>Draft title for Chargers · 4 rows</b><span>Waiting</span></div><div class="r"><em>02:03</em><b>Price mismatch on AirPods Pro 2</b><span>Waiting</span></div></div>
+<div class="line mono">Store Assistant · autommerce.com/contact</div></div></body></html>

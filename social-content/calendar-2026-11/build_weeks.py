@@ -109,28 +109,34 @@ li{font-size:27px;font-weight:600;letter-spacing:-.02em;padding:14px 0;border-to
 def a10():
     css = """
 .band{position:absolute;left:0;top:0;width:14px;height:1350px;background:#C40000}
-.wrap{padding:52px 64px 0 78px}
+.wrap{padding:48px 56px 0 72px}
 .lock{display:flex;align-items:center;gap:12px}
 .lock b{font-size:22px;font-weight:800}
 .lock small{display:block;font-size:11px;opacity:.55;margin-top:3px}
-.head{margin-top:36px;display:flex;justify-content:space-between;align-items:flex-end;gap:24px}
-h1{font-size:96px;letter-spacing:-.06em;line-height:.88;color:#C40000}
+.head{margin-top:28px;display:flex;justify-content:space-between;align-items:flex-end;gap:24px}
+h1{font-size:88px;letter-spacing:-.06em;line-height:.88;color:#C40000}
 .stat{text-align:right}
 .stat b{display:block;font-size:64px;letter-spacing:-.05em;line-height:.9}
 .stat span{display:block;margin-top:6px;font-size:14px;color:rgba(11,10,16,.5)}
-.sub{margin-top:22px;font-size:26px;line-height:1.3;letter-spacing:-.02em;width:900px;color:#3B3742}
-.tbl{margin-top:28px;background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:18px;overflow:hidden}
-.th{display:grid;grid-template-columns:72px 1fr 160px 140px;padding:14px 28px;background:rgba(11,10,16,.04);font-size:13px;color:rgba(11,10,16,.5)}
-.row{display:grid;grid-template-columns:72px 1fr 160px 140px;align-items:center;padding:0 28px;height:78px;border-top:1px solid rgba(11,10,16,.08);font-size:24px}
+.sub{margin-top:18px;font-size:24px;line-height:1.3;letter-spacing:-.02em;width:920px;color:#3B3742}
+.tbl{margin-top:24px;background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:18px;overflow:hidden}
+.th{display:grid;grid-template-columns:72px 1fr 160px 140px;padding:16px 28px;background:rgba(11,10,16,.04);font-size:13px;color:rgba(11,10,16,.5)}
+.row{display:grid;grid-template-columns:72px 1fr 160px 140px;align-items:center;padding:0 28px;height:92px;border-top:1px solid rgba(11,10,16,.08);font-size:26px}
 .row b{font-weight:650;letter-spacing:-.02em}
 .row .sku{font-family:'Geist Mono',monospace;font-size:15px;letter-spacing:.06em;color:rgba(11,10,16,.45)}
-.miss-row{background:rgba(196,0,0,.06)}
+.miss-row{background:rgba(196,0,0,.07)}
 .miss-row b{color:#C40000}
 .ok{font-family:'Geist Mono',monospace;font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:rgba(11,10,16,.4)}
 .miss{font-family:'Geist Mono',monospace;font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:#C40000;font-weight:700}
 .idx{font-family:'Geist Mono',monospace;font-size:15px;color:rgba(11,10,16,.4)}
 .miss-row .idx{color:#C40000}
-.note{position:absolute;left:78px;right:64px;bottom:48px;display:flex;justify-content:space-between;align-items:center;font-size:14px;color:rgba(11,10,16,.5)}
+.summary{margin-top:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.s{background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:14px;padding:18px 20px}
+.s.bad{background:#C40000;color:#fff;border:0}
+.s small{font-size:12px;opacity:.55}
+.s.bad small{opacity:.75}
+.s b{display:block;margin-top:8px;font-size:28px;letter-spacing:-.03em}
+.note{position:absolute;left:72px;right:56px;bottom:44px;display:flex;justify-content:space-between;align-items:center;font-size:14px;color:rgba(11,10,16,.5)}
 .pill{padding:10px 14px;border-radius:999px;border:1px solid rgba(196,0,0,.35);color:#C40000;font-size:13px}
 """
     rows = [
@@ -150,7 +156,12 @@ h1{font-size:96px;letter-spacing:-.06em;line-height:.88;color:#C40000}
 <div class="wrap"><div class="lock">{logo()}<div><b>Abbas Zein</b><small class="mono">Founder notes</small></div></div>
 <div class="head"><h1>Not<br>found.</h1><div class="stat"><b>5<span style="color:#C40000">/6</span></b><span class="mono">images matched</span></div></div>
 <div class="sub">An empty cell is cheaper than the wrong photo on five hundred product&nbsp;pages.</div>
-<div class="tbl"><div class="th mono"><span>#</span><span>Product</span><span>SKU</span><span>Status</span></div>{html_rows}</div></div>
+<div class="tbl"><div class="th mono"><span>#</span><span>Product</span><span>SKU</span><span>Status</span></div>{html_rows}</div>
+<div class="summary">
+<div class="s"><small class="mono">Matched</small><b>5 products</b></div>
+<div class="s bad"><small class="mono">Not found</small><b>Dyson V15</b></div>
+<div class="s"><small class="mono">Action</small><b>Leave empty</b></div>
+</div></div>
 <div class="note"><span class="mono">Catalog Intelligence run · sixth left empty on purpose</span><span class="pill mono">Refuse the guess</span></div>'''
     return {'week-3/A10-not-found/poster': doc(body, css)}
 
@@ -158,175 +169,367 @@ h1{font-size:96px;letter-spacing:-.06em;line-height:.88;color:#C40000}
 # ---------------------------------------------------------------- M9 hours
 def m9():
     css = """
-.wrap{padding:52px 64px 0}
-.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:26px;letter-spacing:-.03em}
-.chip{position:absolute;right:64px;top:56px;padding:12px 16px;border-radius:999px;background:#0B0A10;color:#fff;font-size:13px}
-h1{margin-top:48px;font-size:56px;width:920px}
-.math{margin-top:36px;display:grid;grid-template-columns:1fr 48px 1fr 48px 1.2fr;align-items:end;gap:8px}
-.cell{background:#fff;border-radius:22px;padding:28px 26px;border:1px solid rgba(11,10,16,.08)}
-.cell small{display:block;font-size:14px;color:rgba(11,10,16,.5);margin-bottom:10px}
-.cell b{font-size:56px;letter-spacing:-.05em;line-height:.9}
-.op{text-align:center;font-size:42px;font-weight:700;color:#F76D01;padding-bottom:28px}
-.cell.res{background:#F76D01;border:0;color:#0B0A10}
-.cell.res small{color:rgba(11,10,16,.7)}
-.grid{margin-top:28px;display:grid;grid-template-columns:repeat(25,1fr);gap:6px}
-.grid i{aspect-ratio:1;border-radius:4px;background:rgba(11,10,16,.1);display:block}
-.grid i.on{background:#F76D01}
-.cap{margin-top:14px;font-size:18px;color:rgba(11,10,16,.55)}
-.box{position:absolute;left:64px;right:64px;bottom:56px;background:#0B0A10;color:#fff;border-radius:22px;padding:30px 34px;display:flex;justify-content:space-between;align-items:center}
-.box b{font-size:28px;letter-spacing:-.02em}
-.box span{font-size:16px;color:#F76D01}
+.wrap{padding:48px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px;letter-spacing:-.03em}
+.chip{margin-left:auto;padding:10px 14px;border:1.5px solid rgba(11,10,16,.2);font-size:12px;letter-spacing:.16em;background:#fff}
+.head{margin-top:28px;display:grid;grid-template-columns:1.15fr .85fr;gap:28px;align-items:end}
+h1{font-size:52px;width:auto}
+.math{background:#fff;border:1.5px solid rgba(11,10,16,.1);padding:22px 24px}
+.math small{display:block;font-size:12px;color:#F76D01;margin-bottom:10px}
+.math .line{font-size:26px;font-weight:700;letter-spacing:-.03em;line-height:1.35}
+.math .line em{font-style:normal;color:#F76D01}
+.math .eq{margin-top:14px;padding-top:14px;border-top:1.5px solid rgba(11,10,16,.1);font-size:42px;font-weight:800;letter-spacing:-.05em;line-height:1}
+.math .eq span{color:#F76D01}
+.marks{margin-top:22px}
+.marks .lab{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.marks .lab b{font-size:15px;letter-spacing:.14em}
+.marks .lab span{font-size:14px;color:rgba(11,10,16,.55)}
+.grid{display:grid;grid-template-columns:repeat(25,1fr);gap:4px}
+.grid i{display:block;height:14px;background:#F76D01;opacity:.88}
+.grid i:nth-child(5n){opacity:1;background:#C40000}
+.table{margin-top:22px;background:#fff;border:1.5px solid rgba(11,10,16,.1)}
+.table .th,.table .tr{display:grid;grid-template-columns:72px 1.4fr .9fr .7fr;gap:12px;padding:14px 18px;align-items:center}
+.table .th{background:#0B0A10;color:#F8F6F3;font-size:12px;letter-spacing:.14em}
+.table .tr{border-top:1px solid rgba(11,10,16,.08);font-size:22px;font-weight:650;letter-spacing:-.02em}
+.table .tr span{font-family:'Geist Mono',monospace;font-size:15px;letter-spacing:.04em;color:#F76D01;font-weight:500}
+.table .tr em{font-style:normal;color:rgba(11,10,16,.5);font-weight:500;font-size:18px}
+.footn{margin-top:20px;display:flex;justify-content:space-between;align-items:center;padding:18px 20px;background:#F76D01;color:#0B0A10}
+.footn b{font-size:24px;letter-spacing:-.02em}
+.footn span{font-size:14px;letter-spacing:.12em}
 """
-    dots = ''.join(f'<i class="{"on" if i < 20 else ""}"></i>' for i in range(50))
-    body = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div><div class="chip mono">Illustrative</div>
-<h1>Five hundred titles, written by&nbsp;hand.</h1>
-<div class="math">
-<div class="cell"><small class="mono">Products</small><b>500</b></div><div class="op">&times;</div>
-<div class="cell"><small class="mono">Minutes each</small><b>4</b></div><div class="op">=</div>
-<div class="cell res"><small class="mono">Hours of typing</small><b>33h</b></div>
-</div>
-<div class="grid">{dots}</div>
-<div class="cap mono">50 of 500 shown · titles only · descriptions and specs come after</div></div>
-<div class="box"><b>Catalog Intelligence writes the row.</b><span class="mono">You approve it</span></div>'''
-    return {'week-3/M9-hours/poster': doc(body, css)}
+    marks = ''.join('<i></i>' for _ in range(500))
+    rows = [
+        ('01', 'Titles', '4 min each', '33h'),
+        ('02', 'Descriptions', 'longer still', '\u2014'),
+        ('03', 'Specs + FAQs', 'per SKU', '\u2014'),
+        ('04', 'Catalog Intelligence', 'writes the row', 'you approve'),
+    ]
+    trs = ''.join(
+        f'<div class="tr"><span>{a}</span><b>{b}</b><em>{c}</em><b>{d}</b></div>'
+        for a, b, c, d in rows)
+    body = f'''<div class="wrap">
+<div class="lock">{logo()} Autommerce<div class="chip mono">Illustrative</div></div>
+<div class="head"><h1>Five hundred titles, written by&nbsp;hand.</h1>
+<div class="math"><small class="mono">The arithmetic</small>
+<div class="line">500 titles \u00d7 <em>4 min</em></div>
+<div class="eq">= <span>33h</span></div></div></div>
+<div class="marks"><div class="lab"><b class="mono">500 marks \u00b7 one per title</b><span class="mono">paper work table</span></div>
+<div class="grid">{marks}</div></div>
+<div class="table"><div class="th mono"><span>Step</span><span>Work</span><span>Effort</span><span>Result</span></div>{trs}</div>
+<div class="footn"><b>Catalog Intelligence writes the row.</b><span class="mono">You approve it</span></div>
+</div>'''
+    return {'week-3/M9-hours/poster': doc(body, css, '#F3EDE4')}
 
 
 # ---------------------------------------------------------------- M10 approval
 def m10():
     css = """
-body{background:#F4F0F6}
-.wrap{padding:60px 72px 0}
-.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:26px}
-h1{margin-top:100px;font-size:72px;width:920px}
-.ask{margin-top:64px;background:#fff;border-radius:28px;padding:36px 40px;width:900px;box-shadow:0 24px 50px -36px rgba(64,0,149,.6)}
-.ask small{color:#6B358D;font-size:14px}
-.ask p{margin-top:14px;font-size:34px;font-weight:650;letter-spacing:-.03em;line-height:1.25}
-.gate{margin-top:22px;width:900px;border:2px solid #400095;border-radius:28px;padding:32px 40px;display:flex;justify-content:space-between;align-items:center;background:#fff}
-.gate b{font-size:32px;letter-spacing:-.03em}
-.gate span{display:block;margin-top:8px;font-size:20px;color:#3B3742}
-.pill{padding:16px 22px;border-radius:999px;background:#400095;color:#fff;font-weight:700;font-size:20px}
-.note{position:absolute;left:72px;bottom:52px;font-size:16px;color:rgba(11,10,16,.55)}
+.wrap{padding:48px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
+h1{margin-top:28px;font-size:56px;width:960px}
+.ask{margin-top:22px;background:#400095;color:#fff;border-radius:20px;padding:22px 26px}
+.ask small{color:#F76D01;font-size:13px}
+.ask p{margin-top:8px;font-size:28px;font-weight:650;letter-spacing:-.03em;line-height:1.25}
+.panel{margin-top:18px;background:#fff;border:1.5px solid rgba(64,0,149,.18);border-radius:20px;overflow:hidden}
+.panel .bar{display:flex;justify-content:space-between;align-items:center;padding:16px 22px;background:#F4F0F6;border-bottom:1px solid rgba(64,0,149,.12)}
+.panel .bar b{font-size:18px;letter-spacing:-.02em}
+.panel .bar span{font-size:13px;color:#6B358D}
+.row{display:grid;grid-template-columns:28px 1.15fr 1.35fr 110px;gap:14px;padding:16px 22px;align-items:center;border-top:1px solid rgba(11,10,16,.06);font-size:18px}
+.row:first-of-type{border-top:0}
+.row .n{font-family:'Geist Mono',monospace;font-size:13px;color:#6B358D;letter-spacing:.08em}
+.row .was{color:rgba(11,10,16,.45);text-decoration:line-through;text-decoration-thickness:1.5px;font-size:16px;letter-spacing:-.015em}
+.row .now{font-weight:700;letter-spacing:-.02em;font-size:17px}
+.row .st{justify-self:end;padding:7px 12px;background:#F4F0F6;color:#400095;font-size:12px;letter-spacing:.1em;font-weight:600}
+.gate{margin-top:16px;border:2px solid #400095;border-radius:20px;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;background:#fff}
+.gate b{font-size:26px;letter-spacing:-.03em}
+.gate span{display:block;margin-top:4px;font-size:16px;color:#3B3742}
+.pill{padding:14px 22px;background:#400095;color:#fff;font-weight:700;font-size:18px;letter-spacing:-.01em}
+.note{margin-top:16px;font-size:14px;color:rgba(11,10,16,.55)}
 """
+    rows = [
+        ('01', 'USB Charger Fast', 'Anker 65W GaN USB-C Charger', 'Pending'),
+        ('02', 'Wall Adapter 20W', 'Apple 20W USB-C Power Adapter', 'Pending'),
+        ('03', 'Car Charger Dual', 'Belkin BoostCharge Dual 36W Car Charger', 'Pending'),
+        ('04', 'Wireless Pad', 'Samsung 15W Wireless Charging Pad', 'Pending'),
+    ]
+    row_html = ''.join(
+        f'<div class="row"><div class="n">{n}</div><div class="was">{was}</div><div class="now">{now}</div><div class="st mono">{st}</div></div>'
+        for n, was, now, st in rows)
     body = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div>
 <h1>Nothing reaches the store until you say&nbsp;so.</h1>
 <div class="ask"><small class="mono">You ask</small><p>Rewrite every title in Chargers. Name the brand and the wattage.</p></div>
-<div class="gate"><div><b>Waiting for approval</b><span>Every change can be undone.</span></div><div class="pill">Approve</div></div></div>
-<div class="note mono">Store Assistant · plain words in, your decision out</div>'''
+<div class="panel"><div class="bar"><b>Chargers · draft titles</b><span class="mono">4 waiting</span></div>{row_html}</div>
+<div class="gate"><div><b>Waiting for approval</b><span>Every change can be undone.</span></div><div class="pill">Approve</div></div>
+<div class="note mono">Store Assistant · plain words in, your decision out</div></div>'''
     return {'week-3/M10-approval/poster': doc(body, css, '#F4F0F6')}
 
 
 # ---------------------------------------------------------------- M11 seo aeo geo
 def m11():
     N = 5
-    css = """
-.wrap{padding:56px 72px 0}
-.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
-.count{position:absolute;right:72px;top:62px;font-size:16px}
-.count b{color:#F76D01;font-weight:500}
-.word{margin-top:120px;font-size:168px;font-weight:800;letter-spacing:-.07em;line-height:.86}
-.deck{margin-top:36px;font-size:36px;line-height:1.3;letter-spacing:-.025em;width:860px;color:#3B3742}
-.rows{margin-top:48px}
-.rows div{display:flex;gap:22px;align-items:baseline;padding:20px 0;border-top:1px solid rgba(11,10,16,.1);font-size:30px;font-weight:650;letter-spacing:-.02em}
-.rows b{font-family:'Geist Mono',monospace;font-size:16px;color:#F76D01;font-weight:500}
-"""
     pages = {}
-    slides = [
-        ('Three ways a product gets found.', '<div class="word">SEO<br>AEO<br><span class="o">GEO</span></div>', ''),
-        ('People typing a query.', '<div class="word">SEO</div><div class="deck">Search engines read the title, the headings and the links. A vague title is a product they never&nbsp;list.</div>', ''),
-        ('People asking a question.', '<div class="word" style="font-size:150px">AEO</div><div class="deck">Answer engines lift the page that answers in plain text. Specs trapped in a picture do not get&nbsp;picked.</div>', ''),
-        ('Answers that cite a source.', '<div class="word">GEO</div><div class="deck">Generative engines cite the page they can quote. Facts, written out, are what they&nbsp;quote.</div>', ''),
-        ('Same four fixes. All three readers.', '', '<div class="rows" style="margin-top:160px"><div><b>01</b>Titles that name the exact product</div><div><b>02</b>Specs as text, not a picture</div><div><b>03</b>Answers to real questions</div><div><b>04</b>One price, everywhere</div></div>'),
+    css0 = """
+.wrap{padding:48px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
+.count{position:absolute;right:56px;top:56px;font-size:15px}
+.count b{color:#F76D01;font-weight:500}
+h1{margin-top:28px;font-size:52px;width:900px}
+.stack{margin-top:28px;display:grid;gap:14px}
+.band{padding:28px 32px;display:flex;align-items:center;justify-content:space-between;min-height:170px}
+.band b{font-size:92px;font-weight:800;letter-spacing:-.07em;line-height:.85}
+.band span{font-size:22px;font-weight:650;letter-spacing:-.02em;max-width:280px;line-height:1.25;text-align:right}
+.b1{background:#F76D01;color:#0B0A10}
+.b2{background:#400095;color:#fff}
+.b3{background:#0B0A10;color:#fff}
+.b3 b{color:#F76D01}
+"""
+    body0 = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div><div class="count mono"><b>01</b> / {N:02d}</div>
+<h1>Three ways a product gets&nbsp;found.</h1>
+<div class="stack">
+<div class="band b1"><b>SEO</b><span>People typing a query</span></div>
+<div class="band b2"><b>AEO</b><span>People asking a question</span></div>
+<div class="band b3"><b>GEO</b><span>Answers that cite a source</span></div>
+</div></div>{foot(0, N)}'''
+    pages['week-3/M11-seo-aeo-geo/slide_01'] = doc(body0, css0)
+
+    css1 = """
+.wrap{padding:48px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
+.count{position:absolute;right:56px;top:56px;font-size:15px}
+.count b{color:#F76D01;font-weight:500}
+.hero{margin-top:24px;background:#F76D01;color:#0B0A10;padding:36px 36px 32px;min-height:280px}
+.hero .k{font-size:14px;letter-spacing:.16em}
+.hero .word{margin-top:10px;font-size:140px;font-weight:800;letter-spacing:-.07em;line-height:.82}
+.hero .deck{margin-top:18px;font-size:28px;font-weight:650;letter-spacing:-.025em;line-height:1.25;max-width:860px}
+.list{margin-top:22px;background:#fff;border:1.5px solid rgba(11,10,16,.1)}
+.list div{display:grid;grid-template-columns:70px 1fr;gap:16px;padding:22px 26px;border-top:1px solid rgba(11,10,16,.08);font-size:26px;font-weight:650;letter-spacing:-.02em;align-items:center}
+.list div:first-child{border-top:0}
+.list b{font-family:'Geist Mono',monospace;font-size:14px;color:#F76D01;font-weight:500}
+"""
+    body1 = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div><div class="count mono"><b>02</b> / {N:02d}</div>
+<div class="hero"><div class="k mono">People typing a query</div><div class="word">SEO</div>
+<div class="deck">Search engines read the title, the headings and the links. A vague title is a product they never&nbsp;list.</div></div>
+<div class="list"><div><b>01</b>Exact product name in the title</div><div><b>02</b>Headings that match the query</div><div><b>03</b>Links that point to one clear page</div></div>
+</div>{foot(1, N)}'''
+    pages['week-3/M11-seo-aeo-geo/slide_02'] = doc(body1, css1)
+
+    css2 = """
+.wrap{padding:48px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px;color:#fff}
+.count{position:absolute;right:56px;top:56px;font-size:15px;color:rgba(255,255,255,.75)}
+.count b{color:#F76D01;font-weight:500}
+.hero{margin-top:24px;display:grid;grid-template-columns:280px 1fr;gap:20px}
+.badge{background:#F76D01;color:#0B0A10;padding:28px 24px;display:flex;flex-direction:column;justify-content:flex-end;min-height:260px}
+.badge .k{font-size:13px;letter-spacing:.16em}
+.badge .word{margin-top:8px;font-size:96px;font-weight:800;letter-spacing:-.07em;line-height:.85}
+.copy{background:rgba(255,255,255,.08);color:#fff;padding:28px 28px;border:1px solid rgba(255,255,255,.14)}
+.copy .k{font-size:13px;letter-spacing:.16em;color:#F76D01}
+.copy p{margin-top:14px;font-size:28px;font-weight:650;letter-spacing:-.025em;line-height:1.3}
+.qa{margin-top:18px;display:grid;gap:12px}
+.qa .q,.qa .a{padding:22px 26px;font-size:24px;font-weight:650;letter-spacing:-.02em;line-height:1.3}
+.qa .q{background:#fff;color:#0B0A10}
+.qa .q small{display:block;font-size:12px;letter-spacing:.14em;color:#6B358D;margin-bottom:8px;font-weight:500}
+.qa .a{background:#0B0A10;color:#fff}
+.qa .a small{display:block;font-size:12px;letter-spacing:.14em;color:#F76D01;margin-bottom:8px;font-weight:500}
+"""
+    body2 = f'''<div class="wrap"><div class="lock">{logo(True)} Autommerce</div><div class="count mono"><b>03</b> / {N:02d}</div>
+<div class="hero"><div class="badge"><div class="k mono">Question</div><div class="word">AEO</div></div>
+<div class="copy"><div class="k mono">People asking a question</div><p>Answer engines lift the page that answers in plain text. Specs trapped in a picture do not get&nbsp;picked.</p></div></div>
+<div class="qa"><div class="q"><small class="mono">Shopper</small>What wattage is this charger?</div>
+<div class="a"><small class="mono">Your page · as text</small>65W USB-C GaN. Fast charge for phones and laptops.</div></div>
+</div>{foot(2, N, dark=True)}'''
+    pages['week-3/M11-seo-aeo-geo/slide_03'] = doc(body2, css2, '#400095')
+
+    css3 = """
+.wrap{padding:48px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px;color:#fff}
+.count{position:absolute;right:56px;top:56px;font-size:15px;color:rgba(255,255,255,.7)}
+.count b{color:#F76D01;font-weight:500}
+.hero{margin-top:28px}
+.k{font-size:14px;letter-spacing:.16em;color:#F76D01}
+.word{margin-top:8px;font-size:140px;font-weight:800;letter-spacing:-.07em;line-height:.82;color:#fff}
+.deck{margin-top:18px;font-size:28px;line-height:1.3;letter-spacing:-.025em;color:rgba(255,255,255,.82);max-width:900px;font-weight:650}
+.cite{margin-top:28px;background:#F8F6F3;color:#0B0A10;padding:28px 30px;border-left:10px solid #F76D01}
+.cite small{display:block;font-size:12px;letter-spacing:.14em;color:#C40000;margin-bottom:10px}
+.cite p{font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1.3}
+.cite .src{margin-top:16px;font-size:14px;color:rgba(11,10,16,.55)}
+.facts{margin-top:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.facts div{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);padding:20px 18px;color:#fff}
+.facts b{display:block;font-size:13px;letter-spacing:.14em;color:#F76D01;margin-bottom:8px;font-weight:500}
+.facts span{font-size:22px;font-weight:650;letter-spacing:-.02em;line-height:1.25}
+"""
+    body3 = f'''<div class="wrap"><div class="lock">{logo(True)} Autommerce</div><div class="count mono"><b>04</b> / {N:02d}</div>
+<div class="hero"><div class="k mono">Answers that cite a source</div><div class="word">GEO</div>
+<div class="deck">Generative engines cite the page they can quote. Facts, written out, are what they&nbsp;quote.</div></div>
+<div class="cite"><small class="mono">Cited from your PDP</small><p>“Anker 65W GaN USB-C charger. Charges a phone and a laptop from one brick.”</p>
+<div class="src mono">Source · your product page · as text</div></div>
+<div class="facts"><div><b class="mono">01</b><span>Brand named</span></div><div><b class="mono">02</b><span>Wattage written</span></div><div><b class="mono">03</b><span>Use case clear</span></div></div>
+</div>{foot(3, N, dark=True)}'''
+    pages['week-3/M11-seo-aeo-geo/slide_04'] = doc(body3, css3, '#0B0A10')
+
+    css4 = """
+.wrap{padding:48px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
+.count{position:absolute;right:56px;top:56px;font-size:15px}
+.count b{color:#F76D01;font-weight:500}
+h1{margin-top:28px;font-size:52px;width:920px}
+.rows{margin-top:24px;display:grid;gap:12px}
+.row{display:grid;grid-template-columns:90px 1fr;min-height:150px;align-items:center}
+.row .n{display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:800;letter-spacing:-.04em;height:100%}
+.row .t{padding:28px 30px;font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1.2;background:#fff;border:1.5px solid rgba(11,10,16,.1);height:100%;display:flex;align-items:center}
+.r1 .n{background:#F76D01;color:#0B0A10}
+.r2 .n{background:#400095;color:#fff}
+.r3 .n{background:#6B358D;color:#fff}
+.r4 .n{background:#0B0A10;color:#F76D01}
+.sub{margin-top:18px;font-size:18px;color:rgba(11,10,16,.55)}
+"""
+    fixes = [
+        ('r1', '01', 'Titles that name the exact product'),
+        ('r2', '02', 'Specs as text, not a picture'),
+        ('r3', '03', 'Answers to real questions'),
+        ('r4', '04', 'One price, everywhere'),
     ]
-    for i, (deck, main, extra) in enumerate(slides):
-        headline = f'<h1 style="margin-top:80px;font-size:76px;width:900px">{deck}</h1>' if i in (0, 4) and i == 4 else ''
-        if i == 0:
-            main_html = f'<h1 style="margin-top:70px;font-size:64px;width:800px">{deck}</h1>' + main
-        elif i == 4:
-            main_html = f'<h1 style="margin-top:48px;font-size:68px;width:900px">{deck}</h1>' + extra
-        else:
-            main_html = main
-        body = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div><div class="count mono"><b>{i+1:02d}</b> / {N:02d}</div>{main_html}</div>{foot(i, N)}'''
-        pages[f'week-3/M11-seo-aeo-geo/slide_{i+1:02d}'] = doc(body, css)
+    rows = ''.join(f'<div class="row {c}"><div class="n">{n}</div><div class="t">{t}</div></div>' for c, n, t in fixes)
+    body4 = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div><div class="count mono"><b>05</b> / {N:02d}</div>
+<h1>Same four fixes. All three&nbsp;readers.</h1>
+<div class="rows">{rows}</div>
+<div class="sub mono">SEO · AEO · GEO · one catalog job</div></div>{foot(4, N)}'''
+    pages['week-3/M11-seo-aeo-geo/slide_05'] = doc(body4, css4)
     return pages
 
 
 # ---------------------------------------------------------------- M12 menu
 def m12():
     css = """
-.wrap{padding:56px 72px 0}
-.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:26px}
-h1{margin-top:36px;font-size:64px;width:940px}
-.pair{position:absolute;left:72px;right:72px;top:430px;display:grid;grid-template-columns:1fr 1fr;gap:24px}
-.card{background:#fff;border-radius:28px;padding:32px 32px 12px;border:1px solid rgba(11,10,16,.08)}
-.card small{font-size:14px;color:rgba(11,10,16,.5)}
-.card.good{border:2px solid #F76D01}
+.wrap{padding:44px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
+h1{margin-top:18px;font-size:48px;width:940px}
+.bubble{margin-top:16px;background:#0B0A10;color:#fff;border-radius:18px 18px 18px 6px;padding:18px 22px;max-width:960px}
+.bubble small{color:#F76D01;font-size:12px;letter-spacing:.14em}
+.bubble p{margin-top:8px;font-size:24px;font-weight:650;letter-spacing:-.025em;line-height:1.3}
+.pair{margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card{border-radius:16px;padding:20px 22px 8px;min-height:520px}
+.card.bad{background:#ECE8E2;border:1.5px solid rgba(11,10,16,.1)}
+.card.good{background:#fff;border:2px solid #F76D01}
+.card small{font-size:13px}
+.card.bad small{color:rgba(11,10,16,.5)}
 .card.good small{color:#F76D01}
-.item{font-size:32px;font-weight:650;letter-spacing:-.03em;padding:22px 0;border-bottom:1px solid rgba(11,10,16,.08)}
+.item{font-size:30px;font-weight:650;letter-spacing:-.03em;padding:22px 0;border-bottom:1px solid rgba(11,10,16,.1)}
 .card .item:last-child{border-bottom:0}
-.bad .item{color:rgba(11,10,16,.45);text-decoration:line-through;text-decoration-thickness:2px}
-.note{position:absolute;left:72px;bottom:48px;font-size:15px;color:rgba(11,10,16,.5)}
+.bad .item{color:rgba(11,10,16,.42);text-decoration:line-through;text-decoration-thickness:2px}
+.bottom{margin-top:16px;display:grid;grid-template-columns:1.2fr .9fr .9fr;gap:12px}
+.bottom div{padding:18px 18px;min-height:140px}
+.bottom b{display:block;font-size:13px;letter-spacing:.14em;margin-bottom:10px}
+.bottom span{font-size:22px;font-weight:700;letter-spacing:-.025em;line-height:1.25}
+.b1{background:#F76D01;color:#0B0A10}
+.b2{background:#400095;color:#fff}
+.b3{background:#0B0A10;color:#fff}
+.b3 b{color:#F76D01}
 """
-    def items(names, cls=''):
-        return ''.join(f'<div class="item {cls}">{n}</div>' for n in names)
+    def items(names):
+        return ''.join(f'<div class="item">{n}</div>' for n in names)
     body = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div>
-<h1>Rebuild the menu by talking to&nbsp;it.</h1></div>
+<h1>Rebuild the menu by talking to&nbsp;it.</h1>
+<div class="bubble"><small class="mono">You said</small><p>Rebuild the menu around how people shop: by room, by use, gifts, and replacement parts. Drop Misc and Other.</p></div>
 <div class="pair">
 <div class="card bad"><small class="mono">Before · illustrative</small>{items(['Sale','New','Brands','Misc','Other'])}</div>
 <div class="card good"><small class="mono">After · you approve</small>{items(['Shop by room','Shop by use','Gifts','Replacement parts'])}</div>
 </div>
-<div class="note mono">Website Restructure · live preview · version history</div>'''
+<div class="bottom">
+<div class="b1"><b class="mono">Live preview</b><span>See the new menu before anything ships.</span></div>
+<div class="b2"><b class="mono">Version history</b><span>Roll back any change.</span></div>
+<div class="b3"><b class="mono">Your gate</b><span>Nothing publishes until you approve.</span></div>
+</div></div>'''
     return {'week-3/M12-menu/poster': doc(body, css)}
 
 
 # ---------------------------------------------------------------- M13 who
 def m13():
     N = 5
-    css = """
-.wrap{padding:52px 64px 0}
-.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
-.count{position:absolute;right:64px;top:56px;font-size:16px}
-.count b{color:#F76D01;font-weight:500}
-.k{margin-top:36px;color:#F76D01;font-size:16px}
-h1{margin-top:14px;font-size:64px;width:920px}
-.p{margin-top:24px;font-size:30px;line-height:1.35;letter-spacing:-.02em;width:880px;color:#3B3742}
-.cards{margin-top:36px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.card{background:#fff;border-radius:22px;padding:28px 26px;border:1px solid rgba(11,10,16,.08)}
-.card b{display:block;font-size:28px;letter-spacing:-.03em;margin-top:8px}
-.card small{color:#F76D01;font-size:14px}
-.card p{margin-top:12px;font-size:22px;line-height:1.3;color:#3B3742;letter-spacing:-.015em}
-.stat{margin-top:28px;display:flex;gap:18px}
-.stat div{flex:1;background:#fff;border-radius:20px;padding:24px;border:1px solid rgba(11,10,16,.08)}
-.stat b{display:block;font-size:48px;letter-spacing:-.05em;color:#F76D01}
-.stat span{display:block;margin-top:8px;font-size:20px;color:#3B3742}
-"""
-    cover_cards = [
-        ('01', 'The store', 'Supplier sheets faster than any team can type.'),
-        ('02', 'The agency', 'Clients want catalogs live. Headcount is not the plan.'),
-        ('03', 'The brand', 'Agents read your page. Empty fields get skipped.'),
-        ('04', 'Fashion retail', 'Guessing size is the return you could prevent.'),
-    ]
-    cards = ''.join(
-        f'<div class="card"><small class="mono">{n}</small><b>{t}</b><p>{d}</p></div>'
-        for n, t, d in cover_cards)
-    slides = [
-        ('cover', 'Who Autommerce is for', 'Four kinds of operation. One catalog, one workspace.', cards),
-        ('body', 'The store', 'A supplier sheet landed this morning. Four hundred rows. Titles, specs and photos are still somebody\'s tonight.',
-         '<div class="stat"><div><b>400</b><span>rows waiting</span></div><div><b>1</b><span>sheet, still raw</span></div></div>'),
-        ('body', 'The agency', 'The client wants five hundred products live by Friday. Hiring for every catalog is not a plan.',
-         '<div class="stat"><div><b>500</b><span>products by Friday</span></div><div><b>0</b><span>new hires that scale</span></div></div>'),
-        ('body', 'The brand', 'An assistant was asked for your best seller and described a product you do not sell. Your page gave it nothing to quote.',
-         '<div class="stat"><div><b>3</b><span>readers on every page</span></div><div><b>1</b><span>catalog to feed them</span></div></div>'),
-        ('body', 'The fashion retailer', 'Shoppers cannot try it on, so they buy two sizes and send one back. Persona is the fitting room, inside the store.',
-         '<div class="stat"><div><b>19%</b><span>online returns, US 2025</span></div><div><b>1</b><span>fitting room in the store</span></div></div>'),
-    ]
     out = {}
-    for i, (kind, h, p, extra) in enumerate(slides):
-        k = 'The back office' if i == 0 else f'Audience 0{i} / 04'
-        body = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div><div class="count mono"><b>{i+1:02d}</b> / {N:02d}</div>
-<div class="k mono">{k}</div><h1>{h}</h1><div class="p">{p}</div>{extra if kind=='cover' else extra}</div>{foot(i, N)}'''
-        out[f'week-3/M13-who/slide_{i+1:02d}'] = doc(body, css + ('.cards{margin-top:28px}' if i == 0 else ''), '#F8F6F3')
-    return out
+    css0 = """
+.wrap{padding:40px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
+.count{position:absolute;right:56px;top:48px;font-size:15px}
+.count b{color:#F76D01;font-weight:500}
+.k{margin-top:16px;color:#F76D01;font-size:14px}
+h1{margin-top:8px;font-size:52px;width:920px}
+.p{margin-top:10px;font-size:22px;line-height:1.3;letter-spacing:-.02em;width:900px;color:#3B3742}
+.grid{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card{padding:28px 26px;min-height:380px;display:flex;flex-direction:column;justify-content:space-between}
+.card .n{font-size:13px;letter-spacing:.14em}
+.card b{font-size:40px;font-weight:800;letter-spacing:-.04em;line-height:1}
+.card span{display:block;font-size:22px;font-weight:600;letter-spacing:-.02em;line-height:1.3;margin-top:14px}
+.card .job{margin-top:18px;font-size:16px;letter-spacing:.04em;opacity:.8;font-family:'Geist Mono',monospace;text-transform:uppercase}
+.c1{background:#F76D01;color:#0B0A10}
+.c2{background:#400095;color:#fff}
+.c3{background:#6B358D;color:#fff}
+.c4{background:#0B0A10;color:#fff}
+.c4 .n,.c4 .job{color:#F76D01}
+"""
+    cards = [
+        ('c1', '01', 'The store', 'Supplier sheet. Four hundred rows. Tonight.', 'Catalog · titles · photos'),
+        ('c2', '02', 'The agency', 'Five hundred live by Friday. No hire-for-every-catalog.', 'Clients · deadlines · scale'),
+        ('c3', '03', 'The brand', 'An assistant invents a product you do not sell.', 'Facts · quotes · AEO/GEO'),
+        ('c4', '04', 'Fashion retail', 'Buy two sizes. Return one. Persona fits inside.', 'Fitting room · in-store'),
+    ]
+    card_html = ''.join(
+        f'<div class="card {c}"><div class="n mono">{n}</div><div><b>{t}</b><span>{d}</span><div class="job">{j}</div></div></div>'
+        for c, n, t, d, j in cards)
+    body0 = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div><div class="count mono"><b>01</b> / {N:02d}</div>
+<div class="k mono">The back office</div><h1>Who Autommerce is&nbsp;for</h1>
+<div class="p">Four kinds of operation. One catalog, one workspace.</div>
+<div class="grid">{card_html}</div></div>{foot(0, N)}'''
+    out['week-3/M13-who/slide_01'] = doc(body0, css0)
 
+    slides = [
+        ('#FFF4E8', '#F76D01', '#0B0A10', '02', 'The store',
+         'A supplier sheet landed this morning. Four hundred rows. Titles, specs and photos are still somebody\'s tonight.',
+         [('400', 'rows waiting'), ('Tonight', 'titles · specs · photos'), ('One sheet', 'still somebody\'s job')],
+         [('Titles', 'Still blank or vendor codes'), ('Specs', 'Trapped in a PDF'), ('Photos', 'Missing half the variants'), ('Tonight', 'Someone types until midnight')]),
+        ('#F4F0F6', '#400095', '#fff', '03', 'The agency',
+         'The client wants five hundred products live by Friday. Hiring for every catalog is not a plan.',
+         [('500', 'products by Friday'), ('Hiring', 'is not the plan'), ('One workspace', 'every catalog')],
+         [('Brief', 'Live by Friday'), ('Headcount', 'Cannot scale per client'), ('Workspace', 'One place for every catalog'), ('Margin', 'Protect the agency model')]),
+        ('#F8F6F3', '#6B358D', '#fff', '04', 'The brand',
+         'An assistant was asked for your best seller and described a product you do not sell. Your page gave it nothing to quote.',
+         [('Asked', 'your best seller'), ('Quoted', 'nothing real'), ('Page', 'gave it no facts')],
+         [('Shopper', 'Asked an assistant'), ('Answer', 'Invented a product'), ('Cause', 'Empty fields on the PDP'), ('Fix', 'Facts written as text')]),
+        ('#F8F6F3', '#0B0A10', '#F76D01', '05', 'The fashion retailer',
+         'Shoppers cannot try it on, so they buy two sizes and send one back. Persona is the fitting room, inside the store.',
+         [('Two sizes', 'bought'), ('One', 'comes back'), ('Persona', 'fitting room inside')],
+         [('Doubt', 'How will this look on me?'), ('Behavior', 'Buy two, return one'), ('Cost', 'Returns tax the margin'), ('Room', 'Persona fits inside the store')]),
+    ]
+    for i, (bg, accent, accent_fg, num, title, copy, stats, rows) in enumerate(slides, start=1):
+        css = f"""
+.wrap{{padding:40px 56px 0}}
+.lock{{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}}
+.count{{position:absolute;right:56px;top:48px;font-size:15px}}
+.count b{{color:{accent};font-weight:500}}
+.k{{margin-top:16px;color:{accent};font-size:14px}}
+.banner{{margin-top:14px;background:{accent};color:{accent_fg};padding:26px 28px}}
+.banner h1{{font-size:52px;width:auto}}
+.p{{margin-top:18px;font-size:26px;line-height:1.35;letter-spacing:-.02em;width:920px;color:#3B3742;font-weight:600}}
+.stats{{margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}}
+.stats div{{background:#fff;border:1.5px solid rgba(11,10,16,.1);padding:22px 20px;min-height:150px}}
+.stats b{{display:block;font-size:34px;font-weight:800;letter-spacing:-.04em;line-height:1;color:{accent}}}
+.stats span{{display:block;margin-top:12px;font-size:18px;font-weight:600;letter-spacing:-.02em;line-height:1.25;color:#3B3742}}
+.rows{{margin-top:16px;background:#fff;border:1.5px solid rgba(11,10,16,.1)}}
+.rows .r{{display:grid;grid-template-columns:160px 1fr;gap:16px;padding:18px 22px;border-top:1px solid rgba(11,10,16,.08);align-items:center}}
+.rows .r:first-child{{border-top:0}}
+.rows .r b{{font-size:14px;letter-spacing:.14em;color:{accent};font-weight:500;font-family:'Geist Mono',monospace;text-transform:uppercase}}
+.rows .r span{{font-size:24px;font-weight:650;letter-spacing:-.025em}}
+"""
+        stat_html = ''.join(f'<div><b>{a}</b><span>{b}</span></div>' for a, b in stats)
+        row_html = ''.join(f'<div class="r"><b>{a}</b><span>{b}</span></div>' for a, b in rows)
+        body = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div><div class="count mono"><b>{num}</b> / {N:02d}</div>
+<div class="k mono">0{i} / 04</div>
+<div class="banner"><h1>{title}</h1></div>
+<div class="p">{copy}</div>
+<div class="stats">{stat_html}</div>
+<div class="rows">{row_html}</div></div>{foot(i, N)}'''
+        out[f'week-3/M13-who/slide_{i+1:02d}'] = doc(body, css, bg)
+    return out
 
 # ---------------------------------------------------------------- P8 mirror
 def p8():
@@ -390,25 +593,37 @@ h1{margin-top:12px;font-size:68px;width:920px}
 
     # 02 Zara — ink band
     css2 = """
-.band{position:absolute;left:0;top:0;bottom:0;width:340px;background:#0B0A10;color:#fff;padding:56px 40px 0}
-.band .k{color:#F76D01;font-size:15px;margin-top:80px}
-.band .brand{margin-top:20px;font-size:72px;font-weight:800;letter-spacing:-.05em}
-.band .yr{margin-top:18px;font-size:16px;color:rgba(255,255,255,.55)}
-.main{position:absolute;left:340px;right:0;top:0;bottom:0;padding:56px 56px 0 48px;background:#F8F6F3}
+.band{position:absolute;left:0;top:0;bottom:0;width:340px;background:#0B0A10;color:#fff;padding:56px 36px 0}
+.band .k{color:#F76D01;font-size:15px;margin-top:70px}
+.band .brand{margin-top:18px;font-size:72px;font-weight:800;letter-spacing:-.05em}
+.band .yr{margin-top:16px;font-size:15px;color:rgba(255,255,255,.55)}
+.band .stack{margin-top:48px;display:flex;flex-direction:column;gap:14px}
+.band .chip{padding:16px 16px;border-radius:12px;background:rgba(255,255,255,.08);font-size:16px;line-height:1.3}
+.band .chip b{display:block;color:#F76D01;font-size:13px;font-weight:500;margin-bottom:6px;font-family:'Geist Mono',monospace;letter-spacing:.12em;text-transform:uppercase}
+.main{position:absolute;left:340px;right:0;top:0;bottom:0;padding:48px 48px 0 44px;background:#F8F6F3}
 .lock{display:flex;align-items:center;gap:12px}
 .lock b{font-size:22px;font-weight:800}
 .lock small{display:block;font-size:11px;opacity:.55;margin-top:2px}
-.count{position:absolute;right:56px;top:56px;font-size:16px}
+.count{position:absolute;right:48px;top:52px;font-size:16px}
 .count b{color:#F76D01;font-weight:500}
-h1{margin-top:56px;font-size:56px;width:580px}
-.p{margin-top:22px;font-size:26px;line-height:1.35;letter-spacing:-.02em;width:560px;color:#3B3742}
-.facts{margin-top:36px;display:flex;flex-direction:column;gap:12px}
-.f{background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:14px;padding:18px 22px;display:flex;justify-content:space-between;align-items:center}
+h1{margin-top:40px;font-size:52px;width:600px}
+.p{margin-top:18px;font-size:24px;line-height:1.35;letter-spacing:-.02em;width:580px;color:#3B3742}
+.facts{margin-top:28px;display:flex;flex-direction:column;gap:10px}
+.f{background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:14px;padding:20px 22px;display:flex;justify-content:space-between;align-items:center}
 .f b{font-size:22px;letter-spacing:-.02em}
 .f span{font-family:'Geist Mono',monospace;font-size:13px;color:#F76D01}
-.src{position:absolute;left:388px;right:56px;bottom:110px;font-size:14px;color:rgba(11,10,16,.5);line-height:1.4}
+.flow{margin-top:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.flow div{background:#0B0A10;color:#fff;border-radius:12px;padding:16px 14px;text-align:center}
+.flow small{display:block;color:#F76D01;font-size:11px}
+.flow b{display:block;margin-top:8px;font-size:18px;letter-spacing:-.02em}
+.src{position:absolute;left:384px;right:48px;bottom:110px;font-size:14px;color:rgba(11,10,16,.5);line-height:1.4}
 """
-    body2 = f'''<div class="band"><div class="k mono">Brand 01</div><div class="brand">Zara</div><div class="yr mono">Try-On · from Dec 2025</div></div>
+    body2 = f'''<div class="band"><div class="k mono">Brand 01</div><div class="brand">Zara</div><div class="yr mono">Try-On · from Dec 2025</div>
+<div class="stack">
+<div class="chip"><b>Capture</b>Face + full body</div>
+<div class="chip"><b>Motion</b>Avatar walks the look</div>
+<div class="chip"><b>Disclosure</b>Generated · may not match</div>
+</div></div>
 <div class="main"><div class="lock">{logo()}<div><b>Persona AI</b><small class="mono">By Autommerce</small></div></div>
 <div class="count mono"><b>02</b> / {N:02d}</div>
 <h1>An avatar, from two&nbsp;photos.</h1>
@@ -418,6 +633,7 @@ h1{margin-top:56px;font-size:56px;width:580px}
 <div class="f"><b>Walking avatar</b><span class="mono">OUTPUT</span></div>
 <div class="f"><b>Disclosure on every try</b><span class="mono">TRUST</span></div>
 </div>
+<div class="flow"><div><small class="mono">01</small><b>Photo</b></div><div><small class="mono">02</small><b>Avatar</b></div><div><small class="mono">03</small><b>Try-on</b></div></div>
 <div class="src mono">Zara Try-On, rolling out from December 2025</div></div>{foot(1, N)}'''
     out['week-3/P10-tryon-mainstream/slide_02'] = doc(body2, css2)
 
@@ -454,23 +670,29 @@ h1{font-size:58px;width:920px}
 
     # 04 ASOS — purple stripe
     css4 = """
-.stripe{position:absolute;left:0;right:0;top:0;height:18px;background:#400095}
-.accent{position:absolute;left:0;top:18px;bottom:0;width:18px;background:#400095}
-.wrap{padding:56px 64px 0 72px}
+.stripe{position:absolute;left:0;right:0;top:0;height:28px;background:#400095}
+.accent{position:absolute;left:0;top:28px;bottom:0;width:28px;background:#400095}
+.wrap{padding:56px 56px 0 72px}
 .lock{display:flex;align-items:center;gap:12px}
 .lock b{font-size:22px;font-weight:800}
 .lock small{display:block;font-size:11px;opacity:.55;margin-top:2px}
-.count{position:absolute;right:64px;top:56px;font-size:16px}
+.count{position:absolute;right:56px;top:56px;font-size:16px}
 .count b{color:#400095;font-weight:500}
-.k{margin-top:36px;color:#400095;font-size:15px}
-h1{margin-top:12px;font-size:58px;width:900px}
-.p{margin-top:18px;font-size:26px;line-height:1.3;width:880px;color:#3B3742}
-.grid{margin-top:32px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-.g{background:#fff;border:1px solid rgba(64,0,149,.18);border-radius:16px;padding:24px 20px;min-height:200px}
+.k{margin-top:28px;color:#400095;font-size:15px}
+h1{margin-top:12px;font-size:54px;width:900px}
+.p{margin-top:16px;font-size:24px;line-height:1.3;width:880px;color:#3B3742}
+.grid{margin-top:24px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.g{background:#fff;border:1px solid rgba(64,0,149,.18);border-radius:16px;padding:24px 20px;min-height:190px}
 .g small{color:#400095;font-size:13px}
-.g b{display:block;margin-top:16px;font-size:36px;letter-spacing:-.04em;line-height:1}
+.g b{display:block;margin-top:14px;font-size:40px;letter-spacing:-.04em;line-height:1}
 .g span{display:block;margin-top:12px;font-size:17px;color:#3B3742;line-height:1.3}
-.src{position:absolute;left:72px;right:64px;bottom:110px;font-size:14px;color:rgba(11,10,16,.5);line-height:1.4}
+.panel{margin-top:14px;background:#400095;color:#fff;border-radius:18px;padding:26px 28px}
+.panel .lab{font-size:13px;color:rgba(255,255,255,.7)}
+.rows{margin-top:14px}
+.r{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-top:1px solid rgba(255,255,255,.18);font-size:22px;font-weight:650;letter-spacing:-.02em}
+.r:first-child{border-top:0}
+.r em{font-style:normal;font-family:'Geist Mono',monospace;font-size:14px;color:#F76D01;font-weight:500}
+.src{position:absolute;left:72px;right:56px;bottom:110px;font-size:14px;color:rgba(11,10,16,.5);line-height:1.4}
 """
     body4 = f'''<div class="stripe"></div><div class="accent"></div>
 <div class="wrap"><div class="lock">{logo()}<div><b>Persona AI</b><small class="mono">By Autommerce</small></div></div>
@@ -483,6 +705,12 @@ h1{margin-top:12px;font-size:58px;width:900px}
 <div class="g"><small class="mono">SPEED</small><b>4–7s</b><span>Per try-on load</span></div>
 <div class="g"><small class="mono">MODE</small><b>2</b><span>Own photo or AI likeness</span></div>
 </div>
+<div class="panel"><div class="lab mono">How it works</div>
+<div class="rows">
+<div class="r"><span>Upload your photo</span><em>OR LIKENESS</em></div>
+<div class="r"><span>Pick a product</span><em>~10,000 SKUS</em></div>
+<div class="r"><span>See it on you</span><em>4–7 SECONDS</em></div>
+</div></div>
 <div class="src mono">ASOS, 17 February 2026, with AIUTA. Select UK and US customers.</div></div>{foot(3, N)}'''
     out['week-3/P10-tryon-mainstream/slide_04'] = doc(body4, css4)
 
@@ -667,18 +895,21 @@ h1{margin-top:12px;font-size:58px;width:920px}
 """
     # Slide 1 — three metric cards + day strip
     s1 = base_css + """
-.metrics{margin-top:36px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
-.m{background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:18px;padding:22px 20px 20px}
+.metrics{margin-top:28px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.m{background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:18px;padding:26px 22px 24px;min-height:210px}
 .m small{font-size:13px;color:#F76D01}
-.m b{display:block;margin-top:14px;font-size:36px;letter-spacing:-.04em;line-height:1}
-.m span{display:block;margin-top:10px;font-size:15px;color:#3B3742;line-height:1.3}
-.days{margin-top:22px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
-.d{height:88px;border-radius:14px;background:rgba(11,10,16,.05);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
-.d b{font-family:'Geist Mono',monospace;font-size:13px;font-weight:500;color:rgba(11,10,16,.45)}
-.d i{font-style:normal;font-size:18px;font-weight:700;letter-spacing:-.02em}
+.m b{display:block;margin-top:18px;font-size:40px;letter-spacing:-.04em;line-height:1}
+.m span{display:block;margin-top:14px;font-size:17px;color:#3B3742;line-height:1.3}
+.days{margin-top:18px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.d{height:110px;border-radius:14px;background:rgba(11,10,16,.05);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.d b{font-family:'Geist Mono',monospace;font-size:14px;font-weight:500;color:rgba(11,10,16,.45)}
+.d i{font-style:normal;font-size:22px;font-weight:700;letter-spacing:-.02em}
 .d.on{background:#F76D01;color:#0B0A10}
 .d.on b{color:rgba(11,10,16,.7)}
 .cap{margin-top:14px;font-size:15px;color:rgba(11,10,16,.5)}
+.watch{margin-top:16px;background:#0B0A10;color:#fff;border-radius:16px;padding:22px 26px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.watch small{display:block;color:#F76D01;font-size:12px}
+.watch b{display:block;margin-top:8px;font-size:22px;letter-spacing:-.02em}
 """
     days = ''.join(
         f'<div class="d {"on" if d=="Fri" else ""}"><b>{d}</b><i>{n}</i></div>'
@@ -694,28 +925,35 @@ h1{margin-top:12px;font-size:58px;width:920px}
 <div class="m"><small class="mono">03 · The drop</small><b>Cart → order</b><span>Added, never checked out</span></div>
 </div>
 <div class="days">{days}</div>
-<div class="cap mono">White Friday week · read the day, not the week</div></div>{foot(0, N)}'''
+<div class="cap mono">White Friday week · read the day, not the week</div>
+<div class="watch">
+<div><small class="mono">Check</small><b>Conversion</b></div>
+<div><small class="mono">Check</small><b>Stock at 12:00</b></div>
+<div><small class="mono">Check</small><b>Cart drop</b></div>
+</div></div>{foot(0, N)}'''
 
     # Slide 2 — conversion bars
     s2 = base_css + """
-.panel{margin-top:28px;background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:20px;padding:28px 32px 24px}
+.panel{margin-top:22px;background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:20px;padding:28px 32px 26px}
 .panel .lab{font-size:14px;color:rgba(11,10,16,.5)}
-.bars{margin-top:18px}
-.bar{display:grid;grid-template-columns:160px 1fr 70px;align-items:center;gap:16px;padding:12px 0;border-top:1px solid rgba(11,10,16,.08)}
+.bars{margin-top:14px}
+.bar{display:grid;grid-template-columns:170px 1fr 70px;align-items:center;gap:16px;padding:18px 0;border-top:1px solid rgba(11,10,16,.08)}
 .bar:first-child{border-top:0}
-.bar b{font-size:20px;letter-spacing:-.02em}
-.track{height:16px;border-radius:8px;background:rgba(11,10,16,.08);overflow:hidden}
-.fill{height:100%;border-radius:8px;background:#F76D01}
+.bar b{font-size:22px;letter-spacing:-.02em}
+.track{height:20px;border-radius:10px;background:rgba(11,10,16,.08);overflow:hidden}
+.fill{height:100%;border-radius:10px;background:#F76D01}
 .fill.warn{background:#C40000}
-.bar em{font-style:normal;font-family:'Geist Mono',monospace;font-size:16px;text-align:right}
-.call{margin-top:18px;padding:18px 22px;border-radius:14px;background:#0B0A10;color:#fff;font-size:22px;font-weight:650;letter-spacing:-.02em}
+.bar em{font-style:normal;font-family:'Geist Mono',monospace;font-size:18px;text-align:right}
+.call{margin-top:20px;padding:22px 24px;border-radius:14px;background:#0B0A10;color:#fff;font-size:24px;font-weight:650;letter-spacing:-.02em}
 .call span{color:#F76D01}
 """
     bars = [
         ('Hero coat', 72, False),
         ('Boot edit', 58, False),
         ('Gift set', 41, False),
+        ('Cashmere set', 33, False),
         ('Lookbook #3', 19, True),
+        ('Gift card', 14, True),
     ]
     bar_html = ''
     for name, pct, warn in bars:
@@ -730,17 +968,17 @@ h1{margin-top:12px;font-size:58px;width:920px}
 
     # Slide 3 — stock timeline
     s3 = base_css + """
-.timeline{margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.slot{background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:18px;padding:22px 24px}
+.timeline{margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.slot{background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:18px;padding:28px 26px;min-height:168px}
 .slot small{font-size:13px;color:rgba(11,10,16,.45)}
-.slot b{display:block;margin-top:10px;font-size:42px;letter-spacing:-.045em}
-.slot span{display:block;margin-top:8px;font-size:18px;color:#3B3742;line-height:1.3}
+.slot b{display:block;margin-top:14px;font-size:48px;letter-spacing:-.045em}
+.slot span{display:block;margin-top:10px;font-size:20px;color:#3B3742;line-height:1.3}
 .slot.bad{background:#C40000;color:#fff;border:0}
 .slot.bad small{color:rgba(255,255,255,.7)}
 .slot.bad span{color:rgba(255,255,255,.85)}
-.clock{margin-top:16px;background:#0B0A10;color:#fff;border-radius:18px;padding:26px 28px;display:flex;justify-content:space-between;align-items:center}
-.clock b{font-size:56px;letter-spacing:-.05em;color:#F76D01}
-.clock p{font-size:22px;font-weight:650;letter-spacing:-.02em;width:520px;line-height:1.25}
+.clock{margin-top:16px;background:#0B0A10;color:#fff;border-radius:18px;padding:30px 32px;display:flex;justify-content:space-between;align-items:center}
+.clock b{font-size:64px;letter-spacing:-.05em;color:#F76D01}
+.clock p{font-size:24px;font-weight:650;letter-spacing:-.02em;width:540px;line-height:1.25}
 """
     body3 = f'''<div class="wrap"><div class="lock">{logo()}<div><b>Abbas Zein</b><small class="mono">Founder notes</small></div></div>
 <div class="count mono"><b>03</b> / {N:02d}</div>
@@ -757,17 +995,17 @@ h1{margin-top:12px;font-size:58px;width:920px}
 
     # Slide 4 — funnel drop chart
     s4 = base_css + """
-.funnel{margin-top:28px;display:flex;flex-direction:column;gap:12px}
-.step{border-radius:16px;padding:22px 28px;display:flex;justify-content:space-between;align-items:center;color:#fff}
-.step b{font-size:28px;letter-spacing:-.03em}
-.step em{font-style:normal;font-family:'Geist Mono',monospace;font-size:22px}
+.funnel{margin-top:22px;display:flex;flex-direction:column;gap:14px}
+.step{border-radius:16px;padding:26px 28px;display:flex;justify-content:space-between;align-items:center;color:#fff}
+.step b{font-size:30px;letter-spacing:-.03em}
+.step em{font-style:normal;font-family:'Geist Mono',monospace;font-size:24px}
 .s1{background:#400095;width:100%}
 .s2{background:#6B358D;width:86%;margin-left:0}
 .s3{background:#F76D01;color:#0B0A10;width:64%}
 .s4{background:#C40000;width:38%}
-.gap{margin-top:20px;padding:22px 26px;border-radius:16px;border:2px solid #C40000;background:rgba(196,0,0,.06)}
-.gap b{display:block;font-size:28px;letter-spacing:-.03em;color:#C40000}
-.gap span{display:block;margin-top:8px;font-size:20px;color:#3B3742;line-height:1.3}
+.gap{margin-top:18px;padding:26px 28px;border-radius:16px;border:2px solid #C40000;background:rgba(196,0,0,.06)}
+.gap b{display:block;font-size:30px;letter-spacing:-.03em;color:#C40000}
+.gap span{display:block;margin-top:8px;font-size:22px;color:#3B3742;line-height:1.3}
 """
     body4 = f'''<div class="wrap"><div class="lock">{logo()}<div><b>Abbas Zein</b><small class="mono">Founder notes</small></div></div>
 <div class="count mono"><b>04</b> / {N:02d}</div>
@@ -812,84 +1050,152 @@ h1{margin-top:120px;font-size:108px;width:920px}
 # ---------------------------------------------------------------- M15 growth
 def m15():
     css = """
-.wrap{padding:56px 72px 0}
-.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:26px}
-h1{margin-top:40px;font-size:64px;width:940px}
-.steps{margin-top:40px;position:relative}
-.steps:before{content:'';position:absolute;left:22px;top:24px;bottom:24px;width:2px;background:rgba(247,109,1,.45)}
-.st{display:grid;grid-template-columns:64px 1fr;align-items:center;padding:16px 0}
-.dot{width:46px;height:46px;border-radius:50%;background:#F76D01;color:#0B0A10;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;position:relative;z-index:1}
-.st b{font-size:40px;letter-spacing:-.04em}
-.note{position:absolute;left:72px;right:72px;bottom:60px;font-size:26px;line-height:1.35;letter-spacing:-.02em;color:#3B3742}
+.wrap{padding:40px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
+h1{margin-top:18px;font-size:48px;width:940px}
+.sub{margin-top:10px;font-size:20px;color:#3B3742;letter-spacing:-.015em;max-width:900px}
+.stages{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.st{padding:24px 22px;min-height:250px;display:flex;flex-direction:column;justify-content:space-between}
+.st .n{font-size:13px;letter-spacing:.14em}
+.st b{font-size:38px;font-weight:800;letter-spacing:-.04em;line-height:1}
+.st span{margin-top:12px;font-size:20px;font-weight:600;letter-spacing:-.02em;line-height:1.3}
+.s1{background:#F76D01;color:#0B0A10}
+.s2{background:#FFF4E8;color:#0B0A10;border:1.5px solid rgba(247,109,1,.35)}
+.s2 .n{color:#F76D01}
+.s3{background:#400095;color:#fff}
+.s4{background:#0B0A10;color:#fff}
+.s4 .n{color:#F76D01}
+.pipe{margin-top:16px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.pipe div{background:#fff;border:1.5px solid rgba(11,10,16,.1);padding:14px 10px;text-align:center;min-height:110px}
+.pipe b{display:block;font-size:12px;letter-spacing:.1em;color:#F76D01;margin-bottom:8px;font-weight:500}
+.pipe span{font-size:15px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.pipe .on{background:#0B0A10;color:#fff;border-color:#0B0A10}
+.pipe .on b{color:#F76D01}
+.note{margin-top:14px;padding:18px 20px;background:#F76D01;color:#0B0A10;font-size:22px;line-height:1.3;letter-spacing:-.02em;font-weight:650}
 """
-    steps = ''.join(f'<div class="st"><div class="dot">{n}</div><b>{t}</b></div>' for n, t in [('01', 'Niche'), ('02', 'Keywords'), ('03', 'Collections'), ('04', 'Articles')])
+    pipe = [
+        ('01', 'Research'), ('02', 'Niche'), ('03', 'Keywords'), ('04', 'Outline'),
+        ('05', 'Collections'), ('06', 'Articles'), ('07', 'Publish'),
+    ]
+    on = {2, 3, 5, 6}
+    pipe_html = ''.join(
+        f'<div class="{"on" if i in on else ""}"><b class="mono">{n}</b><span>{t}</span></div>'
+        for i, (n, t) in enumerate(pipe, start=1))
     body = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div>
 <h1>From a keyword to a page in the&nbsp;store.</h1>
-<div class="steps">{steps}</div></div>
-<div class="note">Growth Engine is a seven-stage agent. These four are what land in the store. You stay the&nbsp;editor.</div>'''
-    return {'week-4/M15-growth/poster': doc(body, css)}
+<div class="sub">Growth Engine is a seven-stage agent. These four are what land in the store.</div>
+<div class="stages">
+<div class="st s1"><div class="n mono">01</div><div><b>Niche</b><span>Where the demand actually sits</span></div></div>
+<div class="st s2"><div class="n mono">02</div><div><b>Keywords</b><span>The phrases shoppers type</span></div></div>
+<div class="st s3"><div class="n mono">03</div><div><b>Collections</b><span>Pages built into the store</span></div></div>
+<div class="st s4"><div class="n mono">04</div><div><b>Articles</b><span>Content that feeds the catalog</span></div></div>
+</div>
+<div class="pipe">{pipe_html}</div>
+<div class="note">You stay the editor. Nothing publishes until you say so.</div></div>'''
+    return {'week-4/M15-growth/poster': doc(body, css, '#F8F6F3')}
 
 
 # ---------------------------------------------------------------- M16 24h
 def m16():
     css = """
-.ring{position:absolute;right:80px;top:180px;width:420px;height:420px;border-radius:50%;border:18px solid #400095;display:flex;align-items:center;justify-content:center;flex-direction:column}
-.ring b{font-size:120px;letter-spacing:-.06em;line-height:.8}
-.ring span{margin-top:8px;font-size:16px;color:#400095}
-.wrap{padding:60px 72px 0;width:560px}
-.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:26px}
-h1{margin-top:80px;font-size:68px}
-.cards{position:absolute;left:72px;right:72px;bottom:70px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
-.card{background:#fff;border-radius:22px;padding:26px 28px;border:1px solid rgba(11,10,16,.08)}
-.card small{font-size:14px;color:#400095}
-.card b{display:block;margin-top:8px;font-size:30px;letter-spacing:-.03em}
+.wrap{padding:40px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
+.top{margin-top:18px;display:grid;grid-template-columns:1.25fr .75fr;gap:14px;align-items:stretch}
+h1{font-size:48px;width:auto}
+.ring{background:#400095;color:#fff;padding:24px 22px;display:flex;flex-direction:column;justify-content:flex-end;min-height:180px}
+.ring b{font-size:84px;letter-spacing:-.06em;line-height:.8}
+.ring span{margin-top:8px;font-size:13px;letter-spacing:.14em;color:#F76D01}
+.rule{margin-top:14px;background:#fff;border:1.5px solid rgba(64,0,149,.2);padding:16px 20px}
+.rule small{display:block;font-size:12px;color:#6B358D;letter-spacing:.12em}
+.rule p{margin-top:6px;font-size:22px;font-weight:650;letter-spacing:-.025em;line-height:1.3}
+.flow{margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{padding:22px 20px;min-height:200px;display:flex;flex-direction:column;justify-content:space-between}
+.card small{font-size:12px;letter-spacing:.14em}
+.card b{display:block;margin-top:8px;font-size:30px;letter-spacing:-.035em;line-height:1.15}
+.card p{margin-top:10px;font-size:18px;line-height:1.3;font-weight:550}
+.c1{background:#F4F0F6;color:#0B0A10}
+.c1 small{color:#400095}
+.c2{background:#0B0A10;color:#fff}
+.c2 small{color:#F76D01}
+.log{margin-top:14px;background:#fff;border:1.5px solid rgba(11,10,16,.1);overflow:hidden}
+.log .bar{display:flex;justify-content:space-between;padding:14px 18px;background:#0B0A10;color:#fff;font-size:13px;letter-spacing:.12em}
+.log .bar span{color:#F76D01}
+.log .r{display:grid;grid-template-columns:70px 1.2fr .9fr 120px;gap:12px;padding:14px 18px;border-top:1px solid rgba(11,10,16,.08);align-items:center;font-size:18px;font-weight:650;letter-spacing:-.02em}
+.log .r:first-of-type{border-top:0}
+.log .r em{font-style:normal;font-family:'Geist Mono',monospace;font-size:13px;color:#6B358D;letter-spacing:.08em;font-weight:500}
+.log .ok{color:#400095;font-size:13px;letter-spacing:.1em;font-family:'Geist Mono',monospace;justify-self:end}
+.log .hold{color:#F76D01;font-size:13px;letter-spacing:.1em;font-family:'Geist Mono',monospace;justify-self:end}
+.note{margin-top:12px;font-size:14px;color:rgba(11,10,16,.55)}
 """
-    body = f'''<div class="ring"><b>24h</b><span class="mono">Every day</span></div>
-<div class="wrap"><div class="lock">{logo()} Autommerce</div>
-<h1>New stock, classified while you&nbsp;sleep.</h1></div>
-<div class="cards"><div class="card"><small class="mono">Fits a rule</small><b>Filed in the right category.</b></div>
-<div class="card"><small class="mono">Doesn't fit</small><b>Listed. Not guessed.</b></div></div>'''
-    return {'week-4/M16-sync/poster': doc(body, css)}
+    rows = [
+        ('02:11', 'Sony WH-1000XM5', 'Headphones', 'ok', 'Filed'),
+        ('02:11', 'Anker 65W GaN', 'Chargers', 'ok', 'Filed'),
+        ('02:12', 'Ceramic planter set', 'Home · unclear', 'hold', 'Listed'),
+        ('02:12', 'USB-C braided cable', 'Chargers', 'ok', 'Filed'),
+    ]
+    log = ''.join(
+        f'<div class="r"><em>{t}</em><b>{n}</b><span>{c}</span><span class="{cls}">{st}</span></div>'
+        for t, n, c, cls, st in rows)
+    body = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div>
+<div class="top"><h1>New stock, classified while you&nbsp;sleep.</h1>
+<div class="ring"><b>24h</b><span class="mono">Every day</span></div></div>
+<div class="rule"><small class="mono">The rule you set once</small><p>If it matches Headphones or Chargers, file it. Everything else stays listed, not guessed.</p></div>
+<div class="flow">
+<div class="card c1"><div><small class="mono">Fits a rule</small><b>Filed in the right category.</b></div><p>New SKUs land where shoppers already look.</p></div>
+<div class="card c2"><div><small class="mono">Doesn't fit</small><b>Listed. Not guessed.</b></div><p>Ambiguous products wait for you — never auto-invented.</p></div>
+</div>
+<div class="log"><div class="bar mono"><b>Overnight run</b><span>4 new SKUs</span></div>{log}</div>
+<div class="note mono">Growth Sync · classify on a schedule · you keep the exceptions</div></div>'''
+    return {'week-4/M16-sync/poster': doc(body, css, '#F8F6F3')}
 
 
 # ---------------------------------------------------------------- M17 gallery
 def m17():
     css = """
-.wrap{padding:48px 56px 0}
-.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:26px}
-h1{margin-top:22px;font-size:58px;width:960px}
-.grid{margin-top:28px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
-.cell{height:268px;border-radius:22px;overflow:hidden;position:relative;background:#E8E4DE}
-.cell img{width:100%;height:100%;object-fit:cover;display:block}
-.cell .lab{position:absolute;left:16px;bottom:16px;right:16px;font-size:22px;font-weight:700;letter-spacing:-.02em;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.55)}
-.cell.on{background:#0B0A10}
-.cell.on .lab{color:#fff}
-.cell.on .lab span{display:block;color:#F76D01;font-family:'Geist Mono',monospace;font-size:13px;letter-spacing:.14em;font-weight:500;margin-bottom:6px;text-shadow:none}
-.note{position:absolute;left:56px;right:56px;bottom:48px;font-size:22px;color:#3B3742;letter-spacing:-.015em}
+.wrap{padding:40px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
+h1{margin-top:16px;font-size:48px;width:960px}
+.grid{margin-top:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.cell{height:340px;overflow:hidden;position:relative;padding:22px 20px;display:flex;flex-direction:column;justify-content:space-between}
+.cell .tag{font-size:12px;letter-spacing:.14em}
+.cell .lab{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1.05}
+.cell .cap{font-size:17px;font-weight:550;line-height:1.3;opacity:.9;margin-top:6px}
+.cell img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cell.hasimg .lab,.cell.hasimg .tag,.cell.hasimg .cap{position:relative;z-index:1;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.45)}
+.cell.hasimg:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,10,16,.12),rgba(11,10,16,.78));z-index:0}
+.c0{background:#0B0A10;color:#fff}
+.c0 .tag{color:#F76D01}
+.c1{background:#F76D01;color:#0B0A10}
+.c2{background:#E8E0D4;color:#0B0A10}
+.c3{background:#400095;color:#fff}
+.c4{background:#6B358D;color:#fff}
+.c5{background:#C40000;color:#fff}
+.note{margin-top:16px;padding:20px 22px;background:#0B0A10;color:#fff;font-size:22px;letter-spacing:-.015em;line-height:1.35;display:flex;justify-content:space-between;align-items:center;gap:20px}
+.note span{color:#F76D01;font-size:14px;letter-spacing:.14em;white-space:nowrap}
 """
-    # tonal crops of the same product photo to suggest a gallery set
-    cells = [
-        ('on', None, '<span>YOU HAVE</span>1 packshot'),
-        ('', f'{ROOT}/../week-2/assets/xm5.jpg', 'Front'),
-        ('', f'{ROOT}/../week-2/assets/xm5.jpg', 'Detail'),
-        ('', f'{ROOT}/../week-2/assets/xm5.jpg', 'Scale'),
-        ('', f'{ROOT}/../week-2/assets/xm5.jpg', 'In use'),
-        ('', f'{ROOT}/../week-2/assets/xm5.jpg', 'Lifestyle'),
-    ]
-    # use relative paths from week-4/M17-gallery/poster.html
     xm = '../../week-2/assets/xm5.jpg'
-    html_cells = []
-    for i, (cls, _, lab) in enumerate(cells):
-        if cls == 'on':
-            html_cells.append(f'<div class="cell on"><div class="lab">{lab}</div></div>')
+    cells = [
+        ('c0', None, 'YOU HAVE', '1 packshot', 'The only image on the PDP'),
+        ('c1', None, 'BUILT', 'Front', 'Clean hero angle'),
+        ('hasimg c2', xm, 'EXAMPLE', 'Detail', 'Crop from the same SKU'),
+        ('c3', None, 'BUILT', 'Scale', 'Size against a known object'),
+        ('c4', None, 'BUILT', 'In use', 'On a person or desk'),
+        ('c5', None, 'BUILT', 'Lifestyle', 'Context that sells'),
+    ]
+    html = []
+    for cls, src, tag, lab, cap in cells:
+        if src:
+            html.append(
+                f'<div class="cell {cls}"><img src="{src}" style="object-position:center 35%">'
+                f'<div class="tag mono">{tag}</div><div><div class="lab">{lab}</div><div class="cap">{cap}</div></div></div>')
         else:
-            pos = ['center 20%', '30% 40%', '70% 30%', 'center 80%', 'center 50%'][i - 1]
-            html_cells.append(
-                f'<div class="cell"><img src="{xm}" style="object-position:{pos}"><div class="lab">{lab}</div></div>')
+            html.append(
+                f'<div class="cell {cls}"><div class="tag mono">{tag}</div>'
+                f'<div><div class="lab">{lab}</div><div class="cap">{cap}</div></div></div>')
     body = f'''<div class="wrap"><div class="lock">{logo()} Autommerce</div>
 <h1>One photo in. A gallery&nbsp;out.</h1>
-<div class="grid">{''.join(html_cells)}</div></div>
-<div class="note">Products Gallery finds more images of the exact same item, then exports the&nbsp;set.</div>'''
+<div class="grid">{''.join(html)}</div>
+<div class="note"><b>Products Gallery finds more images of the exact same item, then exports the set.</b><span class="mono">Export gallery</span></div></div>'''
     return {'week-4/M17-gallery/poster': doc(body, css, '#F1EEE8')}
 
 
@@ -897,22 +1203,52 @@ h1{margin-top:22px;font-size:58px;width:960px}
 def m18():
     css = """
 body{color:#fff}
-.glow{position:absolute;width:700px;height:700px;right:-200px;top:-180px;border-radius:50%;background:rgba(247,109,1,.35);filter:blur(40px)}
-.wrap{position:relative;padding:64px 72px 0}
-.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:26px}
-.when{position:absolute;right:72px;top:72px;font-size:15px;color:rgba(255,255,255,.7)}
-h1{margin-top:160px;font-size:92px;width:900px}
-.o{color:#F76D01}
-.p{margin-top:36px;font-size:32px;line-height:1.35;width:760px;color:rgba(255,255,255,.82);letter-spacing:-.02em}
-.line{position:absolute;left:72px;bottom:64px;font-size:22px;font-weight:600}
+.wrap{position:relative;padding:40px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
+.when{margin-left:auto;font-size:14px;letter-spacing:.14em;color:#F76D01}
+h1{margin-top:20px;font-size:56px;width:940px}
+.h2{margin-top:6px;font-size:56px;font-weight:800;letter-spacing:-.055em;line-height:.92;color:#F76D01}
+.p{margin-top:14px;font-size:24px;line-height:1.35;width:900px;color:rgba(255,255,255,.82);letter-spacing:-.02em}
+.grid{margin-top:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.tile{padding:20px 18px;min-height:170px;display:flex;flex-direction:column;justify-content:space-between}
+.tile small{font-size:12px;letter-spacing:.14em}
+.tile b{font-size:26px;font-weight:800;letter-spacing:-.03em;line-height:1.1}
+.t1{background:#F76D01;color:#0B0A10}
+.t2{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16)}
+.t2 small{color:#F76D01}
+.t3{background:#0B0A10;border:1px solid rgba(255,255,255,.16)}
+.t3 small{color:#F76D01}
+.ask{margin-top:14px;background:#fff;color:#0B0A10;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;gap:20px}
+.ask .l small{display:block;font-size:12px;letter-spacing:.14em;color:#6B358D}
+.ask .l b{display:block;margin-top:6px;font-size:22px;letter-spacing:-.025em}
+.ask .r{padding:12px 16px;background:#400095;color:#fff;font-weight:700;font-size:15px;white-space:nowrap}
+.log{margin-top:14px;border:1px solid rgba(255,255,255,.16);overflow:hidden}
+.log .bar{display:flex;justify-content:space-between;padding:12px 18px;background:rgba(0,0,0,.25);font-size:12px;letter-spacing:.14em}
+.log .bar span{color:#F76D01}
+.log .r{display:grid;grid-template-columns:80px 1fr 140px;gap:12px;padding:16px 18px;border-top:1px solid rgba(255,255,255,.1);align-items:center;font-size:20px;font-weight:650;letter-spacing:-.02em}
+.log .r em{font-style:normal;font-family:'Geist Mono',monospace;font-size:13px;color:#F76D01;letter-spacing:.08em;font-weight:500}
+.log .r span{font-size:14px;letter-spacing:.1em;color:rgba(255,255,255,.7);font-family:'Geist Mono',monospace;justify-self:end;text-transform:uppercase}
+.line{margin-top:14px;font-size:15px;color:rgba(255,255,255,.7)}
 """
-    body = f'''<div class="glow"></div><div class="wrap"><div class="lock">{logo(True)} Autommerce</div><div class="when mono">White Friday</div>
+    logs = [
+        ('00:41', 'SKU-5512 went out of stock', 'Waiting'),
+        ('01:18', 'Draft title for Chargers · 4 rows', 'Waiting'),
+        ('02:03', 'Price mismatch on AirPods Pro 2', 'Waiting'),
+    ]
+    log_html = ''.join(f'<div class="r"><em>{t}</em><b>{n}</b><span>{s}</span></div>' for t, n, s in logs)
+    body = f'''<div class="wrap"><div class="lock">{logo(True)} Autommerce<div class="when mono">White Friday</div></div>
 <h1>Your store is open all&nbsp;night.</h1>
-<h1 style="margin-top:8px" class="o">So is the assistant.</h1>
-<div class="p">Ask what broke. Stock, a title, a price. Nothing changes until you&nbsp;approve&nbsp;it.</div></div>
-<div class="line">Store Assistant · autommerce.com/contact</div>'''
+<div class="h2">So is the assistant.</div>
+<div class="p">Ask what broke. Stock, a title, a price. Nothing changes until you&nbsp;approve&nbsp;it.</div>
+<div class="grid">
+<div class="tile t1"><small class="mono">01 · Stock</small><b>Which SKU went dark?</b></div>
+<div class="tile t2"><small class="mono">02 · Title</small><b>Which draft is waiting?</b></div>
+<div class="tile t3"><small class="mono">03 · Price</small><b>What drifted overnight?</b></div>
+</div>
+<div class="ask"><div class="l"><small class="mono">You ask at 2:14am</small><b>Show me everything that broke since midnight.</b></div><div class="r">Approve later</div></div>
+<div class="log"><div class="bar mono"><b>Overnight queue</b><span>3 waiting</span></div>{log_html}</div>
+<div class="line mono">Store Assistant · autommerce.com/contact</div></div>'''
     return {'week-4/M18-all-night/poster': doc(body, css, '#400095')}
-
 
 # ---------------------------------------------------------------- P12 returns split
 def p12():
@@ -987,25 +1323,29 @@ h1{margin-top:28px;font-size:52px;width:960px}
 # ---------------------------------------------------------------- P14 metrics
 def p14():
     css = """
-.wrap{padding:48px 56px 0}
+.wrap{padding:44px 52px 0}
 .lock{display:flex;align-items:center;gap:12px}
 .lock b{font-size:22px;font-weight:800}
 .lock small{display:block;font-size:11px;opacity:.55;margin-top:2px}
-.chip{position:absolute;right:56px;top:52px;padding:10px 14px;border-radius:999px;background:#400095;color:#fff;font-size:13px}
-h1{margin-top:28px;font-size:52px;width:900px}
-.hero{margin-top:24px;background:#0B0A10;color:#fff;border-radius:20px;padding:28px 32px;display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}
+.chip{position:absolute;right:52px;top:48px;padding:10px 14px;border-radius:999px;background:#400095;color:#fff;font-size:13px}
+h1{margin-top:22px;font-size:48px;width:920px}
+.hero{margin-top:20px;background:#0B0A10;color:#fff;border-radius:20px;padding:32px 34px;display:grid;grid-template-columns:1.1fr .9fr;gap:24px;align-items:center}
 .hero small{color:#F76D01;font-size:13px}
-.hero b{display:block;margin-top:8px;font-size:72px;letter-spacing:-.06em;line-height:.9}
-.hero span{display:block;margin-top:10px;font-size:18px;color:rgba(255,255,255,.7)}
-.spark{display:flex;align-items:flex-end;gap:8px;height:100px;padding-bottom:8px}
+.hero b{display:block;margin-top:10px;font-size:80px;letter-spacing:-.06em;line-height:.9}
+.hero span{display:block;margin-top:12px;font-size:18px;color:rgba(255,255,255,.7)}
+.spark{display:flex;align-items:flex-end;gap:8px;height:130px;padding-bottom:8px}
 .spark i{flex:1;border-radius:6px 6px 0 0;background:#F76D01;display:block}
 .grid{margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.card{background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:16px;padding:22px 22px 18px}
+.card{background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:16px;padding:26px 24px 22px;min-height:168px}
 .card small{color:#400095;font-size:12px}
-.card b{display:block;margin-top:10px;font-size:40px;letter-spacing:-.045em;line-height:.95}
-.card span{display:block;margin-top:8px;font-size:16px;color:#3B3742}
-.card .up{color:#F76D01;font-family:'Geist Mono',monospace;font-size:13px;margin-top:10px}
-.note{position:absolute;left:56px;right:56px;bottom:44px;font-size:17px;color:rgba(11,10,16,.55)}
+.card b{display:block;margin-top:12px;font-size:44px;letter-spacing:-.045em;line-height:.95}
+.card span{display:block;margin-top:10px;font-size:17px;color:#3B3742}
+.card .up{color:#F76D01;font-family:'Geist Mono',monospace;font-size:13px;margin-top:14px}
+.strip{margin-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.strip div{background:#400095;color:#fff;border-radius:14px;padding:18px 18px}
+.strip small{font-size:12px;opacity:.75}
+.strip b{display:block;margin-top:8px;font-size:20px;letter-spacing:-.02em}
+.note{position:absolute;left:52px;right:52px;bottom:40px;font-size:16px;color:rgba(11,10,16,.55)}
 """
     bars = ''.join(f'<i style="height:{h}%"></i>' for h in [35, 48, 42, 60, 55, 72, 68, 88, 80, 95])
     body = f'''<div class="wrap"><div class="lock">{logo()}<div><b>Persona AI</b><small class="mono">By Autommerce</small></div></div>
@@ -1018,6 +1358,11 @@ h1{margin-top:28px;font-size:52px;width:900px}
 <div class="card"><small class="mono">03 · Conversion</small><b>4.8%</b><span>Try-on sessions → buy</span><div class="up">↑ 0.6 pts</div></div>
 <div class="card"><small class="mono">04 · AOV</small><b>$154</b><span>Average order value</span><div class="up">↑ $12</div></div>
 <div class="card"><small class="mono">05 · Returns</small><b>9.1%</b><span>Below store average</span><div class="up">↓ 3.4 pts</div></div>
+</div>
+<div class="strip">
+<div><small class="mono">Before Friday</small><b>Turn tracking on</b></div>
+<div><small class="mono">Next to</small><b>Store revenue</b></div>
+<div><small class="mono">Read daily</small><b>Not Monday</b></div>
 </div></div>
 <div class="note mono">Five numbers, next to revenue. Turn tracking on before Friday.</div>'''
     return {'week-4/P14-dashboard/poster': doc(body, css, '#F4F0F6')}
@@ -1027,30 +1372,41 @@ h1{margin-top:28px;font-size:52px;width:900px}
 def p15():
     css = """
 .rail{position:absolute;left:0;top:0;bottom:0;width:18px;background:linear-gradient(180deg,#F76D01,#C40000 45%,#400095)}
-.top{position:absolute;left:56px;right:56px;top:48px;display:flex;justify-content:space-between;align-items:center}
+.bands{position:absolute;right:0;top:0;width:120px;height:1350px;display:flex;flex-direction:column}
+.bands i{flex:1;display:block}
+.bands .o{background:#F76D01}
+.bands .r{background:#C40000}
+.bands .p{background:#400095}
+.bands .v{background:#6B358D}
+.top{position:absolute;left:56px;right:160px;top:48px;display:flex;justify-content:space-between;align-items:center}
 .lock{display:flex;align-items:center;gap:12px;font-weight:800;font-size:22px}
 .lock small{display:block;font-size:11px;font-weight:500;opacity:.55;margin-top:2px}
 .mark{font-size:14px;color:#F76D01}
-h1{position:absolute;left:56px;top:220px;font-size:92px;width:960px;line-height:.94}
+h1{position:absolute;left:56px;top:150px;font-size:82px;width:860px;line-height:.94}
 .grad{background:linear-gradient(100deg,#F76D01,#C40000 50%,#6B358D);-webkit-background-clip:text;background-clip:text;color:transparent;padding-right:.08em}
-.pillars{position:absolute;left:56px;right:56px;top:720px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-.p{background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:16px;padding:22px 20px}
-.p small{color:#F76D01;font-size:12px}
-.p b{display:block;margin-top:10px;font-size:24px;letter-spacing:-.03em}
-.p span{display:block;margin-top:8px;font-size:16px;color:#3B3742;line-height:1.3}
-.sub{position:absolute;left:56px;right:56px;bottom:48px;display:flex;justify-content:space-between;align-items:flex-end}
-.sub p{font-size:24px;width:640px;line-height:1.35;letter-spacing:-.02em;color:#3B3742}
+.pillars{position:absolute;left:56px;right:160px;top:500px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.pi{background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:16px;padding:28px 22px;min-height:240px}
+.pi small{color:#F76D01;font-size:13px}
+.pi b{display:block;margin-top:16px;font-size:28px;letter-spacing:-.03em}
+.pi span{display:block;margin-top:14px;font-size:18px;color:#3B3742;line-height:1.3}
+.quote{position:absolute;left:56px;right:160px;top:780px;background:#0B0A10;color:#fff;border-radius:18px;padding:30px 32px}
+.quote p{font-size:28px;font-weight:650;letter-spacing:-.03em;line-height:1.3;width:820px}
+.quote span{display:block;margin-top:12px;color:#F76D01;font-size:14px}
+.sub{position:absolute;left:56px;right:160px;bottom:48px;display:flex;justify-content:space-between;align-items:flex-end}
+.sub p{font-size:22px;width:620px;line-height:1.35;letter-spacing:-.02em;color:#3B3742}
 .sub .url{font-size:15px;color:#F76D01}
 """
     body = f'''<div class="rail"></div>
+<div class="bands"><i class="o"></i><i class="r"></i><i class="p"></i><i class="v"></i></div>
 <div class="top"><div class="lock">{logo()}<div><b>Persona AI</b><small class="mono">By Autommerce</small></div></div>
 <div class="mark mono">Manifesto</div></div>
 <h1>Every shopper deserves a&nbsp;<span class="grad">stylist.</span></h1>
 <div class="pillars">
-<div class="p"><small class="mono">01</small><b>Your stock only</b><span>Never a competitor SKU</span></div>
-<div class="p"><small class="mono">02</small><b>Your cart</b><span>Checkout stays on your store</span></div>
-<div class="p"><small class="mono">03</small><b>Your brand</b><span>Live mirror + size + outfit</span></div>
+<div class="pi"><small class="mono">01</small><b>Your stock only</b><span>Never a competitor SKU</span></div>
+<div class="pi"><small class="mono">02</small><b>Your cart</b><span>Checkout stays on your store</span></div>
+<div class="pi"><small class="mono">03</small><b>Your brand</b><span>Live mirror + size + outfit</span></div>
 </div>
+<div class="quote"><p>Fitting room. Size. Outfit. One script tag inside the&nbsp;store.</p><span class="mono">Persona AI · by Autommerce</span></div>
 <div class="sub"><p>One that only sells what you stock, and checks out in your&nbsp;cart.</p>
 <div class="url mono">persona.autommerce.com</div></div>'''
     return {'week-4/P15-stylist/poster': doc(body, css)}
