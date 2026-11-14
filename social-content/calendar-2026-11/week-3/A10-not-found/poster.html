@@ -12,24 +12,33 @@ h1{font-weight:800;letter-spacing:-.055em;line-height:.92}
 .prog i.on{background:#F76D01!important}
 .swipe{font-family:'Geist Mono',monospace;font-size:14px;letter-spacing:.14em;text-transform:uppercase}
 
-.wrap{padding:60px 72px 0}
+.band{position:absolute;left:0;top:0;width:14px;height:1350px;background:#C40000}
+.wrap{padding:52px 64px 0 78px}
 .lock{display:flex;align-items:center;gap:12px}
-.lock b{font-size:22px}
+.lock b{font-size:22px;font-weight:800}
 .lock small{display:block;font-size:11px;opacity:.55;margin-top:3px}
-h1{margin-top:70px;font-size:168px;letter-spacing:-.07em;line-height:.84;color:#C40000}
-.sub{margin-top:36px;font-size:36px;line-height:1.25;letter-spacing:-.025em;width:820px}
-.card{margin-top:56px;background:#fff;border-radius:24px;padding:8px 36px;border:1px solid rgba(11,10,16,.08)}
-.row{display:flex;justify-content:space-between;align-items:center;height:84px;border-bottom:1px solid rgba(11,10,16,.08);font-size:28px}
-.row:last-child{border-bottom:0}
+.head{margin-top:36px;display:flex;justify-content:space-between;align-items:flex-end;gap:24px}
+h1{font-size:96px;letter-spacing:-.06em;line-height:.88;color:#C40000}
+.stat{text-align:right}
+.stat b{display:block;font-size:64px;letter-spacing:-.05em;line-height:.9}
+.stat span{display:block;margin-top:6px;font-size:14px;color:rgba(11,10,16,.5)}
+.sub{margin-top:22px;font-size:26px;line-height:1.3;letter-spacing:-.02em;width:900px;color:#3B3742}
+.tbl{margin-top:28px;background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:18px;overflow:hidden}
+.th{display:grid;grid-template-columns:72px 1fr 160px 140px;padding:14px 28px;background:rgba(11,10,16,.04);font-size:13px;color:rgba(11,10,16,.5)}
+.row{display:grid;grid-template-columns:72px 1fr 160px 140px;align-items:center;padding:0 28px;height:78px;border-top:1px solid rgba(11,10,16,.08);font-size:24px}
 .row b{font-weight:650;letter-spacing:-.02em}
-.miss{font-family:'Geist Mono',monospace;font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:#C40000}
-.ok{font-family:'Geist Mono',monospace;font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:rgba(11,10,16,.4)}
-.note{position:absolute;left:72px;bottom:56px;font-size:15px;color:rgba(11,10,16,.5)}
-body{background:#F8F6F3}</style></head><body><div class="wrap"><div class="lock"><img src="../../week-1/assets/autommerce-natural.png" alt="" style="width:42px;height:36px;object-fit:contain"><div><b>Abbas Zein</b><small class="mono">Founder notes</small></div></div>
-<h1>Not<br>found.</h1>
+.row .sku{font-family:'Geist Mono',monospace;font-size:15px;letter-spacing:.06em;color:rgba(11,10,16,.45)}
+.miss-row{background:rgba(196,0,0,.06)}
+.miss-row b{color:#C40000}
+.ok{font-family:'Geist Mono',monospace;font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:rgba(11,10,16,.4)}
+.miss{font-family:'Geist Mono',monospace;font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:#C40000;font-weight:700}
+.idx{font-family:'Geist Mono',monospace;font-size:15px;color:rgba(11,10,16,.4)}
+.miss-row .idx{color:#C40000}
+.note{position:absolute;left:78px;right:64px;bottom:48px;display:flex;justify-content:space-between;align-items:center;font-size:14px;color:rgba(11,10,16,.5)}
+.pill{padding:10px 14px;border-radius:999px;border:1px solid rgba(196,0,0,.35);color:#C40000;font-size:13px}
+body{background:#F8F6F3}</style></head><body><div class="band"></div>
+<div class="wrap"><div class="lock"><img src="../../week-1/assets/autommerce-natural.png" alt="" style="width:42px;height:36px;object-fit:contain"><div><b>Abbas Zein</b><small class="mono">Founder notes</small></div></div>
+<div class="head"><h1>Not<br>found.</h1><div class="stat"><b>5<span style="color:#C40000">/6</span></b><span class="mono">images matched</span></div></div>
 <div class="sub">An empty cell is cheaper than the wrong photo on five hundred product&nbsp;pages.</div>
-<div class="card">
-<div class="row"><b>Five products</b><span class="ok">Matched</span></div>
-<div class="row"><b>A Dyson V15</b><span class="miss">Not found</span></div>
-</div></div>
-<div class="note mono">A real Catalog Intelligence run · 5 of 6 images · the sixth left empty</div></body></html>
+<div class="tbl"><div class="th mono"><span>#</span><span>Product</span><span>SKU</span><span>Status</span></div><div class="row"><span class="idx">01</span><b>Sony WH-1000XM5</b><span class="sku">SKU-8841</span><span class="ok">Matched</span></div><div class="row"><span class="idx">02</span><b>Nespresso Vertuo</b><span class="sku">SKU-2204</span><span class="ok">Matched</span></div><div class="row"><span class="idx">03</span><b>Apple AirPods Pro 2</b><span class="sku">SKU-1109</span><span class="ok">Matched</span></div><div class="row miss-row"><span class="idx">04</span><b>Dyson V15 Detect</b><span class="sku">SKU-5512</span><span class="miss">Not found</span></div><div class="row"><span class="idx">05</span><b>Kindle Paperwhite</b><span class="sku">SKU-7730</span><span class="ok">Matched</span></div><div class="row"><span class="idx">06</span><b>Bose QuietComfort</b><span class="sku">SKU-3391</span><span class="ok">Matched</span></div></div></div>
+<div class="note"><span class="mono">Catalog Intelligence run · sixth left empty on purpose</span><span class="pill mono">Refuse the guess</span></div></body></html>

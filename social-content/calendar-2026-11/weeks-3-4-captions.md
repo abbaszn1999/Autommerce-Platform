@@ -4,7 +4,7 @@ All times are Beirut time (UTC+2). Company posts use one visual on LinkedIn, Fac
 
 | ID | Date and time | Where | Format |
 |---|---|---|---|
-| A7 | Mon Nov 16, 08:30 | Abbas LinkedIn | Poster |
+| A7 | Mon Nov 16, 08:30 | Abbas LinkedIn | Carousel, 6 |
 | M9 | Mon Nov 16, 10:00 | Autommerce, all three | Poster |
 | A8 | Tue Nov 17, 08:30 | Abbas LinkedIn | Poster |
 | M10 | Tue Nov 17, 10:00 | Autommerce, all three | Poster |
@@ -43,14 +43,18 @@ The photographs of Abbas and the Persona campaign stills are generated from the 
 
 ## A7 · Abbas LinkedIn · Mon Nov 16, 08:30
 
+Visual: 6-slide carousel (LinkedIn document). Ink canvas. The nine OpenAI feed fields.
+
 ```
-Nine fields. That's the entire door between a product and ChatGPT.
+ChatGPT can only recommend a product it can read.
 
-OpenAI's shopping feed requires all nine on every row: an item ID, a title, a description, a URL, a brand, a seller, an image, availability and a price. Leave one empty and the row is rejected. The product never enters the conversation.
+OpenAI's shopping feed takes nine fields on every row. An ID. A precise title. A plain-text description. The page link. The brand. The seller. A photo of that variant. Availability. The price, with its currency.
 
-Most catalogs I see fail on three of them. A title that doesn't name the variant. No brand. A price with no currency.
+Leave one empty and the row is rejected. The agent never sees that product.
 
-Which of the nine is weakest in your catalog?
+I would check title, brand and price first. That is where most catalogs go quiet.
+
+Which field is empty in yours?
 
 Source: OpenAI, product feed specification.
 

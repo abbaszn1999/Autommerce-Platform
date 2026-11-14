@@ -12,17 +12,52 @@ h1{font-weight:800;letter-spacing:-.055em;line-height:.92}
 .prog i.on{background:#F76D01!important}
 .swipe{font-family:'Geist Mono',monospace;font-size:14px;letter-spacing:.14em;text-transform:uppercase}
 
-.wrap{padding:56px 72px 0}
+.wrap{padding:48px 56px 0}
 .lock{display:flex;align-items:center;gap:12px}
-.lock b{font-size:24px;font-weight:800}
+.lock b{font-size:22px;font-weight:800}
 .lock small{display:block;font-size:11px;opacity:.55;margin-top:2px}
-h1{margin-top:48px;font-size:68px;width:940px}
-.grid{margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
-.m{background:#fff;border-radius:24px;padding:32px 32px 28px;border:1px solid rgba(11,10,16,.08)}
-.m small{color:#F76D01;font-size:14px}
-.m b{display:block;margin-top:12px;font-size:48px;letter-spacing:-.04em}
-.line{position:absolute;left:72px;right:72px;bottom:64px;font-size:26px;font-weight:600;letter-spacing:-.02em;line-height:1.35}
+h1{margin-top:28px;font-size:52px;width:960px}
+.layout{margin-top:28px;display:grid;grid-template-columns:340px 1fr;gap:18px}
+.ring-card{background:#0B0A10;color:#fff;border-radius:22px;padding:28px 24px 24px;display:flex;flex-direction:column;align-items:center}
+.ring-card small{align-self:flex-start;color:#F76D01;font-size:13px}
+.ring{margin-top:28px;width:220px;height:220px;border-radius:50%;background:
+  conic-gradient(#F76D01 0 92%, rgba(255,255,255,.12) 92% 100%);
+  display:flex;align-items:center;justify-content:center;position:relative}
+.ring:after{content:'';position:absolute;inset:18px;border-radius:50%;background:#0B0A10}
+.ring .val{position:relative;z-index:1;text-align:center}
+.ring .val b{display:block;font-size:64px;letter-spacing:-.06em;line-height:.9}
+.ring .val span{display:block;margin-top:6px;font-size:13px;color:rgba(255,255,255,.55)}
+.fit{margin-top:28px;text-align:center;font-size:22px;font-weight:650;letter-spacing:-.02em}
+.fit em{font-style:normal;color:#F76D01}
+.right{display:flex;flex-direction:column;gap:14px}
+.measures{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.m{background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:16px;padding:18px 18px 16px}
+.m small{color:#F76D01;font-size:12px}
+.m b{display:block;margin-top:8px;font-size:28px;letter-spacing:-.03em}
+.m span{display:block;margin-top:4px;font-size:15px;color:#3B3742}
+.chart{background:#fff;border:1px solid rgba(11,10,16,.1);border-radius:16px;padding:18px 20px 14px;flex:1}
+.chart .lab{font-size:13px;color:rgba(11,10,16,.5);margin-bottom:8px}
+.crow{display:grid;grid-template-columns:70px 1fr 56px 70px;align-items:center;gap:10px;padding:11px 0;border-top:1px solid rgba(11,10,16,.08);font-size:18px}
+.crow:first-of-type{border-top:0}
+.crow b{font-weight:650;letter-spacing:-.02em}
+.crow .bar{height:10px;border-radius:5px;background:rgba(11,10,16,.08);overflow:hidden}
+.crow .bar i{display:block;height:100%;background:#F76D01;border-radius:5px}
+.crow .pick{font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#F76D01;font-weight:700}
+.crow .mute{font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:rgba(11,10,16,.35)}
+.note{position:absolute;left:56px;right:56px;bottom:48px;font-size:22px;font-weight:600;letter-spacing:-.02em;line-height:1.35}
 body{background:#F8F6F3}</style></head><body><div class="wrap"><div class="lock"><img src="../../week-1/assets/autommerce-natural.png" alt="" style="width:42px;height:36px;object-fit:contain"><div><b>Persona AI</b><small class="mono">By Autommerce</small></div></div>
 <h1>The wrong size is the return you could have&nbsp;prevented.</h1>
-<div class="grid"><div class="m"><small class="mono">01</small><b>Height</b></div><div class="m"><small class="mono">02</small><b>Chest</b></div><div class="m"><small class="mono">03</small><b>Waist</b></div><div class="m"><small class="mono">04</small><b>Shoe size</b></div></div></div>
-<div class="line">The suggestion uses their measurements and your size&nbsp;charts.</div></body></html>
+<div class="layout">
+<div class="ring-card"><small class="mono">Fit score</small>
+<div class="ring"><div class="val"><b>92</b><span class="mono">/ 100</span></div></div>
+<div class="fit">Suggested size <em>L</em></div></div>
+<div class="right">
+<div class="measures">
+<div class="m"><small class="mono">01 · Height</small><b>178 cm</b><span>Shopper profile</span></div>
+<div class="m"><small class="mono">02 · Chest</small><b>102 cm</b><span>Against your chart</span></div>
+<div class="m"><small class="mono">03 · Waist</small><b>86 cm</b><span>Against your chart</span></div>
+<div class="m"><small class="mono">04 · Shoe</small><b>43 EU</b><span>Brand size map</span></div>
+</div>
+<div class="chart"><div class="lab mono">Size chart match · this SKU</div><div class="crow"><b>S</b><div class="bar"><i style="width:35%"></i></div><span>35%</span><span class="mute">—</span></div><div class="crow"><b>M</b><div class="bar"><i style="width:62%"></i></div><span>62%</span><span class="mute">—</span></div><div class="crow"><b>L</b><div class="bar"><i style="width:88%"></i></div><span>88%</span><span class="pick">Best</span></div><div class="crow"><b>XL</b><div class="bar"><i style="width:55%"></i></div><span>55%</span><span class="mute">—</span></div></div>
+</div></div></div>
+<div class="note">The suggestion uses their measurements and your size&nbsp;charts.</div></body></html>

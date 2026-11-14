@@ -14,7 +14,7 @@ Production rules: `../QUALITY_STANDARDS.md`. Week folders hold the final visuals
 | A4 | Tue Nov 10 | The step most AI tools skip: exact product matching | Founder-annotated recording |
 | A5 | Wed Nov 11 | 11.11: discounts win the click, product pages win the sale | Typographic poster |
 | A6 | Thu Nov 12 | 5 lessons from 6 years in AI and ecommerce | Carousel, new photos |
-| A7 | Mon Nov 16 | 9 fields between your product and ChatGPT | Data poster |
+| A7 | Mon Nov 16 | 9 fields between your product and ChatGPT | Carousel |
 | A8 | Tue Nov 17 | Why I built Persona (NRF returns) | Founder photo poster |
 | A9 | Wed Nov 18 | Every product page has three readers now | Three-panel poster |
 | A10 | Thu Nov 19 | We don't let the AI guess | Poster and short clip |
