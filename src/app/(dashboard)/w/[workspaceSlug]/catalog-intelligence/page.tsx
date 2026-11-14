@@ -74,8 +74,6 @@ export default function ImportPage() {
   const { workspace, role } = useWorkspaceContext();
   const permissions = useRole(role);
   const canEdit = permissions.canImport;
-  const canAdmin = permissions.canAdmin;
-
   const [sessions, setSessions] = useState<ImportSession[]>([]);
   const [activeJobSessionIds, setActiveJobSessionIds] = useState<Set<string>>(
     () => new Set()
@@ -205,7 +203,7 @@ export default function ImportPage() {
     if (!deleteTarget) return;
     setDeletingProject(true);
     try {
-      await deleteImportSession(deleteTarget.id);
+      await deleteImportSession(deleteTarget.workspace_id, deleteTarget.id);
       setSessions((prev) => prev.filter((s) => s.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (err) {
@@ -435,7 +433,7 @@ export default function ImportPage() {
                           <Clock3 className="h-3 w-3" />
                           {timeAgo(session.updated_at || session.created_at)}
                         </span>
-                        {canAdmin && (
+                        {canEdit && (
                           <button
                             type="button"
                             onClick={(event) => {
