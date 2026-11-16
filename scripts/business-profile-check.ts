@@ -25,12 +25,12 @@ async function main() {
   const a = await editProfile(admin, workspaceId, [{ field: "margin", value: "40%" }, { field: "markets", value: ["Lebanon"] }], owner, { userId });
   check("owner saves two fields", a.changes.length === 2 && a.profile.values.margin === 0.4, a.changes);
 
-  const b = await editProfile(admin, workspaceId, [{ field: "margin", value: 0.2 }, { field: "brandVoice", value: "Warm and direct." }], { source: "website", status: "suggested" }, { userId });
+  const b = await editProfile(admin, workspaceId, [{ field: "margin", value: 0.2 }, { field: "brandTerms", value: ["Kalema"] }], { source: "website", status: "suggested" }, { userId });
   check("a suggestion never replaces the owner's margin", b.profile.values.margin === 0.4 && b.skipped.some((s) => s.field === "margin"), b.skipped);
-  check("a suggestion fills an empty field", b.profile.meta.brandVoice?.status === "suggested");
+  check("a suggestion fills an empty field", b.profile.meta.brandTerms?.status === "suggested");
 
-  const confirm = await editProfile(admin, workspaceId, [{ field: "brandVoice", value: "Warm and direct." }], owner, { userId });
-  check("the owner confirms a suggestion", confirm.profile.meta.brandVoice?.status === "confirmed" && confirm.changes.length === 1);
+  const confirm = await editProfile(admin, workspaceId, [{ field: "brandTerms", value: ["Kalema"] }], owner, { userId });
+  check("the owner confirms a suggestion", confirm.profile.meta.brandTerms?.status === "confirmed" && confirm.changes.length === 1);
 
   // Two saves at the same moment, different fields: both must survive.
   await Promise.all([

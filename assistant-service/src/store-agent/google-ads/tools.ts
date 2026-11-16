@@ -5,6 +5,20 @@
 
 import type { SDKCustomTool } from "@cursor/sdk";
 import { approvalBinding } from "../../../../src/lib/google-ads/approval-binding";
+import { promises as fs } from "node:fs";
+import { dirname } from "node:path";
+import { SECTIONS } from "../../../../src/lib/business-profile-doc";
+import {
+  BUSINESS_FILES_BUCKET,
+  BUSINESS_FILE_KINDS,
+  BUSINESS_FILE_KIND_IDS,
+  businessFilePath,
+  businessFileProblem,
+  isBusinessFileKind,
+  safeFileName,
+} from "../../../../src/lib/business-files";
+import { convertAttachment } from "../attachments";
+import { mimeFor, resolveInChat } from "../files";
 import type { ApprovalPreview } from "../../../../src/lib/store-agent/protocol";
 import { INLINE_RESULT_BYTES, byteLength } from "../sdk-output";
 import { failure, setChatStatus, stamp, text, writeChatFile, type ToolContext } from "../tool-helpers";
@@ -16,6 +30,9 @@ type ApplyResult = { status: "applied"; id: string; inverse: unknown[]; warnings
 
 /** Items on the card: as many as one change can hold, so nothing is approved unseen. */
 const CARD_ITEMS = 200;
+const SECTION_ID_LIST = SECTIONS.map((s) => s.id);
+/** The document's sections as the agent reads them: id, heading, what belongs there. */
+const SECTION_IDS = SECTIONS.map((s) => `${s.id} ("${s.label}": ${s.guide})`).join("; ");
 
 /** Big reads go to a file in the chat folder instead of the model's context. */
 async function compact(ctx: ToolContext, payload: unknown, name: string): Promise<string> {
@@ -215,9 +232,10 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
 
     business_profile: {
       description:
-        "The business profile shared by every Autommerce agent in this workspace: every field with its value, where it came from and whether the owner " +
-        "confirmed it or it is only a suggestion, and the required fields still missing. A short version is already in your rules; " +
-        "read this for the full texts (brand voice, identity, shipping and returns) or after an edit.",
+        "The business profile shared by every Autommerce agent in this workspace. It has two parts. (1) Data fields (name, website, languages, countries, brand names, goal, margin, " +
+        "target ROAS, monthly budget cap, average order value, competitors, never-advertise): each with its value, where it came from and whether the owner confirmed it or it is only a suggestion, " +
+        "and the required fields still missing. (2) The business knowledge document: Markdown with fixed headings (the sections below), in the owner's and your words, with a guide for what belongs in each. " +
+        "A shortened version is already in your rules; read this for the whole document or after an edit.",
       inputSchema: { type: "object", properties: {} },
       execute: async () => {
         try {
@@ -231,27 +249,19 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
 
     update_business_profile: {
       description:
-        "Save fields of the business profile. statedByUser: true ONLY when the user said these values in this chat (\"our margin is 40%\", " +
-        "\"add Qatar\"): they are saved as confirmed, at once; the user can change them on the Business profile page. " +
-        "statedByUser: false for what you found yourself (website, account data): saved only as suggestions the owner confirms, only into empty or " +
-        "suggested fields, and never for margin, target ROAS, monthly budget cap or goal (only the owner sets those). " +
-        "The profile is a fixed document with these sections and fields. " +
-        "Key facts: businessName, website, languages. Business overview: overview (text: what it is, story, model). Brand and search names: brandTerms. " +
-        "Markets and customers: markets, audience (text). Goals and economics: goal (profit | growth | new_customers), margin (e.g. 40 for 40%), targetRoas (e.g. 4 for 400%), " +
-        "monthlyBudgetCap, averageOrderValue (amounts in the account currency). Products and catalog: categories, focusProducts. " +
-        "Positioning: usp (text), keySellingPoints, competitiveAdvantages, proof (text). Offers, shipping and returns: shippingReturns (text). " +
-        "Competitors: competitors ([{ name, url }]). Seasonality: peakSeasons. Guardrails: neverAdvertise, restrictions (text). " +
-        "Brand guidelines: brandIdentity, brandVoice, visualDirection, logoUrl, palette ([{ name, hex, role }]). " +
-        "Marketing history and learnings: marketingHistory (text). Sources and uploaded files: sources (text: the files and pages this was written from). Open questions: openQuestions (list). " +
-        "Texts may use short Markdown (bullets, bold) and are shown as written in a document. " +
-        "Lists are arrays and REPLACE the whole list: to add one item, send the current items plus the new one. value null clears a field.",
+        "Save DATA fields of the business profile (the knowledge document is written with edit_profile_document, not here). " +
+        "statedByUser: true ONLY when the user said these values in this chat (\"our margin is 40%\", \"add Qatar\"): they are saved as confirmed, at once; the user can change them on the Business profile page. " +
+        "statedByUser: false for what you found yourself (website, account data): saved only as suggestions the owner confirms, only into empty or suggested fields, and never for margin, target ROAS, monthly budget cap or goal (only the owner sets those). " +
+        "Fields: businessName, website, languages (list), brandTerms (list: every spelling and language the brand is searched by), markets (list of countries; the FIRST is where competitor keywords are looked up), " +
+        "goal (profit | growth | new_customers), margin (e.g. 40 for 40%), targetRoas (e.g. 4 for 400%), monthlyBudgetCap, averageOrderValue (amounts in the account currency), " +
+        "competitors ([{ name, url }], up to 15), neverAdvertise (list). Lists are arrays and REPLACE the whole list: to add one item, send the current items plus the new one. value null clears a field.",
       inputSchema: {
         type: "object",
         properties: {
           edits: {
             type: "array",
             minItems: 1,
-            maxItems: 40,
+            maxItems: 14,
             items: { type: "object", properties: { field: { type: "string" }, value: {} }, required: ["field", "value"] },
           },
           statedByUser: { type: "boolean" },
@@ -268,6 +278,121 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
           });
           if (!res.ok) return failure(`Not saved: ${res.error}`);
           return text(JSON.stringify({ ...res, ok: undefined }));
+        } catch (error) {
+          return failure((error as Error).message);
+        }
+      },
+    },
+
+    edit_profile_document: {
+      description:
+        "Write into the business knowledge document: ONE section per call, as Markdown. The sections and their headings are fixed (same for every business) and cannot be renamed or removed: " +
+        SECTION_IDS +
+        ". mode \"append\" adds to the end of the section (use it to add something new and keep what is there); mode \"replace\" rewrites the whole section (read it first with business_profile and keep what the owner wrote that is still true). " +
+        "It is saved at once, like the owner's own edit, and kept in the document's version history so the owner can restore an earlier version. " +
+        "There is no limit on how much you write in a section (the whole document holds about 85 KB): write it fully, in clean Markdown (short paragraphs, bullets, bold labels, tables, links), in the business's first language, as a reference an agent can use later. " +
+        "Level 1 and 2 headings in your text are shown as level 3 (the document's own headings stay the only ones). " +
+        "statedByUser: true when the text is what the user told you in this chat; false for what you found or wrote yourself (give the source). Never invent facts, numbers, awards or reviews; leave a gap or add an Open question instead.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          section: { type: "string", enum: SECTION_ID_LIST },
+          mode: { type: "string", enum: ["append", "replace"] },
+          markdown: { type: "string", description: "The Markdown to add (append) or the whole new text of the section (replace)." },
+          statedByUser: { type: "boolean" },
+          source: { type: "string", enum: ["website", "google_ads", "merchant", "store"], description: "Only when statedByUser is false: where you found it." },
+        },
+        required: ["section", "mode", "markdown", "statedByUser"],
+      },
+      execute: async (args) => {
+        try {
+          const res = await call<{ ok: boolean; error?: string; section?: string; changed?: boolean; documentBytes?: number }>("profile_doc", {
+            section: args.section,
+            mode: args.mode,
+            markdown: args.markdown,
+            statedByUser: args.statedByUser === true,
+            source: args.source,
+          });
+          if (!res.ok) return failure(`Not saved: ${res.error}`);
+          return text(JSON.stringify({ saved: true, section: res.section, changed: res.changed, documentBytes: res.documentBytes }));
+        } catch (error) {
+          return failure((error as Error).message);
+        }
+      },
+    },
+    keep_business_file: {
+      description:
+        "Keep a file the user gave you in this chat as a BUSINESS file: it is saved for the whole workspace (every chat, every agent, the Business profile page) and linked in the knowledge document under its section and under \"Sources and uploaded files\". " +
+        "Use it ONLY for files that describe the business and will matter later: kind " +
+        BUSINESS_FILE_KIND_IDS.map((k) => `${k} (${BUSINESS_FILE_KINDS[k].label}, written under the ${SECTIONS.find((s) => s.id === BUSINESS_FILE_KINDS[k].section)!.label} section)`).join(", ") +
+        ". NEVER for files made for one task (a CSV to analyse, an invoice, a screenshot of a problem, a file you or the user made for a report) or anything unrelated to the business: those stay in the chat. " +
+        "If you are not sure whether the user wants a file kept, ask one short question first. Keeping a file with the same name replaces the earlier one. " +
+        "Also write what the file says (colours with hex codes, tone, key facts) into the right section with edit_profile_document: the file is the source, the document is what you read every time.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "The file in this chat's folder, e.g. attachments/logo.png." },
+          kind: { type: "string", enum: BUSINESS_FILE_KIND_IDS },
+          description: { type: "string", description: "One short line saying what the file is (e.g. \"square logo on white\")." },
+          name: { type: "string", description: "Optional name to keep it under (with its extension); by default the file's own name." },
+        },
+        required: ["path", "kind"],
+      },
+      execute: async (args) => {
+        try {
+          const relative = typeof args.path === "string" ? args.path : "";
+          const kind: unknown = args.kind;
+          if (!isBusinessFileKind(kind)) return failure(`kind must be one of: ${BUSINESS_FILE_KIND_IDS.join(", ")}.`);
+          const bytes = await fs.readFile(resolveInChat(ctx.files.cwd, relative)).catch(() => null);
+          if (!bytes) return failure(`There is no file ${relative} in this chat's folder.`);
+          const name = safeFileName(typeof args.name === "string" && args.name.trim() ? args.name : relative.split("/").pop() ?? "");
+          const problem = businessFileProblem(name, bytes.length);
+          if (problem) return failure(`Not kept: ${problem}`);
+          const { error } = await ctx.db.storage.from(BUSINESS_FILES_BUCKET).upload(businessFilePath(ctx.run.workspaceId, name), bytes, { upsert: true, contentType: mimeFor(name), cacheControl: "0" });
+          if (error) return failure(`Not kept: ${error.message}`);
+          const res = await call<{ ok: boolean; error?: string; name?: string; link?: string }>("profile_file", {
+            name,
+            kind,
+            description: typeof args.description === "string" ? args.description : undefined,
+          });
+          if (!res.ok) return failure(`The file was saved but not written into the document: ${res.error}`);
+          return text(JSON.stringify({ kept: true, name: res.name, link: res.link, writtenUnder: BUSINESS_FILE_KINDS[kind].section }));
+        } catch (error) {
+          return failure((error as Error).message);
+        }
+      },
+    },
+
+    open_business_file: {
+      description:
+        "Open a business file kept for this workspace (they are listed in your rules under \"Business files\"): it is copied into this chat's folder as business-files/<name> so you can read it " +
+        "(Excel and PDF are converted to text you can read; an image is there to look at with read_file). With publicUrl: true you also get a link valid for one hour, " +
+        "for what needs an https address: the logo or an image of a campaign or an ad.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "The file's name as listed under Business files." },
+          publicUrl: { type: "boolean", description: "Also return a link valid for one hour (for ads, logos)." },
+        },
+        required: ["name"],
+      },
+      execute: async (args) => {
+        try {
+          const name = safeFileName(typeof args.name === "string" ? args.name : "");
+          const path = businessFilePath(ctx.run.workspaceId, name);
+          const { data, error } = await ctx.db.storage.from(BUSINESS_FILES_BUCKET).download(path);
+          if (error || !data) return failure(`There is no business file called ${name}. The ones kept are listed in your rules under Business files.`);
+          const relative = `business-files/${name}`;
+          const local = resolveInChat(ctx.files.cwd, relative);
+          await fs.mkdir(dirname(local), { recursive: true });
+          await fs.writeFile(local, Buffer.from(await data.arrayBuffer()));
+          const conversion = await convertAttachment(ctx.files.cwd, relative).catch(() => null);
+          let url: string | undefined;
+          if (args.publicUrl === true) {
+            const signed = await ctx.db.storage.from(BUSINESS_FILES_BUCKET).createSignedUrl(path, 3600);
+            url = signed.data?.signedUrl;
+          }
+          return text(JSON.stringify({ path: relative, note: conversion?.note, url, urlValidFor: url ? "1 hour" : undefined }));
         } catch (error) {
           return failure((error as Error).message);
         }

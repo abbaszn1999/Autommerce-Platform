@@ -24,8 +24,12 @@ vi.mock("@/lib/google-ads/merchant.server", () => ({
 }));
 const editProfile = vi.fn();
 const loadProfile = vi.fn();
+const editDocument = vi.fn();
+const listBusinessFiles = vi.fn();
+vi.mock("@/lib/business-files.server", () => ({ listBusinessFiles: (...a: unknown[]) => listBusinessFiles(...a) }));
 vi.mock("@/lib/business-profile.server", () => ({
   editProfile: (...a: unknown[]) => editProfile(...a),
+  editDocument: (...a: unknown[]) => editDocument(...a),
   loadProfile: (...a: unknown[]) => loadProfile(...a),
 }));
 vi.mock("@/lib/google-ads/connection.server", async () => {
@@ -163,7 +167,7 @@ describe("POST /api/google-ads/agent/[action]", () => {
 
     it("saves the agent's own findings only as suggestions, never as the owner", async () => {
       for (const source of ["merchant", "owner", "chat", undefined]) {
-        await post("profile_update", { workspaceId: WS, chatId: CHAT, edits: [{ field: "brandVoice", value: "Calm." }], statedByUser: false, source });
+        await post("profile_update", { workspaceId: WS, chatId: CHAT, edits: [{ field: "brandTerms", value: ["Calm"] }], statedByUser: false, source });
       }
       expect(editProfile.mock.calls.map((c) => c[3])).toEqual([
         { source: "merchant", status: "suggested" },
@@ -171,6 +175,41 @@ describe("POST /api/google-ads/agent/[action]", () => {
         { source: "website", status: "suggested" },
         { source: "website", status: "suggested" },
       ]);
+    });
+
+    it("writes into the knowledge document straight away, in the section asked for, and logs it as Vera's", async () => {
+      editDocument.mockReset().mockResolvedValue({ changes: [{ field: "document" }], profile: { values: { document: "# Business knowledge base" }, meta: {}, updatedAt: null } });
+      const res = await post("profile_doc", { workspaceId: WS, chatId: CHAT, section: "offers", mode: "append", markdown: "Free returns for 30 days." });
+      expect(await res.json()).toMatchObject({ ok: true, section: "Offers, shipping and returns", changed: true });
+      expect(editDocument).toHaveBeenCalledWith(expect.anything(), WS, expect.any(Function), { source: "website", status: "confirmed" }, { userId: "u1", chatId: CHAT });
+      const change = editDocument.mock.calls[0]![2] as (doc: string) => string;
+      expect(change("")).toContain("Free returns for 30 days.");
+    });
+
+    it("records a business file the agent service saved, under its section, as the chat's edit", async () => {
+      editDocument.mockReset().mockResolvedValue({ changes: [{ field: "document" }], profile: { values: { document: "" }, meta: {}, updatedAt: null } });
+      listBusinessFiles.mockReset().mockResolvedValue([{ name: "logo.png", size: 10, updatedAt: null, link: "", image: true }]);
+      const res = await post("profile_file", { workspaceId: WS, chatId: CHAT, name: "logo.png", kind: "logo", description: "square logo" });
+      expect(await res.json()).toMatchObject({ ok: true, name: "logo.png", link: `/api/business-profile/files?workspaceId=${WS}&name=logo.png` });
+      expect(editDocument).toHaveBeenCalledWith(expect.anything(), WS, expect.any(Function), { source: "chat", status: "confirmed" }, { userId: "u1", chatId: CHAT });
+      const write = editDocument.mock.calls[0]![2] as (doc: string) => string;
+      expect(write("")).toContain("**Client logo:** [logo.png]");
+    });
+
+    it("won't record a file that was never saved, or of an unknown kind", async () => {
+      editDocument.mockReset();
+      listBusinessFiles.mockReset().mockResolvedValue([]);
+      expect(await (await post("profile_file", { workspaceId: WS, chatId: CHAT, name: "ghost.png", kind: "logo" })).json()).toMatchObject({ ok: false });
+      listBusinessFiles.mockResolvedValue([{ name: "a.png" }]);
+      expect(await (await post("profile_file", { workspaceId: WS, chatId: CHAT, name: "a.png", kind: "invoice" })).json()).toMatchObject({ ok: false });
+      expect(editDocument).not.toHaveBeenCalled();
+    });
+
+    it("refuses an unknown section or a missing mode, and never touches the document then", async () => {
+      editDocument.mockReset();
+      expect(await (await post("profile_doc", { workspaceId: WS, chatId: CHAT, section: "palette", mode: "append", markdown: "x" })).json()).toMatchObject({ ok: false });
+      expect(await (await post("profile_doc", { workspaceId: WS, chatId: CHAT, section: "offers", markdown: "x" })).json()).toMatchObject({ ok: false });
+      expect(editDocument).not.toHaveBeenCalled();
     });
 
     it("needs owners or admins, like every other agent action", async () => {

@@ -19,6 +19,8 @@ export type AdsAction =
   | "merchant_apply"
   | "profile"
   | "profile_update"
+  | "profile_doc"
+  | "profile_file"
   | "onboarding"
   | "doc_plan"
   | "doc_report"

@@ -5,9 +5,10 @@
 // things are, offers "unlock now" (Vera then fills in what she has) and, when Vera
 // cannot be reached, a way out so nobody is ever stuck.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Check, Loader2, LockKeyhole, MessageCircle, Sparkles } from "lucide-react";
 import { useStoreAgent } from "@/components/store-agent/use-store-agent";
+import { useWorkspaceContext } from "@/app/(dashboard)/w/[workspaceSlug]/workspace-context";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import type { OnboardingStage } from "@/lib/business-profile";
 import { cn } from "@/lib/utils";
@@ -20,7 +21,7 @@ export const UNLOCK_REQUEST = "Unlock the dashboard now: fill in my business pro
 
 const STUCK_AFTER_MS = 10 * 60_000;
 
-function Step({ state, title, body }: { state: "done" | "active" | "todo"; title: string; body: string }) {
+function Step({ state, title, body, children }: { state: "done" | "active" | "todo"; title: string; body: string; children?: ReactNode }) {
   return (
     <li className="flex items-start gap-3">
       <span
@@ -34,6 +35,7 @@ function Step({ state, title, body }: { state: "done" | "active" | "todo"; title
       <span>
         <span className={cn("block text-sm font-bold", state === "todo" && "text-muted-foreground")}>{title}</span>
         <span className="block text-[12px] leading-relaxed text-muted-foreground">{body}</span>
+        {children}
       </span>
     </li>
   );
@@ -41,6 +43,7 @@ function Step({ state, title, body }: { state: "done" | "active" | "todo"; title
 
 export function OnboardingLock({ stage, onUnlockAnyway }: { stage: OnboardingStage; onUnlockAnyway: () => Promise<void> }) {
   const availability = useStoreAgent((s) => s.availability);
+  const { workspace, hasStoreAgentStore } = useWorkspaceContext();
   const [stuck, setStuck] = useState(false);
   const [asked, setAsked] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -75,6 +78,21 @@ export function OnboardingLock({ stage, onUnlockAnyway }: { stage: OnboardingSta
         <ol className="mt-6 space-y-4">
           <Step state="done" title="Your details" body="Business, numbers, competitors and guardrails from the setup." />
           <Step state={filling ? "done" : "active"} title="Interview with Vera" body="Logo, brand files, forgotten competitors, selling points, goals." />
+          <Step
+            state={hasStoreAgentStore ? "done" : "todo"}
+            title="Your store"
+            body={
+              hasStoreAgentStore
+                ? "Connected: Vera plans from your real catalogue and sales, and can fix product data that breaks your feed."
+                : "Not connected. Vera needs your store (or Merchant Center) to plan campaigns from real products. The page works without it for now."
+            }
+          >
+            {!hasStoreAgentStore && workspace?.slug && (
+              <a href={`/w/${workspace.slug}/settings`} className="mt-1 inline-block text-[12px] font-bold text-[#400095] underline dark:text-violet-300">
+                Connect your store
+              </a>
+            )}
+          </Step>
           <Step state={filling ? "active" : "todo"} title="Business profile and competitor ads" body="From your website, your files, web research and SE Ranking." />
         </ol>
 

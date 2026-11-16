@@ -17,8 +17,14 @@ describe("store tool locks", () => {
     expect(storeToolLocks("shopify", ["read_inventory"])["store-assistant"]).toEqual({ reason: "missing-scopes", missing: ["read_products"] });
   });
 
+  it("opens the Google Ads agent with read_products, and keeps its optional scopes out of the lock", () => {
+    expect(storeToolLocks("shopify", ["read_products"])["google-ads-agent"]).toBeNull();
+    expect(storeToolLocks("shopify", ["read_inventory"])["google-ads-agent"]).toEqual({ reason: "missing-scopes", missing: ["read_products"] });
+    expect(storeToolLocks("woocommerce", null)["google-ads-agent"]).toBeNull();
+  });
+
   it("opens everything when every scope is granted", () => {
-    expect(Object.values(storeToolLocks("shopify", ALL_SHOPIFY_SCOPES)).every((lock) => lock === null)).toBe(true);
+    expect(Object.values(storeToolLocks("shopify", [...ALL_SHOPIFY_SCOPES, "read_online_store_navigation"])).every((lock) => lock === null)).toBe(true);
   });
 
   it("handles no store, other platforms and unknown scopes", () => {

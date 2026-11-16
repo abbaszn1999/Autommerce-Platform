@@ -128,6 +128,19 @@ export class ChatFiles {
     return `${this.workspaceId}/${this.chatId}/${encodeStoragePath(relative.split(path.sep).join("/"))}`;
   }
 
+  /**
+   * The files of this chat Vera should know about at the start of every run: what
+   * the user uploaded here first, then the results she showed them. Working files
+   * and copies of the business files are left out.
+   */
+  listForAgent(limit = 40): Array<{ path: string; size: number }> {
+    const rows = [...this.known.entries()]
+      .filter(([relative, k]) => !relative.startsWith("business-files/") && !isHiddenPath(relative) && (relative.startsWith("attachments/") || k.shown))
+      .map(([relative, k]) => ({ path: relative, size: k.size, upload: relative.startsWith("attachments/") }));
+    rows.sort((a, b) => Number(b.upload) - Number(a.upload) || a.path.localeCompare(b.path));
+    return rows.slice(0, limit).map(({ path: p, size }) => ({ path: p, size }));
+  }
+
   /** Create the folder and bring back files from earlier runs of this chat. */
   async prepare(): Promise<void> {
     await fs.mkdir(this.cwd, { recursive: true });

@@ -16,6 +16,7 @@ import { oncePerToolCall } from "./call-once";
 import { guidanceText, withGuidance } from "./guidance";
 import { buildMessage, finishBuild, savePlan, startBuild } from "./plans";
 import { convertAttachment } from "./attachments";
+import { BUSINESS_FILES_BUCKET, businessFilesFolder } from "../../../src/lib/business-files";
 import { grantedScopes } from "./shopify/client";
 import { missingScopes } from "./shopify/guard";
 import { SCOPE_LABELS, STORE_AGENT_SCOPES } from "./shopify/scopes";
@@ -33,9 +34,12 @@ import { createScriptTool } from "./script-tool";
 import { loadShopifyConnection, type ShopifyConnection } from "./shopify/client";
 import { storePlatform } from "./store-connection";
 import { loadWooConnection, type WooConnection } from "./woocommerce/client";
-import { createChatTools, createStoreAgentTools } from "./tools";
+import { createChatTools, createStoreAgentTools, createStoreCmsTools } from "./tools";
 import { veraAdsRule } from "./google-ads/instructions";
 import { createGoogleAdsTools } from "./google-ads/tools";
+import { createStoreSalesTools } from "./google-ads/store-sales";
+import { createKeywordBatchTools } from "./google-ads/keyword-batch";
+import { createCreativeTools } from "./google-ads/creative-tools";
 
 /**
  * Cursor tools the agent gets. File access goes through our confined tools
@@ -335,6 +339,13 @@ export function isCorruptMemory(error: unknown): boolean {
   return /corrupt local agent checkpoint|missing root blob|checkpoint.*(missing|not found)/i.test(text);
 }
 
+/** The business files kept for the workspace (name and size), newest first. */
+async function listBusinessFileNames(db: SupabaseClient, workspaceId: string): Promise<{ name: string; size: number }[]> {
+  const { data, error } = await db.storage.from(BUSINESS_FILES_BUCKET).list(businessFilesFolder(workspaceId), { limit: 100, sortBy: { column: "updated_at", order: "desc" } });
+  if (error) throw new Error(error.message);
+  return (data ?? []).filter((f) => f.id && !f.name.startsWith(".")).map((f) => ({ name: f.name, size: Number((f.metadata as { size?: number } | null)?.size ?? 0) }));
+}
+
 /**
  * The chat as the user sees it, for an agent that lost its memory: the last
  * messages before this run, newest last, trimmed to stay small.
@@ -522,27 +533,42 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     chatFiles = files;
     await files.prepare();
 
-    // Google Ads chats (the Google Ads page) never touch the store: no store connection, store rules or store tools.
+    // A Google Ads chat (Vera) works on the Google Ads account; when the workspace also has a store, she gets
+    // the store's tools too (read the catalogue, fix product data, always on an approval card).
     const isAds = req.domain === "google_ads";
     /** What the agent works on, for the notes it gets about earlier runs. */
     const where = isAds ? "Google Ads account" : "store";
-    const platform = isAds ? ("shopify" as const) : await storePlatform(db, req.workspaceId);
+    const adsStore = isAds ? await storePlatform(db, req.workspaceId).catch(() => null) : null;
+    const platform = isAds ? (adsStore ?? ("shopify" as const)) : await storePlatform(db, req.workspaceId);
     let connection: ShopifyConnection | null = null;
     const getConnection = async () => (connection ??= await loadShopifyConnection(db, req.workspaceId));
     let wooConnection: WooConnection | null = null;
     const getWoo = async () => (wooConnection ??= await loadWooConnection(db, req.workspaceId));
-    const storeInfo = isAds
-      ? { name: "", domain: "" }
-      : platform === "woocommerce"
-        ? await getWoo().then((c) => ({ name: c.storeName, domain: c.domain }))
-        : await getConnection().then((c) => ({ name: c.storeName || c.shopDomain, domain: c.shopDomain }));
+    const loadStoreInfo = () =>
+      platform === "woocommerce"
+        ? getWoo().then((c) => ({ name: c.storeName, domain: c.domain }))
+        : getConnection().then((c) => ({ name: c.storeName || c.shopDomain, domain: c.shopDomain }));
+    // For Vera a store whose connection cannot be read counts as not connected: she plans from the feed and the site.
+    let storeForAds = adsStore !== null;
+    let storeInfo = { name: "", domain: "" };
+    if (!isAds || adsStore) {
+      try {
+        storeInfo = await loadStoreInfo();
+      } catch (error) {
+        if (!isAds) throw error;
+        log("reading the store connection failed", error);
+        storeForAds = false;
+      }
+    }
 
     // What this store's token may do: told to the agent up front, and kept for the sidebar's locks.
     let missingAccess: string[] = [];
-    if (!isAds && platform === "shopify") {
+    if ((!isAds || storeForAds) && platform === "shopify") {
       try {
         const granted = await grantedScopes(await getConnection());
         missingAccess = missingScopes(STORE_AGENT_SCOPES, granted).map((scope) => SCOPE_LABELS[scope]);
+        // Vera works without the store: without even the catalogue she gets no store tools and plans from the feed and the site.
+        if (isAds && missingScopes(["read_products"], granted).length) storeForAds = false;
         const { error } = await db
           .from("workspace_integrations")
           .update({ granted_scopes: [...granted], scopes_checked_at: new Date().toISOString() })
@@ -557,10 +583,17 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     await fs.mkdir(path.join(cwd, ".cursor", "rules"), { recursive: true });
     const adsAccount = isAds ? await loadAdsAccount(db, req.workspaceId) : null;
     const business = await loadBusinessContext(db, req.workspaceId, adsAccount?.currency ?? "", log);
-    await fs.writeFile(
-      path.join(cwd, ".cursor", "rules", "vera.mdc"),
-      adsAccount
-        ? veraAdsRule({ ...adsAccount, profile: business.brief, onboarding: business.onboarding, mode: req.mode })
+    // The rule file is written after the attachments are in the folder, so it can list them.
+    const writeRule = async (extra: { businessFiles?: { name: string; size: number }[]; chatFiles?: { path: string; size: number }[] } = {}) => {
+      const rule = adsAccount
+        ? veraAdsRule({
+            ...adsAccount,
+            profile: business.brief,
+            onboarding: business.onboarding,
+            storeCms: storeForAds ? { platform, name: storeInfo.name, domain: storeInfo.domain, missingAccess } : null,
+            ...extra,
+            mode: req.mode,
+          })
         : veraRule({
             businessProfile: business.filled ? business.brief : "",
             platform,
@@ -571,8 +604,9 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
             autoRunBulk: req.autoRunBulk,
             notes: await loadStoreNotes(db, req.workspaceId),
             missingAccess,
-          })
-    );
+          });
+      await fs.writeFile(path.join(cwd, ".cursor", "rules", "vera.mdc"), rule);
+    };
 
     const images: NonNullable<SDKUserMessage["images"]> = [];
     const placed: string[] = [];
@@ -589,6 +623,18 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
       const conversion = await convertAttachment(cwd, relative);
       if (conversion) converted.push(conversion.note);
     }
+    // Vera (Google Ads) is given the standing lists of files in every run: the workspace's business files and this chat's folder.
+    await writeRule(
+      isAds
+        ? {
+            businessFiles: await listBusinessFileNames(db, req.workspaceId).catch((error) => {
+              log("listing the business files failed", error);
+              return [];
+            }),
+            chatFiles: files.listForAgent(),
+          }
+        : {}
+    );
     // Files and plans of this chat the user @-mentioned.
     const mentioned = await mentionContext(db, req.chatId, cwd, req.message).catch((error) => {
       log("reading mentioned files failed", error);
@@ -647,7 +693,13 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     if (isAds && (!deps.secret || !deps.platformUrl)) throw new Error("The Google Ads agent is not configured (PLATFORM_URL).");
     const customTools = oncePerToolCall(withGuidance({
       ...(isAds
-        ? { ...createGoogleAdsTools(toolContext, { url: deps.platformUrl!, secret: deps.secret! }), ...createChatTools(toolContext) }
+        ? {
+            ...createGoogleAdsTools(toolContext, { url: deps.platformUrl!, secret: deps.secret! }),
+            ...createKeywordBatchTools(toolContext, { url: deps.platformUrl!, secret: deps.secret! }),
+            ...createCreativeTools(toolContext),
+            ...createChatTools(toolContext),
+            ...(storeForAds ? { ...createStoreCmsTools(toolContext), ...createStoreSalesTools(toolContext) } : {}),
+          }
         : createStoreAgentTools(toolContext)),
       ...createFileTools(cwd, (relative) => written.add(relative)),
       ...createScriptTool(cwd, (relative, inputs) => {

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, Check, CheckCircle2, Copy, Loader2, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ALL_SHOPIFY_SCOPES, SHOPIFY_TOOL_ACCESS, hasShopifyScope, missingShopifyScopes, requiredShopifyScopes } from "@/lib/integrations/shopify-access";
+import { ALL_SHOPIFY_SCOPES, VISIBLE_SHOPIFY_TOOL_ACCESS, hasShopifyScope, missingShopifyScopes, requiredShopifyScopes } from "@/lib/integrations/shopify-access";
 
 /**
  * What each tool needs from the Shopify token. Before a test it is a guide
@@ -26,7 +26,7 @@ export function ShopifyAccessGuide({
   const [copied, setCopied] = useState(false);
   const checked = Array.isArray(grantedScopes);
   const granted = new Set(grantedScopes ?? []);
-  const tools = SHOPIFY_TOOL_ACCESS.map((tool) => ({
+  const tools = VISIBLE_SHOPIFY_TOOL_ACCESS.map((tool) => ({
     tool,
     missing: checked ? missingShopifyScopes([...granted], tool.scopes) : [],
     // Without these the tool stays locked; other missing scopes only limit what it can do.

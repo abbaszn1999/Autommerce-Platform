@@ -34,6 +34,8 @@ export interface ToolDefinition {
   billing: ToolBilling;
   /** True when the tool cannot run without a connected store. */
   needsIntegration?: boolean;
+  /** Hidden everywhere in the app for now (the page still exists). */
+  hidden?: boolean;
   /** Only visible to admins/owners ("admin") or owners ("owner"). */
   requiresRole?: "admin" | "owner";
   /** Extra keywords so search finds the tool by what it does, not just its name. */
@@ -142,6 +144,7 @@ export const TOOLS: ToolDefinition[] = [
     category: "agents",
     billing: "free",
     needsIntegration: true,
+    hidden: true,
     keywords: ["header", "navigation", "menu", "design", "preview"],
   },
   {
@@ -291,6 +294,7 @@ export function visibleTools(opts: {
   isOwner: boolean;
 }): ToolDefinition[] {
   return TOOLS.filter((tool) => {
+    if (tool.hidden) return false;
     if (tool.requiresRole === "owner") return opts.isOwner;
     if (tool.requiresRole === "admin") return opts.canAdmin;
     return true;

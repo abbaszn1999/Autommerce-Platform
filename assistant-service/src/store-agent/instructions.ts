@@ -1,7 +1,7 @@
 import type { StorePlatform } from "./store-connection";
 
 /** The parts of the instructions that differ by platform. */
-type PlatformText = {
+export type PlatformText = {
   name: string;
   reach: string;
   tools: string;
@@ -60,6 +60,9 @@ How WooCommerce works:
   resultsDir: "woo-results",
   attachImage: "by their URL in the product's images (keep the current ones as { id } and append { src, alt })",
 };
+
+/** The platform-specific reach and tool text (also given to Vera on the Google Ads page when a store is connected). */
+export const platformText = (platform: StorePlatform): PlatformText => (platform === "woocommerce" ? WOOCOMMERCE : SHOPIFY);
 
 /**
  * Vera's standing instructions. Written into each chat folder as an

@@ -5,7 +5,7 @@
  * list is checked against this one in its tests).
  */
 
-export type StoreToolId = "store-assistant" | "growth-sync" | "market-research" | "website-restructure";
+export type StoreToolId = "store-assistant" | "growth-sync" | "market-research" | "website-restructure" | "google-ads-agent";
 
 export type ShopifyToolAccess = {
   id: StoreToolId;
@@ -13,6 +13,8 @@ export type ShopifyToolAccess = {
   /** What the tool does on the store, in a sentence. */
   summary: string;
   scopes: readonly string[];
+  /** Hidden from the app (sidebar, home, library) and from the access guide; its lock still applies if someone opens its address. */
+  hidden?: boolean;
   /**
    * What it needs to open, when less than all of `scopes`: the Store Assistant
    * opens with read_products, and each other scope adds what it can do.
@@ -41,6 +43,25 @@ export const SHOPIFY_TOOL_ACCESS: readonly ShopifyToolAccess[] = [
     ],
   },
   {
+    id: "google-ads-agent",
+    name: "Google Ads agent",
+    summary:
+      "Reads your catalogue and sales totals (no customer data) to plan campaigns, and can fix product data that breaks Merchant Center, always on an approval card.",
+    // Opens with the catalogue; each other scope adds one thing: fixing products, inventory, images, channels, sales totals.
+    required: ["read_products"],
+    scopes: [
+      "read_products",
+      "write_products",
+      "read_inventory",
+      "write_inventory",
+      "read_files",
+      "write_files",
+      "read_publications",
+      "write_publications",
+      "read_reports",
+    ],
+  },
+  {
     id: "growth-sync",
     name: "Growth Sync",
     summary: "Finds new products, creates collections, adds and removes products, and deletes collections it made.",
@@ -55,13 +76,18 @@ export const SHOPIFY_TOOL_ACCESS: readonly ShopifyToolAccess[] = [
   {
     id: "website-restructure",
     name: "Website Restructure",
+    hidden: true,
     summary: "Read only: your navigation menus, collections and brands.",
     scopes: ["read_online_store_navigation", "read_products"],
   },
 ];
 
 /** Every scope the platform uses, in a stable order, for "copy all". */
-export const ALL_SHOPIFY_SCOPES: readonly string[] = [...new Set(SHOPIFY_TOOL_ACCESS.flatMap((t) => t.scopes))];
+/** The tools shown to merchants (hidden ones keep their locks but are not listed). */
+export const VISIBLE_SHOPIFY_TOOL_ACCESS: readonly ShopifyToolAccess[] = SHOPIFY_TOOL_ACCESS.filter((t) => !t.hidden);
+
+/** Every scope the visible tools use, in a stable order, for "copy all". */
+export const ALL_SHOPIFY_SCOPES: readonly string[] = [...new Set(VISIBLE_SHOPIFY_TOOL_ACCESS.flatMap((t) => t.scopes))];
 
 /** Shopify grants read access with every write scope. */
 export function hasShopifyScope(granted: ReadonlySet<string>, scope: string): boolean {

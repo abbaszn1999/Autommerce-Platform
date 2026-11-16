@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { changedSections } from "./business-profile-doc";
 import {
   ProfileEditError,
   isProfileField,
@@ -64,17 +65,22 @@ async function writeProfile(admin: SupabaseClient, workspaceId: string, revision
 /**
  * Apply edits under the editor's rules (see planProfileEdits) and log each
  * changed field (a record of who changed what). Safe against two people saving at once.
+ * `edits` can be a function of the profile as it is when the write happens, so a
+ * change built from the current text (add to a section) is never lost to a parallel write.
  */
 export async function editProfile(
   admin: SupabaseClient,
   workspaceId: string,
-  edits: ProfileEdit[],
+  edits: ProfileEdit[] | ((current: BusinessProfileData) => ProfileEdit[]),
   editor: Editor,
-  actor: { userId: string | null; chatId?: string | null }
+  actor: { userId: string | null; chatId?: string | null },
+  opts: { allowHidden?: boolean } = {}
 ) {
   for (let attempt = 0; attempt < 4; attempt++) {
     const current = await loadProfile(admin, workspaceId);
-    const plan = planProfileEdits(current, edits, editor);
+    const list = typeof edits === "function" ? edits(current) : edits;
+    if (!list.length) return { changes: [] as ProfileChangeRecord[], skipped: [], profile: current as BusinessProfileData };
+    const plan = planProfileEdits(current, list, editor, undefined, opts);
     if (!plan.changes.length) return { changes: [] as ProfileChangeRecord[], skipped: plan.skipped, profile: current as BusinessProfileData };
     if (!(await writeProfile(admin, workspaceId, current.revision, plan.next, actor.userId))) continue;
 
@@ -141,4 +147,46 @@ export async function setOnboardingStage(admin: SupabaseClient, workspaceId: str
     if (await writeProfile(admin, workspaceId, current.revision, plan.next, userId)) return;
   }
   throw new ProfileEditError("The profile is being changed by someone else right now. Try again.");
+}
+
+/**
+ * Change the knowledge document: `change` gets the text as it is when the write
+ * happens and returns the new text. Logged like every edit (the version history).
+ */
+export function editDocument(
+  admin: SupabaseClient,
+  workspaceId: string,
+  change: (document: string) => string,
+  editor: Editor,
+  actor: { userId: string | null; chatId?: string | null }
+) {
+  return editProfile(admin, workspaceId, (current) => [{ field: "document", value: change(typeof current.values.document === "string" ? current.values.document : "") }], editor, actor, { allowHidden: true });
+}
+
+export type DocumentVersion = { id: string; source: ProfileSource; createdAt: string; chatId: string | null; changed: string[] };
+
+/** The latest saved versions of the document, newest first, with the sections each one changed. */
+export async function listDocumentVersions(admin: SupabaseClient, workspaceId: string, limit = 30): Promise<DocumentVersion[]> {
+  const { data, error } = await admin
+    .from("business_profile_changes")
+    .select("id, source, chat_id, created_at, before_value, after_value")
+    .eq("workspace_id", workspaceId)
+    .eq("field", "document")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`business profile: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    id: String(r.id),
+    source: r.source as ProfileSource,
+    createdAt: String(r.created_at),
+    chatId: (r.chat_id as string | null) ?? null,
+    changed: changedSections(typeof r.before_value === "string" ? r.before_value : "", typeof r.after_value === "string" ? r.after_value : ""),
+  }));
+}
+
+/** The whole document as one saved version left it (null: no such version in this workspace). */
+export async function getDocumentVersion(admin: SupabaseClient, workspaceId: string, id: string): Promise<string | null> {
+  const { data, error } = await admin.from("business_profile_changes").select("after_value").eq("workspace_id", workspaceId).eq("field", "document").eq("id", id).maybeSingle();
+  if (error) throw new Error(`business profile: ${error.message}`);
+  return data && typeof data.after_value === "string" ? data.after_value : data ? "" : null;
 }

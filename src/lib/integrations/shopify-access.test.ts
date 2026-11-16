@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ALL_SHOPIFY_SCOPES, SHOPIFY_TOOL_ACCESS, hasShopifyScope, missingShopifyScopes } from "./shopify-access";
+import { ALL_SHOPIFY_SCOPES, SHOPIFY_TOOL_ACCESS, VISIBLE_SHOPIFY_TOOL_ACCESS, hasShopifyScope, missingShopifyScopes } from "./shopify-access";
 
 describe("shopify access", () => {
   it("counts a write scope as its read scope too", () => {
@@ -21,6 +21,12 @@ describe("shopify access", () => {
 
   it("gives every scope once, and a full grant makes every tool ready", () => {
     expect(new Set(ALL_SHOPIFY_SCOPES).size).toBe(ALL_SHOPIFY_SCOPES.length);
-    for (const tool of SHOPIFY_TOOL_ACCESS) expect(missingShopifyScopes(ALL_SHOPIFY_SCOPES, tool.scopes)).toEqual([]);
+    for (const tool of VISIBLE_SHOPIFY_TOOL_ACCESS) expect(missingShopifyScopes(ALL_SHOPIFY_SCOPES, tool.scopes)).toEqual([]);
+  });
+
+  it("keeps Website Restructure out of the list and the copied scopes, but still locked by its scope", () => {
+    expect(SHOPIFY_TOOL_ACCESS.find((t) => t.id === "website-restructure")?.hidden).toBe(true);
+    expect(VISIBLE_SHOPIFY_TOOL_ACCESS.some((t) => t.id === "website-restructure")).toBe(false);
+    expect(ALL_SHOPIFY_SCOPES).not.toContain("read_online_store_navigation");
   });
 });

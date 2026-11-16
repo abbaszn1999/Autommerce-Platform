@@ -84,6 +84,11 @@ export function createStoreAgentTools(ctx: ToolContext): Record<string, SDKCusto
   return { ...store, ...createSharedTools(ctx) };
 }
 
+/** Only the connected store's own tools (read, change, bulk, upload), for agents that bring their own shared tools. */
+export function createStoreCmsTools(ctx: ToolContext): Record<string, SDKCustomTool> {
+  return ctx.platform === "woocommerce" ? createWooTools(ctx) : createShopifyTools(ctx);
+}
+
 function createShopifyTools(ctx: ToolContext): Record<string, SDKCustomTool> {
   return {
     shopify_admin: {

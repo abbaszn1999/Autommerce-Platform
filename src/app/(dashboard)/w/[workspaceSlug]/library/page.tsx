@@ -7,7 +7,6 @@ import {
   ArrowUpRight,
   Bot,
   Clock,
-  LayoutTemplate,
   Library,
   Lock,
   Megaphone,
@@ -30,15 +29,6 @@ type LibraryAgent = {
 };
 
 const AGENTS: LibraryAgent[] = [
-  {
-    path: "/website-restructure",
-    name: "Website restructure",
-    blurb: "Rebuilds your storefront header and navigation through chat, with a live preview and version history.",
-    icon: LayoutTemplate,
-    tone: { icon: "bg-violet-500/10 text-violet-500 ring-violet-500/20", glow: "from-violet-500/15" },
-    points: ["Header and menu builder", "Live preview", "Version history"],
-    tool: "website-restructure",
-  },
   {
     path: "/store-assistant",
     name: "Store assistant",

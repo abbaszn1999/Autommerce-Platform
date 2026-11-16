@@ -25,12 +25,16 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   const { data: approval } = await access.admin
     .from("store_agent_approvals")
-    .select("id, workspace_id, kind, chat_id")
+    .select("id, workspace_id, kind, chat_id, undoable")
     .eq("id", approvalId)
     .eq("workspace_id", parsed.data.workspaceId)
     .maybeSingle();
   if (!approval) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if ((await chatDomain(access.admin, String(approval.chat_id))) === "google_ads") return undoGoogleAdsApproval(access, approvalId, String(approval.chat_id));
+  if ((await chatDomain(access.admin, String(approval.chat_id))) === "google_ads") {
+    // Vera also changes the store (with its own backup): that approval is undone by the store's undo below.
+    const handled = await undoGoogleAdsApproval(access, approvalId, String(approval.chat_id), approval.undoable === true);
+    if (handled) return handled;
+  }
   if (approval.kind !== "write" && !["owner", "admin"].includes(String(access.ctx.membershipRole))) {
     return NextResponse.json({ error: "Only the workspace owner or an admin can undo bulk changes." }, { status: 403 });
   }
@@ -49,7 +53,7 @@ export async function POST(request: NextRequest, { params }: Params) {
  * change: the server uses the inverse it stored when the change was applied
  * (the change's id there is the approval id). Owners and admins only.
  */
-async function undoGoogleAdsApproval(access: StoreAgentAccess, approvalId: string, chatId: string) {
+async function undoGoogleAdsApproval(access: StoreAgentAccess, approvalId: string, chatId: string, storeBackup: boolean) {
   if (!["owner", "admin"].includes(String(access.ctx.membershipRole))) {
     return NextResponse.json({ error: "Only the workspace owner or an admin can undo Google Ads changes." }, { status: 403 });
   }
@@ -63,7 +67,10 @@ async function undoGoogleAdsApproval(access: StoreAgentAccess, approvalId: strin
       .eq("client_change_id", approvalId)
       .eq("status", "applied")
       .maybeSingle();
-    if (!change) return NextResponse.json({ error: "This change was not applied, so there is nothing to undo." }, { status: 409 });
+    if (!change) {
+      if (storeBackup) return null;
+      return NextResponse.json({ error: "This change was not applied, so there is nothing to undo." }, { status: 409 });
+    }
     const merchant = change.target === "merchant";
     const row = await loadConnection(access.admin, String(chat.workspace_id), merchant ? "merchant" : "ads");
     if (!row?.composio_connected_account_id || !row.account_id) return NextResponse.json({ error: LIVE_ERRORS.not_connected }, { status: 409 });
