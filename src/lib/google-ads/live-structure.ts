@@ -31,8 +31,6 @@ export type StructureRows = Partial<Record<StructureQueryName, GaqlRow[]>> & { a
 const str = (v: unknown) => (v == null ? "" : String(v));
 const num = (v: unknown) => (v == null || v === "" ? 0 : Number(v) || 0);
 const lastId = (resource: unknown) => str(resource).split("/").pop() ?? "";
-/** "customers/1/adGroupCriteria/22~33" → "33". */
-const criterionId = (resource: unknown) => lastId(resource).split("~").pop() ?? "";
 const bidChange = (v: unknown) => (v == null ? undefined : Math.round((Number(v) - 1) * 100) / 100);
 const status = (v: unknown): EntityStatus => (v === "PAUSED" ? "PAUSED" : v === "REMOVED" ? "REMOVED" : "ENABLED");
 
@@ -224,7 +222,9 @@ export function mapListingGroups(rows: StructureRows): ListingGroup[] {
     const c = r.adGroupCriterion;
     if (!c?.criterionId) continue;
     const cv = c.listingGroup?.caseValue ?? {};
-    const parent = criterionId(c.listingGroup?.parentAdGroupCriterion);
+    // Criterion ids repeat across ad groups, so a node is "adGroupId~criterionId" (the parent's resource name already ends that way).
+    const parent = lastId(c.listingGroup?.parentAdGroupCriterion);
+    const nodeId = `${str(r.adGroup?.id)}~${str(c.criterionId)}`;
     let dimension: ListingDimension = parent ? "OTHERS" : "ALL";
     let value = parent ? "Everything else" : "All products";
     if (cv.productBrand?.value != null) [dimension, value] = ["BRAND", str(cv.productBrand.value)];
@@ -232,7 +232,7 @@ export function mapListingGroups(rows: StructureRows): ListingGroup[] {
     else if (cv.productItemId?.value != null) [dimension, value] = ["ITEM_ID", str(cv.productItemId.value)];
     else if (cv.productCustomAttribute?.value != null) [dimension, value] = ["CUSTOM_LABEL_0", `${str(cv.productCustomAttribute.index).replace("INDEX", "Label ")}: ${str(cv.productCustomAttribute.value)}`];
     out.push({
-      id: str(c.criterionId),
+      id: nodeId,
       campaignId: str(r.campaign?.id),
       ...(parent ? { parentId: parent } : {}),
       dimension,

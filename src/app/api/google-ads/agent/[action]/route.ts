@@ -11,7 +11,7 @@ import { loadLiveAccount } from "@/lib/google-ads/live-report.server";
 import { REPORTS, REPORT_DAYS, isReportName, type ReportDays } from "@/lib/google-ads/live-reports";
 import { runReport } from "@/lib/google-ads/live-reports.server";
 import { MerchantPlanError, merchantOverview, type MerchantOp } from "@/lib/google-ads/merchant-live";
-import { applyMerchantChange, loadMerchantSnapshot, previewMerchantChange } from "@/lib/google-ads/merchant.server";
+import { AGENT_PAGES, applyMerchantChange, listFeedSources, loadMerchantSnapshot, previewMerchantChange } from "@/lib/google-ads/merchant.server";
 import { rangeFor, todayIn } from "@/lib/google-ads/metrics";
 import { PROFILE_SOURCES, ProfileEditError, fieldLabel, formatValue, isProfileField, missingRequired, onboardingStageOf, profileForAgent, userStatedValue, type ProfileEdit, type ProfileSource } from "@/lib/business-profile";
 import { SECTIONS, appendToSection, docBytes, isProfileSection, sectionsFilled, setSection } from "@/lib/business-profile-doc";
@@ -374,8 +374,10 @@ async function merchantAction(action: string, body: Record<string, unknown>, { a
   if (!row?.composio_connected_account_id || !row.account_id) return NextResponse.json({ error: "merchant_not_connected" }, { status: 409 });
 
   if (action === "merchant") {
-    const snapshot = await loadMerchantSnapshot(row, { force: body.refresh === true });
-    return NextResponse.json({ overview: merchantOverview(snapshot), fetchedAt: snapshot.fetchedAt });
+    const snapshot = await loadMerchantSnapshot(row, { force: body.refresh === true, maxPages: AGENT_PAGES });
+    // How the feeds are wired (primary vs supplemental sources) explains many product issues; it is optional.
+    const feeds = await listFeedSources(row).catch(() => undefined);
+    return NextResponse.json({ overview: { ...merchantOverview(snapshot, { issuesOnly: body.issuesOnly === true }), ...(feeds ? { dataSources: feeds } : {}) }, fetchedAt: snapshot.fetchedAt });
   }
 
   // Only updates come from the agent; restores are built by the server for undo.

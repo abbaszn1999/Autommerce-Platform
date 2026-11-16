@@ -48,7 +48,7 @@ function check(field: ProfileField, raw: unknown): { ok: true; value: unknown } 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { ...init, headers: { "Content-Type": "application/json" }, cache: "no-store" });
   const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
-  if (!res.ok) throw new Error(body.message ?? (body.error === "network" ? "Couldn't reach the server. Try again." : "Something went wrong. Try again."));
+  if (!res.ok) throw Object.assign(new Error(body.message ?? (body.error === "network" ? "Couldn't reach the server. Try again." : "Something went wrong. Try again.")), { code: body.error });
   return body as T;
 }
 
@@ -193,6 +193,9 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Offered when picking the languages ads are written in; anything else can still be typed. */
+const LANGUAGE_NAMES = ["Arabic", "English", "French", "German", "Spanish", "Italian", "Portuguese", "Turkish", "Dutch", "Russian", "Persian", "Urdu", "Hindi", "Indonesian", "Japanese", "Korean", "Chinese", "Polish", "Swedish", "Greek", "Hebrew"];
+
 export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onDone: () => void }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -204,6 +207,7 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
   const [businessName, setBusinessName] = useState("");
   const [website, setWebsite] = useState("");
   const [markets, setMarkets] = useState<string[]>([]);
+  const [languages, setLanguages] = useState<string[]>([]);
   const [goal, setGoal] = useState("");
   const [judgeBy, setJudgeBy] = useState<"margin" | "roas">("margin");
   const [margin, setMargin] = useState("");
@@ -228,6 +232,7 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
         setBusinessName(String(v.businessName ?? s.businessName ?? ""));
         setWebsite(String(v.website ?? s.website ?? ""));
         setMarkets((v.markets as string[] | undefined) ?? s.markets ?? []);
+        setLanguages((v.languages as string[] | undefined) ?? []);
         setGoal(String(v.goal ?? ""));
         if (typeof v.margin === "number") setMargin(String(Math.round(v.margin * 1000) / 10));
         if (typeof v.targetRoas === "number") {
@@ -277,7 +282,14 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
 
   const save = async (edits: { field: ProfileField; value: unknown }[]) => {
     if (!edits.length) return;
-    await call("/api/business-profile", { method: "PATCH", body: JSON.stringify({ workspaceId, edits }) });
+    const send = () => call("/api/business-profile", { method: "PATCH", body: JSON.stringify({ workspaceId, edits }) });
+    try {
+      await send();
+    } catch (e) {
+      // Someone saved at the same moment (Vera, or a teammate): the server re-reads on every try, so one more try is safe.
+      if ((e as { code?: string }).code !== "conflict") throw e;
+      await send();
+    }
   };
 
   const next = async () => {
@@ -291,6 +303,7 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
           { field: "businessName", value: businessName },
           { field: "website", value: website },
           { field: "markets", value: markets },
+          ...(languages.length ? [{ field: "languages" as const, value: languages }] : []),
         ]);
       } else if (step === 1) {
         await save([
@@ -424,6 +437,13 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
                             : "Vera warns you when a campaign shows ads outside these countries."}
                         </Help>
                       )}
+                    </div>
+                    <div>
+                      <Label>
+                        Languages
+                      </Label>
+                      <ChipsInput value={languages} onChange={setLanguages} placeholder="Start typing a language…" options={LANGUAGE_NAMES} />
+                      <Help>The languages your site is in and the ones ads should be written in. Vera writes ads and keywords in these.</Help>
                     </div>
                   </div>
                 )}

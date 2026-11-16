@@ -260,7 +260,8 @@ export function toApiAttributes(a: MerchantAttributes): Record<string, unknown> 
 // ─── For the agent ──────────────────────────────────────────────────────────
 
 /** What the agent needs to find and fix problems, without the noise. */
-export function merchantOverview(s: MerchantSnapshot) {
+/** What Vera reads. Counts always cover every product read; the list can be limited to those with issues. */
+export function merchantOverview(s: MerchantSnapshot, opts: { issuesOnly?: boolean } = {}) {
   const count = (status: MerchantProductStatus) => s.products.filter((p) => p.status === status).length;
   const issueCounts = new Map<string, { description: string; severity: string; attribute?: string; resolution?: string; products: number }>();
   for (const p of s.products)
@@ -272,11 +273,14 @@ export function merchantOverview(s: MerchantSnapshot) {
   return {
     merchantId: s.merchantId,
     products: s.products.length,
+    withIssues: s.products.filter((p) => p.issues.length > 0).length,
+    notInStock: s.products.filter((p) => p.availability !== "IN_STOCK").length,
     truncated: s.truncated,
+    showing: `${(opts.issuesOnly ? s.products.filter((p) => p.issues.length > 0) : s.products).length} of ${s.products.length} products read${s.truncated ? " (the account has more than were read)" : ""}`,
     status: { approved: count("APPROVED"), limited: count("LIMITED"), disapproved: count("DISAPPROVED"), pending: count("PENDING") },
     accountIssues: s.accountIssues,
     issues: [...issueCounts.entries()].map(([code, v]) => ({ code, ...v })).sort((a, b) => b.products - a.products),
-    productList: s.products.map((p) => ({
+    productList: (opts.issuesOnly ? s.products.filter((p) => p.issues.length > 0) : s.products).map((p) => ({
       id: p.id,
       offerId: p.offerId,
       title: p.title,

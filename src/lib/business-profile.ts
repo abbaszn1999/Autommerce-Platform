@@ -96,7 +96,18 @@ export type BusinessProfileData = { values: ProfileValues; meta: ProfileMeta; up
  */
 export const REQUIRED: readonly (ProfileField | readonly ProfileField[])[] = ["businessName", "website", "markets", "goal", ["margin", "targetRoas"], "monthlyBudgetCap"];
 
-export class ProfileEditError extends Error {}
+/** `code` is stable: "conflict" (someone else saved at the same moment) and "too_large" (the whole profile is over its size limit). */
+export class ProfileEditError extends Error {
+  constructor(
+    message: string,
+    readonly code?: "conflict" | "too_large"
+  ) {
+    super(message);
+  }
+}
+
+/** The database refuses a profile of 100 KB or more; refuse earlier, with a message that says what to do. */
+export const PROFILE_MAX_BYTES = 95_000;
 
 const LIST_MAX = 30;
 const ITEM_MAX = 200;

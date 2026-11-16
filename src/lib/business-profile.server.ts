@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { changedSections } from "./business-profile-doc";
 import {
+  PROFILE_MAX_BYTES,
   ProfileEditError,
   isProfileField,
   planProfileEdits,
@@ -82,6 +83,8 @@ export async function editProfile(
     if (!list.length) return { changes: [] as ProfileChangeRecord[], skipped: [], profile: current as BusinessProfileData };
     const plan = planProfileEdits(current, list, editor, undefined, opts);
     if (!plan.changes.length) return { changes: [] as ProfileChangeRecord[], skipped: plan.skipped, profile: current as BusinessProfileData };
+    if (new TextEncoder().encode(JSON.stringify(plan.next.values)).length > PROFILE_MAX_BYTES)
+      throw new ProfileEditError("The business profile would be over its size limit (about 100 KB in all). Shorten the knowledge document or a long list, then save again.", "too_large");
     if (!(await writeProfile(admin, workspaceId, current.revision, plan.next, actor.userId))) continue;
 
     const { data, error } = await admin
@@ -103,7 +106,7 @@ export async function editProfile(
     if (error) console.error("[business-profile] change log", error.message);
     return { changes: (data ?? []).map(toRecord), skipped: plan.skipped, profile: await loadProfile(admin, workspaceId) as BusinessProfileData };
   }
-  throw new ProfileEditError("The profile is being changed by someone else right now. Try again.");
+  throw new ProfileEditError("The profile is being changed by someone else right now. Try again.", "conflict");
 }
 
 const toRecord = (r: Record<string, unknown>): ProfileChangeRecord => ({
@@ -146,7 +149,7 @@ export async function setOnboardingStage(admin: SupabaseClient, workspaceId: str
     if (!plan.changes.length) return;
     if (await writeProfile(admin, workspaceId, current.revision, plan.next, userId)) return;
   }
-  throw new ProfileEditError("The profile is being changed by someone else right now. Try again.");
+  throw new ProfileEditError("The profile is being changed by someone else right now. Try again.", "conflict");
 }
 
 /**

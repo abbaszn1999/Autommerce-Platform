@@ -10,7 +10,10 @@ export const dynamic = "force-dynamic";
 const canEdit = (role: string) => role === "owner" || role === "admin";
 
 function fail(err: unknown) {
-  if (err instanceof ProfileEditError) return NextResponse.json({ error: "invalid_edit", message: err.message }, { status: 422 });
+  if (err instanceof ProfileEditError) {
+    if (err.code === "conflict") return NextResponse.json({ error: "conflict", message: err.message }, { status: 409 });
+    return NextResponse.json({ error: err.code ?? "invalid_edit", message: err.message }, { status: 422 });
+  }
   const { status, code } = errorStatus(err);
   if (status >= 500) console.error("[business-profile]", code, (err as Error).message);
   return NextResponse.json({ error: code }, { status });

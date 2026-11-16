@@ -512,8 +512,6 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
   let estimateSoFar = () => extraUsd;
   /** Rough size of what tools returned: the model reads it on every later call. */
   let toolResultTokens = 0;
-  /** Paid work that is not part of this agent on Cursor's side (the chat title). */
-  let titleUsd = 0;
   /** The agent's billed total before this run; undefined while Cursor does not report it for this account. */
   let billedBefore: number | undefined;
   let lastSendReported = false;
@@ -980,7 +978,22 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
         });
     };
     saveEstimate();
-    estimateTimer = setInterval(saveEstimate, ESTIMATE_SAVE_EVERY_MS);
+    // Kept apart so a database without these columns still saves the estimate above.
+    const saveBillingBasis = () => {
+      void db
+        .from("store_agent_runs")
+        .update({ billed_before_cents: billedBefore ?? null, extra_usd: extraUsd })
+        .eq("id", req.runId)
+        .eq("status", "running")
+        .then(({ error }) => {
+          if (error) log("saving the run's billing basis failed", error.message);
+        });
+    };
+    saveBillingBasis();
+    estimateTimer = setInterval(() => {
+      saveEstimate();
+      saveBillingBasis();
+    }, ESTIMATE_SAVE_EVERY_MS);
     estimateTimer.unref?.();
     deadline = setTimeout(() => {
       run.emit({ type: "error", message: "This run reached the one-hour limit and was stopped." });
@@ -1079,7 +1092,6 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     });
     if (titled) {
       extraUsd += titled.usd;
-      titleUsd = titled.usd;
       await db.from("store_agent_chats").update({ title: titled.title }).eq("id", req.chatId);
     }
   }
@@ -1092,7 +1104,8 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     const cost = settledCost({
       status,
       billedUsd: billedBefore !== undefined && billedAfter !== undefined ? (billedAfter - billedBefore) / 100 : undefined,
-      outsideAgentUsd: titleUsd,
+      // Cursor's figure covers the agent only: generated images and the chat title are billed to us separately.
+      outsideAgentUsd: extraUsd,
       reportedUsd: extraUsd + estimateUsd(req.model.id, req.model.params, usage, modelCalls),
       runningEstimateUsd: estimateSoFar(),
       lastSendReported,

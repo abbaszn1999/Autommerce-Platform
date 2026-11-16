@@ -20,7 +20,7 @@ export function GaVera({ width }: { width: number }) {
   const accountName = useAccountData()?.account.name ?? "Google Ads";
 
   // A change Vera applied, an undo or a plan step: load the account again so every page shows it.
-  useEffect(() => onAccountChanged(() => void useGoogleAds.getState().refreshData()), []);
+  useEffect(() => onAccountChanged(() => void useGoogleAds.getState().refreshData({ force: true })), []);
 
   // Plans and reports Vera saves open on the Documents page; the chat's cards open them too.
   useEffect(() => {

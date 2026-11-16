@@ -24,7 +24,8 @@ export const LIVE_QUERIES = {
   deviceBids: () => "SELECT campaign.id, campaign_criterion.device.type, campaign_criterion.bid_modifier FROM campaign_criterion WHERE campaign_criterion.type = 'DEVICE' AND campaign.status != 'REMOVED'",
   conversions: () =>
     "SELECT conversion_action.id, conversion_action.name, conversion_action.category, conversion_action.status, conversion_action.type, conversion_action.primary_for_goal, conversion_action.counting_type, conversion_action.value_settings.default_value, conversion_action.value_settings.always_use_default_value, conversion_action.click_through_lookback_window_days, conversion_action.attribution_model_settings.attribution_model FROM conversion_action WHERE conversion_action.status != 'REMOVED'",
-  conversionCounts: () => "SELECT segments.conversion_action, metrics.all_conversions FROM customer WHERE segments.date DURING LAST_30_DAYS",
+  /** Conversions per action over the chosen range, so the Conversions tab matches the date picker. */
+  conversionCounts: (start: string, end: string) => `SELECT segments.conversion_action, metrics.all_conversions FROM customer WHERE ${between(assertIsoDay(start), assertIsoDay(end))}`,
   recommendations: () => "SELECT recommendation.resource_name, recommendation.type, recommendation.campaign, recommendation.impact FROM recommendation WHERE recommendation.dismissed = FALSE",
 
   campaigns: () =>
@@ -41,6 +42,10 @@ export const LIVE_QUERIES = {
 
   campaignDaily: (start: string, end: string) =>
     `SELECT campaign.id, segments.date, ${METRICS} FROM campaign WHERE campaign.status != 'REMOVED' AND ${between(assertIsoDay(start), assertIsoDay(end))}`,
+
+  /** Impression share per campaign and day. Separate and optional: if Google refuses it for some campaign type, only the Impression share tab is affected. */
+  campaignShare: (start: string, end: string) =>
+    `SELECT campaign.id, segments.date, metrics.search_impression_share, metrics.search_budget_lost_impression_share, metrics.search_rank_lost_impression_share FROM campaign WHERE campaign.status != 'REMOVED' AND campaign.advertising_channel_type IN ('SEARCH', 'SHOPPING') AND ${between(assertIsoDay(start), assertIsoDay(end))}`,
 
   adGroups: () =>
     "SELECT ad_group.id, ad_group.name, ad_group.status, ad_group.type, campaign.id, ad_group.cpc_bid_micros, ad_group.target_cpa_micros FROM ad_group WHERE ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED'",
@@ -76,7 +81,6 @@ export const LIVE_QUERIES = {
   adMetrics: (start: string, end: string) =>
     `SELECT ad_group.id, ad_group_ad.ad.id, ${METRICS} FROM ad_group_ad WHERE ad_group_ad.status != 'REMOVED' AND ${between(assertIsoDay(start), assertIsoDay(end))}`,
 
-  /** The most-shown 500 search terms of the range. */
   /** Numbers per targeted placement or YouTube channel, per topic and per Shopping product group. */
   placementMetrics: (start: string, end: string) =>
     `SELECT ad_group.id, ad_group_criterion.criterion_id, ${METRICS} FROM managed_placement_view WHERE ${between(assertIsoDay(start), assertIsoDay(end))}`,
@@ -86,9 +90,10 @@ export const LIVE_QUERIES = {
     `SELECT ad_group.id, ad_group_criterion.criterion_id, ${METRICS} FROM product_group_view WHERE ${between(assertIsoDay(start), assertIsoDay(end))}`,
   assetGroupMetrics: (start: string, end: string) =>
     `SELECT asset_group.id, ${METRICS} FROM asset_group WHERE asset_group.status != 'REMOVED' AND ${between(assertIsoDay(start), assertIsoDay(end))}`,
+  /** The 10,000 most-shown search terms of the range (paged; the page says when there are more). */
   searchTerms: (start: string, end: string) =>
     `SELECT campaign.id, ad_group.id, search_term_view.search_term, search_term_view.status, segments.search_term_match_type, ${METRICS}
-     FROM search_term_view WHERE ${between(assertIsoDay(start), assertIsoDay(end))} ORDER BY metrics.impressions DESC LIMIT 500`,
+     FROM search_term_view WHERE ${between(assertIsoDay(start), assertIsoDay(end))} ORDER BY metrics.impressions DESC LIMIT 10000`,
 };
 
 export type LiveQueryName = keyof typeof LIVE_QUERIES;

@@ -9,6 +9,8 @@ export type SyncState = {
   /** ISO time of the last successful load. */
   refreshedAt: string;
   error?: string;
+  /** Said under the refresh button: e.g. the reload was too soon after the last one. */
+  note?: string;
   /** A live account whose numbers have not loaded yet: the page shows skeletons, not zeros. */
   pending?: boolean;
 };
@@ -29,6 +31,8 @@ export type FetchOptions = {
   range?: DateRange;
   /** Skip any server-side cache (the Refresh button). */
   force?: boolean;
+  /** When the numbers were really read from Google (a cached copy is older than "now"), and whether a forced reload was refused. */
+  onMeta?: (meta: { fetchedAt: string; refreshLimited: boolean }) => void;
 };
 
 /** Demo data lives in memory, so a refresh just waits a moment and returns the same snapshot. */
@@ -48,7 +52,8 @@ export function liveDataSource(workspaceId: string): GoogleAdsDataSource {
     label: "Google Ads",
     fetchAccount: async (customerId, current, opts) => {
       if (!opts?.range) return current;
-      const { data } = await liveApi.account(workspaceId, opts.range, !!opts.force);
+      const { data, fetchedAt, refreshLimited } = await liveApi.account(workspaceId, opts.range, !!opts.force);
+      opts.onMeta?.({ fetchedAt, refreshLimited: !!refreshLimited });
       // The server always serves the account picked for this workspace; ignore a stale answer for another one.
       return data.account.customerId === customerId ? data : current;
     },

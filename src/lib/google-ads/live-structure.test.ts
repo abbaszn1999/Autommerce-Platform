@@ -101,25 +101,27 @@ describe("product groups and placements", () => {
   it("rebuilds the product group tree", () => {
     const groups = mapListingGroups({
       listingGroups: [
-        { campaign: { id: "5" }, adGroupCriterion: { criterionId: "1", listingGroup: { type: "SUBDIVISION" } } },
-        { campaign: { id: "5" }, adGroupCriterion: { criterionId: "2", cpcBidMicros: "450000", listingGroup: { type: "UNIT", parentAdGroupCriterion: "customers/1/adGroupCriteria/8~1", caseValue: { productBrand: { value: "Acme" } } } } },
-        { campaign: { id: "5" }, adGroupCriterion: { criterionId: "3", negative: true, listingGroup: { type: "UNIT", parentAdGroupCriterion: "customers/1/adGroupCriteria/8~1", caseValue: { productBrand: {} } } } },
+        { campaign: { id: "5" }, adGroup: { id: "8" }, adGroupCriterion: { criterionId: "1", listingGroup: { type: "SUBDIVISION" } } },
+        { campaign: { id: "5" }, adGroup: { id: "8" }, adGroupCriterion: { criterionId: "2", cpcBidMicros: "450000", listingGroup: { type: "UNIT", parentAdGroupCriterion: "customers/1/adGroupCriteria/8~1", caseValue: { productBrand: { value: "Acme" } } } } },
+        { campaign: { id: "5" }, adGroup: { id: "8" }, adGroupCriterion: { criterionId: "3", negative: true, listingGroup: { type: "UNIT", parentAdGroupCriterion: "customers/1/adGroupCriteria/8~1", caseValue: { productBrand: {} } } } },
       ],
     });
     expect(groups).toEqual([
-      { id: "1", campaignId: "5", dimension: "ALL", value: "All products" },
-      { id: "2", campaignId: "5", parentId: "1", dimension: "BRAND", value: "Acme", bid: 0.45 },
-      { id: "3", campaignId: "5", parentId: "1", dimension: "OTHERS", value: "Everything else", excluded: true },
+      { id: "8~1", campaignId: "5", dimension: "ALL", value: "All products" },
+      { id: "8~2", campaignId: "5", parentId: "8~1", dimension: "BRAND", value: "Acme", bid: 0.45 },
+      { id: "8~3", campaignId: "5", parentId: "8~1", dimension: "OTHERS", value: "Everything else", excluded: true },
     ]);
   });
 
   it("shows Google's numbers per placement and per product group, and zero for none", () => {
     const targets = mapContentTargets({ placements: [{ campaign: { id: "5" }, adGroup: { id: "8" }, adGroupCriterion: { criterionId: "4", type: "YOUTUBE_CHANNEL", displayName: "Cooking TV" } }] });
     expect(targets[0]).toMatchObject({ id: "8-4", kind: "YOUTUBE_CHANNEL", value: "Cooking TV", excluded: false });
-    const data = { exact: { start: "a", end: "b", byId: { "8-4": { impressions: 100, clicks: 4, cost: 2, conversions: 1, conversionsValue: 30 }, "2": { impressions: 50, clicks: 5, cost: 3, conversions: 0, conversionsValue: 0 } } } } as never;
+    const data = { exact: { start: "a", end: "b", byId: { "8-4": { impressions: 100, clicks: 4, cost: 2, conversions: 1, conversionsValue: 30 }, "8~2": { impressions: 50, clicks: 5, cost: 3, conversions: 0, conversionsValue: 0 } } } } as never;
     expect(contentMetrics(data, { preset: "CUSTOM", start: "a", end: "b" }, targets).get("8-4")?.cost).toBe(2);
-    expect(groupMetrics(data, "2", new Map()).clicks).toBe(5);
-    expect(groupMetrics(data, "3", new Map()).clicks).toBe(0);
+    expect(groupMetrics(data, "8~2", new Map()).clicks).toBe(5);
+    expect(groupMetrics(data, "8~3", new Map()).clicks).toBe(0);
+    // The same criterion id in another ad group is another product group.
+    expect(groupMetrics(data, "9~2", new Map()).clicks).toBe(0);
   });
 });
 

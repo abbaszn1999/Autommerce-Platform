@@ -20,6 +20,8 @@ const merchantPreview = vi.fn();
 vi.mock("@/lib/google-ads/merchant.server", () => ({
   applyMerchantChange: (...a: unknown[]) => merchantApply(...a),
   previewMerchantChange: (...a: unknown[]) => merchantPreview(...a),
+  AGENT_PAGES: 40,
+  listFeedSources: vi.fn().mockResolvedValue([{ name: "Main feed", kind: "primary", input: "FILE", ours: false }]),
   loadMerchantSnapshot: vi.fn().mockResolvedValue({ merchantId: "5898578821", products: [], accountIssues: [], truncated: false, fetchedAt: "now" }),
 }));
 const editProfile = vi.fn();

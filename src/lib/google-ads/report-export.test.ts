@@ -25,6 +25,33 @@ const content = (extra: Partial<ReportContent> = {}): ReportContent => ({
 const report = (c = content(), title = "October report"): ExportDoc => ({ kind: "report", title, summary: "Profitable", content: c });
 const opts = { currency: "USD", accountName: "Kalema", generatedAt: new Date("2026-11-10T00:00:00Z") };
 
+describe("the Excel workbook keeps the words of every block", () => {
+  it("puts text, callouts, scores and the readable part of html pages in a Notes sheet", async () => {
+    const c = content({
+      sections: [
+        {
+          id: "s2",
+          title: "Narrative",
+          blocks: [
+            { kind: "text", md: "**Spend** went up" },
+            { kind: "callout", tone: "warn", title: "Watch", text: "Budget is capped" } as never,
+            { kind: "score", label: "Account health", score: 72, parts: [{ label: "Tracking", score: 60 }] } as never,
+            { kind: "html", title: "Hours", html: "<style>x{}</style><p>Peak at 9pm</p><script>alert(1)</script>" },
+          ],
+        },
+      ],
+    });
+    const wb = exportWorkbook(ExcelJS, report(c), opts);
+    const notes = wb.getWorksheet("Notes")!;
+    const text = notes.getSheetValues().flat().map(String).join(" | ");
+    expect(text).toContain("Spend went up");
+    expect(text).toContain("Watch: Budget is capped");
+    expect(text).toContain("Account health: 72/100");
+    expect(text).toContain("Peak at 9pm");
+    expect(text).not.toContain("alert(1)");
+  });
+});
+
 describe("the report's sandbox", () => {
   it("puts our policy before anything the report wrote, so it can't be weakened", () => {
     const doc = reportDocument('<!doctype html><html><head><meta name="x"></head><body><img src="https://evil.example/x"></body></html>', true);
@@ -92,7 +119,7 @@ describe("the printable page", () => {
 describe("the Excel file", () => {
   it("has a sheet per table and chart, with numbers as numbers", async () => {
     const wb = exportWorkbook(ExcelJS, report(), opts);
-    expect(wb.worksheets.map((w) => w.name)).toEqual(["Summary", "KPIs", "Findings", "Campaigns", "Spend"]);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(["Summary", "KPIs", "Findings", "Campaigns", "Spend", "Notes"]);
     const table = wb.getWorksheet("Campaigns")!;
     expect(table.getRow(2).getCell(2).value).toBe(1820.5);
     expect(table.getRow(2).getCell(3).value).toBe(0.035);
@@ -103,7 +130,7 @@ describe("the Excel file", () => {
     const buffer = await wb.xlsx.writeBuffer();
     const back = new ExcelJS.Workbook();
     await back.xlsx.load(buffer as ArrayBuffer);
-    expect(back.worksheets).toHaveLength(5);
+    expect(back.worksheets).toHaveLength(6);
   });
 
   it("reads right to left for Arabic, with sheet names Excel accepts", () => {

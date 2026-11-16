@@ -61,8 +61,18 @@ describe("buildLiveAccount", () => {
 
   it("says when the search terms were cut off at the limit", () => {
     const row = (i: number) => ({ campaign: { id: "9" }, searchTermView: { searchTerm: `t${i}` } });
-    expect(buildLiveAccount(account, { ...empty, searchTerms: Array.from({ length: 500 }, (_, i) => row(i)) }, range).searchTermsCapped).toBe(true);
+    expect(buildLiveAccount(account, { ...empty, searchTerms: Array.from({ length: 10_000 }, (_, i) => row(i)) }, range).searchTermsCapped).toBe(true);
     expect(buildLiveAccount(account, { ...empty, searchTerms: [row(1)] }, range).searchTermsCapped).toBe(false);
+  });
+
+  it("carries Google's impression share and what was lost to budget and rank, per day", () => {
+    const campaign = { campaign: { id: "7", name: "S", status: "ENABLED", advertisingChannelType: "SEARCH", biddingStrategyType: "MANUAL_CPC", campaignBudget: "customers/1/campaignBudgets/9" } };
+    const day = { campaign: { id: "7" }, segments: { date: "2026-10-01" }, metrics: { impressions: "50", clicks: "5", costMicros: "1000000", searchImpressionShare: 0.5, searchBudgetLostImpressionShare: 0.3, searchRankLostImpressionShare: 0.2 } };
+    const noShare = { campaign: { id: "7" }, segments: { date: "2026-10-02" }, metrics: { impressions: "0", clicks: "0", costMicros: "0" } };
+    const share = { campaign: { id: "7" }, segments: { date: "2026-10-01" }, metrics: { searchImpressionShare: 0.5, searchBudgetLostImpressionShare: 0.3, searchRankLostImpressionShare: 0.2 } };
+    const data = buildLiveAccount(account, { ...empty, campaigns: [campaign], campaignDaily: [day, noShare], campaignShare: [share] }, range);
+    expect(data.daily["7"][0]).toMatchObject({ searchImprShare: 0.5, searchBudgetLost: 0.3, searchRankLost: 0.2 });
+    expect(data.daily["7"][1].searchImprShare).toBeUndefined();
   });
 
   it("leaves the account total out when Google's wasn't read", () => {

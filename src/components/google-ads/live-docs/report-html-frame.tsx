@@ -22,7 +22,14 @@ export function ReportHtmlFrame({ html, title }: { html: string; title: string }
     const onMessage = (e: MessageEvent) => {
       // Only our own frame's message counts; its origin is opaque ("null"), so match the window itself.
       if (e.source !== ref.current?.contentWindow) return;
-      const h = Number((e.data as { autommerceReportHeight?: unknown } | null)?.autommerceReportHeight);
+      const data = e.data as { autommerceReportHeight?: unknown; autommerceOpenLink?: unknown } | null;
+      const link = data?.autommerceOpenLink;
+      // A link clicked inside the report opens in a new tab, and only right after a real click.
+      if (typeof link === "string") {
+        if (/^https?:\/\//i.test(link) && (!navigator.userActivation || navigator.userActivation.isActive)) window.open(link, "_blank", "noopener,noreferrer");
+        return;
+      }
+      const h = Number(data?.autommerceReportHeight);
       if (Number.isFinite(h)) setHeight(Math.max(MIN, Math.min(MAX, Math.ceil(h))));
     };
     window.addEventListener("message", onMessage);

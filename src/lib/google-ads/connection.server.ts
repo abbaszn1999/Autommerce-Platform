@@ -33,6 +33,8 @@ export type ConnectionRow = {
   account_currency: string | null;
   account_time_zone: string | null;
   connected_by?: string | null;
+  /** Set on load: the person whose Google sign-in this uses is no longer on the team. */
+  connector_left?: boolean;
 };
 
 /** What the browser may see about a connection: no Composio ids. */
@@ -120,12 +122,14 @@ export function normalizeCustomerId(input: unknown): string | null {
   return /^\d{10}$/.test(digits) ? digits : null;
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Signed-in member of the workspace (admin or owner when `admin` is set).
  * Until launch, Google Ads routes answer only to browsers holding the preview cookie, like the page.
  */
 export async function requireConnectionAccess(workspaceId: string, opts: { admin?: boolean; preview?: boolean } = {}) {
-  if (!workspaceId) throw new ConnectionHttpError(400, "missing_workspace");
+  if (!workspaceId || !UUID.test(workspaceId)) throw new ConnectionHttpError(400, "missing_workspace");
   if (opts.preview !== false && !hasPreviewAccess((await cookies()).get(PREVIEW_COOKIE)?.value)) throw new ConnectionHttpError(404, "not_found");
   const supabase = await createClient();
   const {
@@ -168,6 +172,13 @@ export async function loadConnections(admin: SupabaseClient, workspaceId: string
   const { data, error } = await admin.from("google_ads_connections").select("*").eq("workspace_id", workspaceId);
   if (error) throw new ConnectionHttpError(500, "load_failed");
   const rows = (data ?? []) as ConnectionRow[];
+  // A connection must not outlive its owner: when the person whose Google sign-in it uses leaves, Google calls pause until an admin reconnects.
+  const connectors = rows.map((r) => r.connected_by).filter((id): id is string => !!id);
+  if (connectors.length) {
+    const { data: members } = await admin.from("workspace_members").select("user_id").eq("workspace_id", workspaceId).in("user_id", connectors);
+    const present = new Set((members ?? []).map((m) => String(m.user_id)));
+    for (const r of rows) r.connector_left = !!r.connected_by && !present.has(r.connected_by);
+  }
   return { ads: rows.find((r) => r.kind === "ads") ?? null, merchant: rows.find((r) => r.kind === "merchant") ?? null };
 }
 
@@ -299,6 +310,7 @@ async function deleteComposioAccount(id: string, opts: { strict?: boolean } = {}
 /** Run one Composio tool on this connection; a refusal from Google becomes `google_request_failed`. */
 export async function execute<T>(row: ConnectionRow, slug: string, args: Record<string, unknown>): Promise<T> {
   if (!row.composio_connected_account_id) throw new ConnectionHttpError(409, "not_connected");
+  if (row.connector_left) throw new ConnectionHttpError(409, "reconnect_required");
   const result = await getComposio().tools.execute(slug, {
     userId: row.workspace_id,
     connectedAccountId: row.composio_connected_account_id,

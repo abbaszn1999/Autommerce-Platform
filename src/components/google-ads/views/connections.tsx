@@ -66,7 +66,7 @@ export function ConnectionsView() {
 
       {[adsBy && !adsBy.onTeam ? "Google Ads" : null, merchantBy && !merchantBy.onTeam ? "Merchant Center" : null].filter(Boolean).map((what) => (
         <p key={what} role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-          {what} still uses the Google sign-in of {what === "Google Ads" ? adsBy?.name : merchantBy?.name}, who is no longer on this team. Reconnect it with your own Google account so their access isn&apos;t used.
+          {what} still uses the Google sign-in of {what === "Google Ads" ? adsBy?.name : merchantBy?.name}, who is no longer on this team, so Google access is paused for this workspace. Reconnect it with your own Google account to resume.
         </p>
       ))}
 

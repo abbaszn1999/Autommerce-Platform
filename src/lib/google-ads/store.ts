@@ -381,6 +381,8 @@ export const useGoogleAds = create<GaStore>((set, get) => {
         ...s.accounts,
         [account.customerId]: s.accounts[account.customerId] ?? { ...freshAccountState(liveAccountData(account)), sync: { ...freshSync(), pending: true } },
       },
+      // Real accounts: "today" is the account's day, not the browser's, from the very first load.
+      range: s.mode === "live" && s.range.preset !== "CUSTOM" && account.timeZone ? rangeFor(s.range.preset, todayIn(account.timeZone)) : s.range,
       view: "overview",
       scope: {},
       editor: { open: false },
@@ -702,9 +704,19 @@ export const useGoogleAds = create<GaStore>((set, get) => {
       });
     patch({ status: "loading", error: undefined });
     try {
-      const next = await getDataSource().fetchAccount(id, acc.data, { range: start.range, force: opts?.force });
-      // Keep any change made while loading unless the source returned a new snapshot.
-      patch({ status: "ready", refreshedAt: new Date().toISOString(), error: undefined, pending: false }, next === acc.data ? undefined : next);
+      let meta: { fetchedAt: string; refreshLimited: boolean } | undefined;
+      const next = await getDataSource().fetchAccount(id, acc.data, { range: start.range, force: opts?.force, onMeta: (m) => (meta = m) });
+      const sameRange = (r: DateRange) => r.start === start.range.start && r.end === start.range.end;
+      if (get().mode === "live" && !sameRange(get().range)) {
+        // The range changed while this was loading: these numbers are for the old one. Drop them and load the new range.
+        patch({ status: "ready" });
+        reloadAfter.add(id);
+      } else {
+        // Keep any change made while loading unless the source returned a new snapshot.
+        const loaded = meta as { fetchedAt: string; refreshLimited: boolean } | undefined;
+        const note = loaded?.refreshLimited ? "Reloaded less than a minute ago, so this is the copy from then. Try again shortly." : undefined;
+        patch({ status: "ready", refreshedAt: loaded?.fetchedAt ?? new Date().toISOString(), error: undefined, note, pending: false }, next === acc.data ? undefined : next);
+      }
       if (get().mode === "live") void loadLiveHistory(id);
       // The account's own day can differ from the browser's: follow it, once its time zone is known.
       const now = get().range;
@@ -718,7 +730,8 @@ export const useGoogleAds = create<GaStore>((set, get) => {
     } catch (err) {
       patch({ status: "error", error: (err as Error).message || "Could not load this account." });
     }
-    if (reloadAfter.delete(id) && get().customerId === id) await get().refreshData({ force: true });
+    // Changes clear the server's copy, so the reload needn't skip the cache (which would spend Google's quota and hit the refresh limit).
+    if (reloadAfter.delete(id) && get().customerId === id) await get().refreshData();
   },
 
   setScope: (scope, view) =>

@@ -43,6 +43,33 @@ export function publicOriginFromRequest(request: Request): string {
   return getAppOrigin();
 }
 
+/** Hosts the app really runs on: the canonical origin and any listed in APP_ALLOWED_HOSTS (comma separated). */
+function allowedHosts(): Set<string> {
+  const hosts = new Set<string>();
+  try {
+    hosts.add(new URL(getAppOrigin()).host.toLowerCase());
+  } catch {
+    /* an unusable configured origin allows nothing extra */
+  }
+  for (const host of (process.env.APP_ALLOWED_HOSTS ?? "").split(",")) if (host.trim()) hosts.add(host.trim().toLowerCase());
+  return hosts;
+}
+
+/**
+ * Like publicOriginFromRequest, but never trusts a host the app does not run on:
+ * a spoofed X-Forwarded-Host or Host header cannot point an OAuth callback at
+ * another site. Development keeps the request origin.
+ */
+export function trustedOriginFromRequest(request: Request): string {
+  const origin = publicOriginFromRequest(request);
+  if (process.env.NODE_ENV === "development") return origin;
+  try {
+    return allowedHosts().has(new URL(origin).host.toLowerCase()) ? origin : getAppOrigin();
+  } catch {
+    return getAppOrigin();
+  }
+}
+
 export function snippetOrigin(currentOrigin?: string): string {
   const current = (currentOrigin || "").replace(/\/+$/, "");
   if (

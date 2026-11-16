@@ -197,15 +197,18 @@ export function createGoogleAdsTools(ctx: ToolContext, platform: AdsPlatform): R
     merchant_products: {
       description:
         "The connected Merchant Center account's products: each product's id, title, description, brand, GTIN, image, price, availability, " +
-        "status (approved, limited, disapproved, pending) and every issue Google reports, plus the account's own issues and issue counts. " +
-        "Start here for any product or feed question.",
+        "status (approved, limited, disapproved, pending) and every issue Google reports, plus the account's own issues and issue counts, and how the feeds are wired (primary and supplemental data sources). " +
+        "Reads up to 10,000 products; \"showing\" says how many were read and whether there are more. Start here for any product or feed question.",
       inputSchema: {
         type: "object",
-        properties: { refresh: { type: "boolean", description: "Read fresh from Google instead of the last few minutes' copy. Only after a fix." } },
+        properties: {
+          refresh: { type: "boolean", description: "Read fresh from Google instead of the last few minutes' copy. Only after a fix." },
+          issuesOnly: { type: "boolean", description: "List only products that have issues (counts still cover all). Use this for large catalogs." },
+        },
       },
       execute: async (args) => {
         try {
-          const res = await call<{ overview: unknown; fetchedAt: string }>("merchant", { refresh: args.refresh === true });
+          const res = await call<{ overview: unknown; fetchedAt: string }>("merchant", { refresh: args.refresh === true, issuesOnly: args.issuesOnly === true });
           return text(await compact(ctx, { ...(res.overview as object), dataAsOf: res.fetchedAt }, "merchant-products"));
         } catch (error) {
           return failure((error as Error).message);

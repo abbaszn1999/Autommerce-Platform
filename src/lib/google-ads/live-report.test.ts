@@ -159,12 +159,10 @@ describe("buildLiveAccount", () => {
     expect(searchTermBase(data, "10~NEAR_EXACT~stride shoes", RANGE).conversions).toBe(2);
   });
 
-  it("falls back to shares from the real data for another range", () => {
+  it("never estimates a live account's items for a range Google was not asked about", () => {
     const other: DateRange = { preset: "LAST_30_DAYS", start: "2026-10-03", end: "2026-11-01" };
-    const g10 = adGroupBase(data, "10", other).cost;
-    const g11 = adGroupBase(data, "11", other).cost;
-    expect(g10 + g11).toBeCloseTo(campaignBase(data, "111", other).cost);
-    expect(g10 / (g10 + g11)).toBeCloseTo(0.9);
+    expect(adGroupBase(data, "10", other).cost).toBe(0);
+    expect(adGroupBase(data, "11", other).cost).toBe(0);
   });
 
   it("maps keywords, negatives at both levels, and quality details", () => {

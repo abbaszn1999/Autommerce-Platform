@@ -100,22 +100,53 @@ describe("changes cut off by a restart", () => {
   });
 });
 
+const WORKSPACE = "6f1f4c9e-0b0a-4c4e-9a53-2d1f0c7b8e11";
+
 describe("preview gate on the API", () => {
   it("answers as if nothing is there without the preview cookie", async () => {
-    await expect(requireConnectionAccess("w1")).rejects.toThrow("not_found");
+    await expect(requireConnectionAccess(WORKSPACE)).rejects.toThrow("not_found");
+  });
+
+  it("refuses a workspace id that is not a uuid", async () => {
+    await expect(requireConnectionAccess("not-a-uuid", { preview: false })).rejects.toThrow("missing_workspace");
+    await expect(requireConnectionAccess("", { preview: false })).rejects.toThrow("missing_workspace");
   });
 
   it("opens with the signed cookie, or for everyone once launched", async () => {
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??= "secret";
+    process.env.INTEGRATION_ENCRYPTION_KEY ??= "k".repeat(32);
+    process.env.GOOGLE_ADS_PREVIEW_PASSWORD ??= "test password";
     cookie = previewToken()!;
-    await expect(requireConnectionAccess("w1")).resolves.toMatchObject({ role: "owner" });
+    await expect(requireConnectionAccess(WORKSPACE)).resolves.toMatchObject({ role: "owner" });
     cookie = undefined;
     process.env.GOOGLE_ADS_LAUNCHED = "1";
-    await expect(requireConnectionAccess("w1")).resolves.toMatchObject({ role: "owner" });
+    await expect(requireConnectionAccess(WORKSPACE)).resolves.toMatchObject({ role: "owner" });
   });
 
   it("can be skipped for pages outside Google Ads", async () => {
-    await expect(requireConnectionAccess("w1", { preview: false })).resolves.toMatchObject({ role: "owner" });
+    await expect(requireConnectionAccess(WORKSPACE, { preview: false })).resolves.toMatchObject({ role: "owner" });
+  });
+});
+
+describe("a connection outlives its owner only until an admin reconnects", () => {
+  const live = { ...row, workspace_id: WORKSPACE, composio_connected_account_id: "ca_1", connected_by: "gone-user" };
+
+  it("pauses Google calls when the person who connected left the team", async () => {
+    const { execute } = await import("./connection.server");
+    await expect(execute({ ...live, connector_left: true } as never, "GOOGLEADS_SEARCH_GAQL", {})).rejects.toThrow("reconnect_required");
+  });
+
+  it("marks a connection whose connector is no longer a member, and not one whose connector is", async () => {
+    const { loadConnections } = await import("./connection.server");
+    const admin = (members: string[]) => ({
+      from: (table: string) => {
+        const result = { data: table === "google_ads_connections" ? [live] : table === "workspace_members" ? members.map((user_id) => ({ user_id })) : [], error: null };
+        const chain: Record<string, unknown> = { then: (resolve: (v: unknown) => unknown) => resolve(result) };
+        for (const m of ["select", "eq", "in", "lt", "update"]) chain[m] = () => chain;
+        return chain;
+      },
+    });
+    expect((await loadConnections(admin([]) as never, WORKSPACE)).ads?.connector_left).toBe(true);
+    expect((await loadConnections(admin(["gone-user"]) as never, WORKSPACE)).ads?.connector_left).toBe(false);
   });
 });
 

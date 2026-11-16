@@ -27,7 +27,7 @@ export function RecommendationsView() {
 
   return (
     <div>
-      <ViewHeader title="Recommendations" subtitle={campaign ? `Google Ads recommendations for ${campaign.name}. Ask the agent to apply or explain any of them.` : "Google Ads recommendations for this account, across all campaigns. Ask the agent to apply or explain any of them."} />
+      <ViewHeader title="Recommendations" subtitle={campaign ? `Google Ads recommendations for ${campaign.name}. Vera implements one as ordinary changes you approve, so it leaves this list once Google sees the change.` : "Google Ads recommendations for this account, across all campaigns. Vera implements one as ordinary changes you approve, so it leaves this list once Google sees the change."} />
       <Card className="mb-4 flex flex-wrap items-center gap-6 p-4">
         <div className="flex items-center gap-3">
           <Gauge className="h-8 w-8 text-[#400095] dark:text-violet-400" />
@@ -81,10 +81,10 @@ export function RecommendationsView() {
                 <div className="mt-auto flex gap-2 pt-3">
                   <button
                     type="button"
-                    onClick={() => runAgentTurn(prompt ?? `Apply this recommendation: ${r.title}`)}
+                    onClick={() => runAgentTurn(prompt ?? `Implement this recommendation with the right changes in my account and show them for my approval: ${r.title}`)}
                     className="inline-flex items-center gap-1 rounded-lg bg-[#400095] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[#33007a] dark:bg-violet-600"
                   >
-                    <Bot className="h-3.5 w-3.5" /> Ask agent to apply
+                    <Bot className="h-3.5 w-3.5" /> Ask Vera to implement
                   </button>
                   <button
                     type="button"

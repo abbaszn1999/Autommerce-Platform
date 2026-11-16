@@ -59,6 +59,7 @@ export async function callAdsPlatform<T>(
     const readable: Record<string, string> = {
       forbidden: "Only the workspace owner or an admin can use the Google Ads agent.",
       not_connected: "Google Ads is not connected for this workspace any more. The user must reconnect it on the Google Ads page.",
+      reconnect_required: "Google access is paused: the person whose Google sign-in this workspace uses has left the team. Tell the user an owner or admin must reconnect Google Ads and Merchant Center on the Connections tab. Do not retry.",
       merchant_not_connected: "Merchant Center is not connected for this workspace. The user can connect it on the Google Ads page (Connections).",
       not_approved: "This change was not approved, so it was not applied.",
       network: "Google Ads could not be reached. Try again in a moment.",

@@ -2,6 +2,11 @@
  * What a run costs, and how much of an owner's balance runs in progress are
  * already using. Runs are charged when they end, so without the second part two
  * chats could each spend the whole balance.
+ *
+ * DEPLOYMENT: these holds live in this process's memory, and the run registry
+ * (one run per chat) does too. The agent service must run as ONE instance
+ * (Render: autommerce-agent, instances = 1). Scaling it out would let an owner's
+ * parallel chats on different instances each spend the whole balance.
  */
 
 export type RunCost = { usd: number; source: "billed" | "estimated" | "none" };

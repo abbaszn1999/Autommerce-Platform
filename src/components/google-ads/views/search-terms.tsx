@@ -116,7 +116,7 @@ export function SearchTermsView() {
           ]}
         />
       </ViewHeader>
-      {data.searchTermsCapped && <p className="mb-3 text-[11px] text-muted-foreground">Showing the 500 search terms with the most impressions. Google Ads may have more for this period.</p>}
+      {data.searchTermsCapped && <p className="mb-3 text-[11px] text-muted-foreground">Showing the 10,000 search terms with the most impressions. Google Ads may have more for this period.</p>}
       <GaTable
         rows={rows}
         columns={columns}

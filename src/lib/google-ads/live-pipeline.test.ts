@@ -19,8 +19,8 @@ const ACCOUNT_DAILY = [
 
 function answer(q: string): Row[] {
   if (q.includes("FROM customer LIMIT 1")) return [{ customer: { id: "111", descriptiveName: "Beirut Shop", currencyCode: "EUR", timeZone: "Asia/Beirut", optimizationScore: 0.72, autoTaggingEnabled: true } }];
-  if (q.includes("FROM customer WHERE segments.date BETWEEN")) return ACCOUNT_DAILY;
   if (q.includes("segments.conversion_action")) return [{ segments: { conversionAction: "customers/111/conversionActions/5" }, metrics: { allConversions: 4 } }];
+  if (q.includes("FROM customer WHERE segments.date BETWEEN")) return ACCOUNT_DAILY;
   if (q.includes("FROM campaign WHERE campaign.status != 'REMOVED' AND segments.date")) return CAMPAIGN_DAILY;
   if (q.includes("segments.device")) return [
     { campaign: { id: "1" }, segments: { device: "MOBILE" }, metrics: metric(20, 10, 2) },
@@ -138,7 +138,7 @@ describe("when Google fails part of the way", () => {
   });
 
   it("falls back to adding up campaigns, and says so, without Google's total", async () => {
-    failing = /FROM customer WHERE segments.date BETWEEN/;
+    failing = /SELECT segments.date, .* FROM customer WHERE segments.date BETWEEN/;
     const { data } = await loadLiveAccount(connection, range);
     expect(data.accountDaily).toBeUndefined();
     expect(data.unavailable).toContain("customerDaily");

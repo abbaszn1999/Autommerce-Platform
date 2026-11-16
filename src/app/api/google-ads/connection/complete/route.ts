@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { publicOriginFromRequest } from "@/lib/app-origin";
+import { trustedOriginFromRequest } from "@/lib/app-origin";
 import { completeConnection, errorStatus, isConnectionKind, requireConnectionAccess } from "@/lib/google-ads/connection.server";
 
 /**
@@ -8,7 +8,7 @@ import { completeConnection, errorStatus, isConnectionKind, requireConnectionAcc
  * pending connection is ACTIVE, then returns to the Google Ads page.
  */
 export async function GET(request: NextRequest) {
-  const origin = publicOriginFromRequest(request);
+  const origin = trustedOriginFromRequest(request);
   const workspaceId = request.nextUrl.searchParams.get("workspaceId") ?? "";
   const kind = request.nextUrl.searchParams.get("kind");
 

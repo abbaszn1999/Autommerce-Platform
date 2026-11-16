@@ -22,11 +22,13 @@ import {
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const CACHE_MAX = 100;
 const PAGE_SIZE = 250;
+/** The board reads this many pages (2,000 products); Vera reads up to AGENT_PAGES (10,000). */
 const MAX_PAGES = 8;
+export const AGENT_PAGES = 40;
 /** Our supplemental data source in each merchant's account. */
 export const SUPPLEMENTAL_NAME = "Autommerce";
 
-const cache = new Map<string, { at: number; data: MerchantSnapshot }>();
+const cache = new Map<string, { at: number; data: MerchantSnapshot; pages: number }>();
 
 function merchantOf(row: ConnectionRow): string {
   if (row.kind !== "merchant" || !row.account_id || !row.composio_connected_account_id) throw new ConnectionHttpError(409, "not_connected");
@@ -47,16 +49,18 @@ async function allPages<K extends string, T>(row: ConnectionRow, slug: string, k
   return { items, more: true };
 }
 
-export async function loadMerchantSnapshot(row: ConnectionRow, opts: { force?: boolean } = {}): Promise<MerchantSnapshot> {
+export async function loadMerchantSnapshot(row: ConnectionRow, opts: { force?: boolean; maxPages?: number } = {}): Promise<MerchantSnapshot> {
   const merchantId = merchantOf(row);
   const key = `${row.workspace_id}:${merchantId}`;
+  const maxPages = opts.maxPages ?? MAX_PAGES;
   const hit = cache.get(key);
-  if (!opts.force && hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.data;
+  // A copy is good enough when it read everything, or at least as many pages as asked for now.
+  if (!opts.force && hit && Date.now() - hit.at < CACHE_TTL_MS && (!hit.data.truncated || hit.pages >= maxPages)) return hit.data;
 
   const parent = `accounts/${merchantId}`;
   type ApiAccountIssue = { title?: string; detail?: string; severity?: string; documentation_uri?: string };
   const [products, issues] = await Promise.all([
-    allPages<"products", ApiProduct>(row, "GOOGLE_MERCHANT_LIST_PRODUCTS", "products", { parent_account_name: parent, page_size: PAGE_SIZE }, MAX_PAGES),
+    allPages<"products", ApiProduct>(row, "GOOGLE_MERCHANT_LIST_PRODUCTS", "products", { parent_account_name: parent, page_size: PAGE_SIZE }, maxPages),
     allPages<"account_issues", ApiAccountIssue>(row, "GOOGLE_MERCHANT_LIST_ACCOUNT_ISSUES", "account_issues", { parent_account_name: parent }, 2),
   ]);
   const at = Date.now();
@@ -70,7 +74,7 @@ export async function loadMerchantSnapshot(row: ConnectionRow, opts: { force?: b
     fetchedAt: new Date(at).toISOString(),
   };
   if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!);
-  cache.set(key, { at, data });
+  cache.set(key, { at, data, pages: maxPages });
   return data;
 }
 
@@ -166,13 +170,36 @@ async function loadOverrides(admin: SupabaseClient, workspaceId: string, merchan
   return new Map((data ?? []).map((r) => [String(r.product_id), r.attributes as MerchantAttributes]));
 }
 
-/** Check a fix without writing anything: the card shows exactly this. */
-export async function previewMerchantChange(admin: SupabaseClient, row: ConnectionRow, ops: MerchantOp[]) {
+/** The merchant's data sources, as the feed topology: which are primary feeds, which supplemental. */
+export async function listFeedSources(row: ConnectionRow) {
   const merchantId = merchantOf(row);
-  const snapshot = await loadMerchantSnapshot(row, { force: true });
+  const { items } = await allPages<"data_sources", ApiDataSource>(row, "GOOGLE_MERCHANT_LIST_DATA_SOURCES", "data_sources", { parent_account_name: `accounts/${merchantId}`, page_size: 200 }, 5);
+  return items.map((s) => ({
+    name: s.display_name ?? s.name ?? "",
+    kind: s.supplemental_product_data_source ? ("supplemental" as const) : s.primary_product_data_source ? ("primary" as const) : ("other" as const),
+    input: s.input ?? "",
+    ours: s.display_name === SUPPLEMENTAL_NAME && !!s.supplemental_product_data_source,
+  }));
+}
+
+const FIRST_FIX_WARNING =
+  `First fix in this Merchant Center: Autommerce adds a supplemental data source called "${SUPPLEMENTAL_NAME}" and puts it first in each primary feed's rules. ` +
+  "It only overrides the fields you approve here and changes nothing else; you can delete it in Merchant Center > Data sources, or undo these fixes here.";
+
+/** Check a fix without writing anything: the card shows exactly this. */
+export async function previewMerchantChange(admin: SupabaseClient, row: ConnectionRow, ops: MerchantOp[], opts: { fresh?: boolean } = {}) {
+  const merchantId = merchantOf(row);
+  // Any product of the account may be named, so read as deep as Vera does; read fresh only if one is missing from a recent copy.
+  // Applying always reads fresh, so "before" is what is in the account right now.
+  let snapshot = await loadMerchantSnapshot(row, { force: opts.fresh, maxPages: AGENT_PAGES });
+  if (ops.some((o) => !snapshot.products.some((p) => p.id === o.productId))) snapshot = await loadMerchantSnapshot(row, { force: true, maxPages: AGENT_PAGES });
   const products = new Map(snapshot.products.map((p) => [p.id, p]));
   const overrides = await loadOverrides(admin, row.workspace_id, merchantId, ops.map((o) => o.productId));
-  return planMerchantChange(ops, products, overrides);
+  const plan = planMerchantChange(ops, products, overrides);
+  // Looking is free; creating the source is a change to the merchant's account, so say so before it happens.
+  const sources = await listFeedSources(row).catch(() => null);
+  if (sources && !sources.some((s) => s.ours)) plan.warnings = [FIRST_FIX_WARNING, ...plan.warnings];
+  return plan;
 }
 
 /**
@@ -257,7 +284,7 @@ export async function applyMerchantChange(opts: {
   const written: string[] = [];
   let inverse: MerchantOp[] = [];
   try {
-    const plan = await previewMerchantChange(admin, row, ops);
+    const plan = await previewMerchantChange(admin, row, ops, { fresh: true });
     inverse = plan.inverse;
     await finish(admin, claimed.id, { google_operations: plan.writes, warnings: plan.warnings });
     const dataSource = await ensureSupplementalSource(row);
