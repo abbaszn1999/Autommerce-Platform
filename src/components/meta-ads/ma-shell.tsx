@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Loader2 } from "lucide-react";
+import { useWorkspaceContext } from "@/app/(dashboard)/w/[workspaceSlug]/workspace-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { MetaConnectBanner, MetaLiveWorkspace, useLoginResult, useMetaLive } from "./ma-live";
 import { useAccountState, useMetaAds } from "@/lib/meta-ads/store";
 import type { MetaView } from "@/lib/meta-ads/types";
 import { MaCampaignEditor } from "./ma-campaign-editor";
@@ -89,8 +92,22 @@ const chatMax = () => Math.max(CHAT_MIN, Math.round(window.innerWidth * 0.6));
  * account manager on the right. Front-end prototype on demo data.
  */
 export function MetaAdsShell() {
+  const workspaceId = useWorkspaceContext().workspace?.id;
+  const live = useMetaLive(workspaceId);
+  const loginError = useLoginResult();
   const status = useMetaAds((s) => s.status);
   const entered = useMetaAds((s) => s.entered);
+
+  // A real Meta connection: the live workspace (stage A). Otherwise the demo, with the real Connect on top.
+  if (live.loading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  if (live.configured && live.connection) return <MetaLiveWorkspace live={live} loginError={loginError} />;
+
   // Connecting Meta alone stays on the connect screen until "Go to agent".
   const inWorkspace = status === "connected" && entered;
   return (
@@ -100,7 +117,10 @@ export function MetaAdsShell() {
           <Workspace />
         </TooltipProvider>
       ) : (
-        <MaConnect />
+        <div className="flex h-full min-h-0 w-full flex-col">
+          {live.configured && workspaceId && <MetaConnectBanner workspaceId={workspaceId} canManage={live.canManage} loginError={loginError} />}
+          <MaConnect />
+        </div>
       )}
       <CatalogConnectDialog />
     </>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isTextFile } from "@/lib/store-agent/file-kinds";
+import { parseAgentDomain } from "@/lib/store-agent/protocol";
 import { STORE_AGENT_FILES_BUCKET, authorizeStoreAgent } from "@/lib/store-agent/server";
 
 export const runtime = "nodejs";
@@ -18,7 +19,8 @@ export async function GET(request: NextRequest, { params }: Params) {
   const workspaceId = request.nextUrl.searchParams.get("workspaceId") ?? "";
   if (!/^[0-9a-f-]{36}$/i.test(fileId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   // Links (images, downloads) can't send the domain header, so they carry it in the URL.
-  const domain = request.nextUrl.searchParams.get("domain") === "google_ads" ? "google_ads" : undefined;
+  const asked = parseAgentDomain(request.nextUrl.searchParams.get("domain"));
+  const domain = asked === "store" ? undefined : asked;
   const access = await authorizeStoreAgent({ workspaceId, domain });
   if (access instanceof NextResponse) return access;
 

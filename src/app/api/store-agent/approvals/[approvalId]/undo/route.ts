@@ -30,7 +30,10 @@ export async function POST(request: NextRequest, { params }: Params) {
     .eq("workspace_id", parsed.data.workspaceId)
     .maybeSingle();
   if (!approval) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if ((await chatDomain(access.admin, String(approval.chat_id))) === "google_ads") return undoGoogleAdsApproval(access, approvalId, String(approval.chat_id));
+  const domain = await chatDomain(access.admin, String(approval.chat_id));
+  if (domain === "google_ads") return undoGoogleAdsApproval(access, approvalId, String(approval.chat_id));
+  // Meta changes run through Meta's own tools, which keep no inverse: never offered as undoable.
+  if (domain === "meta_ads") return NextResponse.json({ error: "Meta Ads changes can't be undone automatically. Ask the agent to change it back." }, { status: 409 });
   if (approval.kind !== "write" && !["owner", "admin"].includes(String(access.ctx.membershipRole))) {
     return NextResponse.json({ error: "Only the workspace owner or an admin can undo bulk changes." }, { status: 403 });
   }

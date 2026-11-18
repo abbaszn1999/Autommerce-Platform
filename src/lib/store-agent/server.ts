@@ -8,7 +8,7 @@ import { storeToolBlock } from "@/lib/integrations/store-scopes";
 import { isStoreAgentPlatform } from "./platforms";
 import { signServiceRequest } from "@/lib/assistant/service-client";
 import { getWorkspaceContext, isContextSubscriptionActive, type WorkspaceContext } from "@/lib/workspace-context";
-import { AGENT_DOMAIN_HEADER, STORE_AGENT_LIMITS, type AgentDomain, type StoreAgentEvent } from "./protocol";
+import { AGENT_DOMAIN_HEADER, STORE_AGENT_LIMITS, isAdsDomain, parseAgentDomain, type AgentDomain, type StoreAgentEvent } from "./protocol";
 
 /** The Store Agent is on when the service is configured and the feature flag is set. */
 export function isStoreAgentEnabled(): boolean {
@@ -58,7 +58,7 @@ export type StoreAgentAccess = {
 /** The domain a request asks for: the chat UI's header, else the Store Assistant. */
 async function requestDomain(): Promise<AgentDomain> {
   try {
-    return (await headers()).get(AGENT_DOMAIN_HEADER) === "google_ads" ? "google_ads" : "store";
+    return parseAgentDomain((await headers()).get(AGENT_DOMAIN_HEADER));
   } catch {
     return "store";
   }
@@ -93,9 +93,19 @@ export async function authorizeStoreAgent(params: {
   if (!ctx.membershipRole || ctx.membershipRole === "viewer") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (domain === "google_ads") {
+  if (isAdsDomain(domain)) {
     if (!["owner", "admin"].includes(String(ctx.membershipRole))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     if (!hasPreviewAccess((await cookies()).get(PREVIEW_COOKIE)?.value)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (domain === "meta_ads") {
+    const { data: meta } = await createAdminClient()
+      .from("meta_ads_connections")
+      .select("ad_account_id, token_expires_at")
+      .eq("workspace_id", params.workspaceId)
+      .maybeSingle();
+    const expired = !!meta?.token_expires_at && new Date(String(meta.token_expires_at)).getTime() <= Date.now();
+    if (!meta?.ad_account_id || expired) return NextResponse.json({ error: "NO_META_ADS" }, { status: 409 });
+  } else if (domain === "google_ads") {
     const { data: ads } = await createAdminClient()
       .from("google_ads_connections")
       .select("account_id")
@@ -141,7 +151,7 @@ export async function loadOwnedChat(access: StoreAgentAccess, workspaceId: strin
 /** The agent a chat belongs to, whoever asks (for routes keyed by a run or approval id). */
 export async function chatDomain(admin: StoreAgentAccess["admin"], chatId: string): Promise<AgentDomain | null> {
   const { data } = await admin.from("store_agent_chats").select("domain").eq("id", chatId).maybeSingle();
-  return data ? (data.domain === "google_ads" ? "google_ads" : "store") : null;
+  return data ? parseAgentDomain(data.domain) : null;
 }
 
 /** Nothing from the service reaches the browser without passing through here. */

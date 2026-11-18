@@ -469,8 +469,8 @@ export function Composer({
           running
             ? "Add guidance while the agent works…"
             : mode === "plan"
-              ? `Describe what you want planned — nothing in ${domain === "google_ads" ? "Google Ads" : "the store"} will change…`
-              : `Ask anything about ${storeName || (domain === "google_ads" ? "your Google Ads" : "your store")}, or tell the agent what to do…`
+              ? `Describe what you want planned — nothing in ${domain === "google_ads" ? "Google Ads" : domain === "meta_ads" ? "Meta Ads" : "the store"} will change…`
+              : `Ask anything about ${storeName || (domain === "google_ads" ? "your Google Ads" : domain === "meta_ads" ? "your Meta ads" : "your store")}, or tell the agent what to do…`
         }
         className={cn(
           "relative block max-h-[240px] w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-[14px] leading-relaxed outline-none placeholder:text-muted-foreground/60 disabled:opacity-50",

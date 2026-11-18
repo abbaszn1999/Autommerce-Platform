@@ -506,7 +506,7 @@ type AdsApproval = { ok: true; approvalId: string } | { ok: false; message: stri
  * Record the change, show its card and wait. Unlike store changes there is no
  * auto-run and no backup file: the platform keeps the inverse when it applies.
  */
-async function waitForAdsApproval(
+export async function waitForAdsApproval(
   ctx: ToolContext,
   change: { title: string; reason: string; items: PreviewItem[]; warnings: string[]; label: string; binding: string }
 ): Promise<AdsApproval> {

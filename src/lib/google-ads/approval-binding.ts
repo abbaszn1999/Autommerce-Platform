@@ -5,7 +5,8 @@
 
 import { createHash } from "node:crypto";
 
-export type ApprovalTarget = "ads" | "merchant";
+/** "meta": one Meta Ads MCP write tool call ({ tool, arguments }). */
+export type ApprovalTarget = "ads" | "merchant" | "meta";
 
 export function approvalBinding(target: ApprovalTarget, ops: unknown): string {
   return createHash("sha256").update(JSON.stringify({ target, ops })).digest("hex");

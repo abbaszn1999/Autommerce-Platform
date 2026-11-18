@@ -35,7 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLoader } from "@/components/brand/page-loader";
 import { replyText, type MessageBlock } from "@/lib/store-agent/blocks";
-import type { AgentDomain, TodoItem } from "@/lib/store-agent/protocol";
+import { isAdsDomain, type AgentDomain, type TodoItem } from "@/lib/store-agent/protocol";
 import { storeAgentApi, type ApprovalState, type ChatMessage, type Insight, type Plan } from "./api";
 import { ReplyBlocks } from "./blocks";
 import { ChatTabs } from "./chat-tabs";
@@ -263,8 +263,15 @@ const ADS_SUGGESTIONS = [
   "Summarize this account's performance and the three most important fixes",
 ];
 
-/** The new-chat screen on the Google Ads page. */
-function AdsHero({ accountName, onPick }: { accountName: string; onPick: (prompt: string) => void }) {
+const META_SUGGESTIONS = [
+  "Which campaigns spent the most in the last 30 days, and what did they bring?",
+  "Find ad sets with a high cost per result and suggest what to change",
+  "Check my catalog and Pixel for problems that hurt my ads",
+  "Summarize this ad account's performance and the three most important fixes",
+];
+
+/** The new-chat screen on the Google Ads and Meta Ads pages. */
+function AdsHero({ accountName, onPick, meta = false }: { accountName: string; onPick: (prompt: string) => void; meta?: boolean }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-6">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="mb-5">
@@ -273,13 +280,14 @@ function AdsHero({ accountName, onPick }: { accountName: string; onPick: (prompt
         </div>
         <h1 className="text-xl font-black tracking-[-0.03em]">What should we do in {accountName}?</h1>
         <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-          Vera reads this Google Ads account&apos;s real data, finds waste and growth, and prepares exact changes. Every change waits for your approval on its
-          card, is checked by Google first, and can be undone.
+          {meta
+            ? "Vera reads this Meta ad account's real data through Meta's official tools, finds waste and growth, and prepares exact changes. Every change waits for your approval on its card."
+            : "Vera reads this Google Ads account's real data, finds waste and growth, and prepares exact changes. Every change waits for your approval on its card, is checked by Google first, and can be undone."}
         </p>
       </motion.div>
       <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Ideas</div>
       <div className="grid gap-1.5">
-        {ADS_SUGGESTIONS.map((s, i) => (
+        {(meta ? META_SUGGESTIONS : ADS_SUGGESTIONS).map((s, i) => (
           <motion.button
             key={s}
             type="button"
@@ -428,7 +436,9 @@ export function StoreAgentWorkspace({
    */
   variant?: "page" | "panel";
 }) {
-  const isAds = domain === "google_ads";
+  const isAds = isAdsDomain(domain);
+  const isMeta = domain === "meta_ads";
+  const adsName = isMeta ? "Meta Ads" : "Google Ads";
   const state = useStoreAgent();
   const [seed, setSeed] = useState<{ text: string; nonce: number } | undefined>();
   const [chatWidth, setChatWidth] = useState(480);
@@ -529,12 +539,12 @@ export function StoreAgentWorkspace({
           </div>
           <div className="space-y-2">
             <h2 className="text-xl font-black">
-              {noStore ? (isAds ? "Connect Google Ads" : "Connect your store") : state.availability === "off" ? (isAds ? "Vera is not available here yet" : "Store Agent is not available yet") : "Could not reach the agent"}
+              {noStore ? (isAds ? `Connect ${adsName}` : "Connect your store") : state.availability === "off" ? (isAds ? "Vera is not available here yet" : "Store Agent is not available yet") : "Could not reach the agent"}
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">
               {noStore
                 ? isAds
-                  ? "Vera works on the connected Google Ads account. Connect it and pick the ad account first."
+                  ? `Vera works on the connected ${adsName} account. Connect it and pick the ad account first.`
                   : "The Store Agent works on a connected Shopify or WooCommerce store. Connect it in Settings to start."
                 : state.availability === "off"
                   ? "This feature is not turned on for this workspace."
@@ -638,7 +648,7 @@ export function StoreAgentWorkspace({
           {chatState?.status === "loading" ? (
             <ChatSkeleton />
           ) : empty ? (
-            isAds ? <AdsHero accountName={storeName} onPick={pick} /> : <Hero storeName={storeName} insights={state.insights} onPick={pick} />
+            isAds ? <AdsHero accountName={storeName} onPick={pick} meta={isMeta} /> : <Hero storeName={storeName} insights={state.insights} onPick={pick} />
           ) : (
             <div
               ref={scrollRef}

@@ -34,13 +34,17 @@ export const attachmentRefSchema = z.object({
 export type AttachmentRef = z.infer<typeof attachmentRefSchema>;
 
 /**
- * Where a chat lives: the Store Assistant ("store") or the Google Ads page
- * ("google_ads"). It picks the agent's rules and tools; the default keeps every
- * Store Assistant request exactly as before.
+ * Where a chat lives: the Store Assistant ("store"), the Google Ads page
+ * ("google_ads") or the Meta Ads page ("meta_ads"). It picks the agent's rules
+ * and tools; the default keeps every Store Assistant request exactly as before.
  */
-export const AGENT_DOMAINS = ["store", "google_ads"] as const;
+export const AGENT_DOMAINS = ["store", "google_ads", "meta_ads"] as const;
 export type AgentDomain = (typeof AGENT_DOMAINS)[number];
 export const agentDomainSchema = z.enum(AGENT_DOMAINS);
+/** The ad-platform agents: owner/admin only, every change waits for a person, no store tools. */
+export const isAdsDomain = (domain: AgentDomain | null | undefined): domain is "google_ads" | "meta_ads" => domain === "google_ads" || domain === "meta_ads";
+/** A domain from a header or query value; anything unknown is the Store Assistant. */
+export const parseAgentDomain = (value: unknown): AgentDomain => (AGENT_DOMAINS as readonly unknown[]).includes(value) ? (value as AgentDomain) : "store";
 /** Header the chat UI sends (or `domain` query parameter, for links like images). */
 export const AGENT_DOMAIN_HEADER = "x-agent-domain";
 

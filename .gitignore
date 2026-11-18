@@ -60,3 +60,5 @@ promo-video/.env.local
 .agents/
 
 /low-hanging-fruits
+# Meta Ads MCP probe output (contains ad account ids)
+meta-ads/mcp-probe-result.json

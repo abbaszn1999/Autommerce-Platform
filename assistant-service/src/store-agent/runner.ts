@@ -36,6 +36,8 @@ import { loadWooConnection, type WooConnection } from "./woocommerce/client";
 import { createChatTools, createStoreAgentTools } from "./tools";
 import { veraAdsRule } from "./google-ads/instructions";
 import { createGoogleAdsTools } from "./google-ads/tools";
+import { veraMetaRule, type MetaAccountInfo } from "./meta-ads/instructions";
+import { createMetaAdsTools, loadMetaTools } from "./meta-ads/tools";
 
 /**
  * Cursor tools the agent gets. File access goes through our confined tools
@@ -199,6 +201,25 @@ async function loadAdsAccount(
     customerId: String(ads.account_id),
     currency: String(ads.account_currency ?? ""),
     merchant: merchant ? { name: String(merchant.account_name ?? merchant.account_id), id: String(merchant.account_id) } : null,
+  };
+}
+
+/** The Meta ad account (and business, Page, catalog) a Meta Ads chat works on, picked on the Meta Ads page. No token: the site keeps it. */
+async function loadMetaAccount(db: SupabaseClient, workspaceId: string): Promise<MetaAccountInfo> {
+  const { data } = await db
+    .from("meta_ads_connections")
+    .select("ad_account_id, ad_account_name, ad_account_currency, business_id, business_name, page_id, page_name, catalog_id, catalog_name")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (!data?.ad_account_id) throw new Error("Meta is not connected for this workspace. Connect it on the Meta Ads page and pick an ad account.");
+  const pair = (id: unknown, name: unknown) => (id ? { id: String(id), name: String(name ?? id) } : null);
+  return {
+    adAccountId: String(data.ad_account_id),
+    adAccountName: String(data.ad_account_name ?? data.ad_account_id),
+    currency: String(data.ad_account_currency ?? ""),
+    business: pair(data.business_id, data.business_name),
+    page: pair(data.page_id, data.page_name),
+    catalog: pair(data.catalog_id, data.catalog_name),
   };
 }
 
@@ -521,10 +542,12 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     chatFiles = files;
     await files.prepare();
 
-    // Google Ads chats (the Google Ads page) never touch the store: no store connection, store rules or store tools.
-    const isAds = req.domain === "google_ads";
+    // Ads chats (the Google Ads and Meta Ads pages) never touch the store: no store connection, store rules or store tools.
+    const isMeta = req.domain === "meta_ads";
+    const isAds = req.domain === "google_ads" || isMeta;
     /** What the agent works on, for the notes it gets about earlier runs. */
-    const where = isAds ? "Google Ads account" : "store";
+    const where = isMeta ? "Meta ad account" : isAds ? "Google Ads account" : "store";
+    const adsLabel = isMeta ? "Meta Ads" : "Google Ads";
     const platform = isAds ? ("shopify" as const) : await storePlatform(db, req.workspaceId);
     let connection: ShopifyConnection | null = null;
     const getConnection = async () => (connection ??= await loadShopifyConnection(db, req.workspaceId));
@@ -554,11 +577,18 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
 
     await clearProjectConfig(cwd);
     await fs.mkdir(path.join(cwd, ".cursor", "rules"), { recursive: true });
-    const adsAccount = isAds ? await loadAdsAccount(db, req.workspaceId) : null;
-    const business = await loadBusinessContext(db, req.workspaceId, adsAccount?.currency ?? "", log);
+    if (isAds && (!deps.secret || !deps.platformUrl)) throw new Error(`The ${adsLabel} agent is not configured (PLATFORM_URL).`);
+    const metaPlatform = isMeta ? { url: deps.platformUrl!, secret: deps.secret! } : null;
+    const adsAccount = isAds && !isMeta ? await loadAdsAccount(db, req.workspaceId) : null;
+    const metaAccount = isMeta ? await loadMetaAccount(db, req.workspaceId) : null;
+    // Meta's tools come from Meta's server through the site; the rules list them and the tools use them.
+    const metaTools = metaPlatform ? await loadMetaTools(metaPlatform, { run }) : [];
+    const business = await loadBusinessContext(db, req.workspaceId, adsAccount?.currency ?? metaAccount?.currency ?? "", log);
     await fs.writeFile(
       path.join(cwd, ".cursor", "rules", "vera.mdc"),
-      adsAccount
+      metaAccount
+        ? veraMetaRule({ account: metaAccount, tools: metaTools, profile: business.brief, mode: req.mode })
+        : adsAccount
         ? veraAdsRule({ ...adsAccount, profile: business.brief, mode: req.mode })
         : veraRule({
             businessProfile: business.filled ? business.brief : "",
@@ -619,8 +649,8 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
       unfinished
         ? `[Your previous run in this chat stopped before it finished (${unfinished.status}). ${
             unfinished.changes.length
-              ? `These ${isAds ? "Google Ads" : "store"} changes from it WERE applied: ${unfinished.changes.map((s) => `"${s}"`).join("; ")}.`
-              : `No ${isAds ? "Google Ads" : "store"} change from it was applied.`
+              ? `These ${isAds ? adsLabel : "store"} changes from it WERE applied: ${unfinished.changes.map((s) => `"${s}"`).join("; ")}.`
+              : `No ${isAds ? adsLabel : "store"} change from it was applied.`
           } Read the current state of the ${where} before continuing, and never repeat a change that was already applied.]`
         : "",
     ].filter(Boolean);
@@ -636,16 +666,17 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
       platform,
       connection: getConnection,
       woo: getWoo,
-      // Google Ads changes always wait for a person (the gateway also sends false).
+      // Google Ads and Meta Ads changes always wait for a person (the gateway also sends false).
       autoRun: isAds ? false : req.autoRun,
       autoRunBulk: isAds ? false : req.autoRunBulk,
       planMode: req.mode === "plan",
       checkpoint,
       log,
     };
-    if (isAds && (!deps.secret || !deps.platformUrl)) throw new Error("The Google Ads agent is not configured (PLATFORM_URL).");
     const customTools = oncePerToolCall(withGuidance({
-      ...(isAds
+      ...(metaPlatform
+        ? { ...createMetaAdsTools(toolContext, metaPlatform, metaTools), ...createChatTools(toolContext) }
+        : isAds
         ? { ...createGoogleAdsTools(toolContext, { url: deps.platformUrl!, secret: deps.secret! }), ...createChatTools(toolContext) }
         : createStoreAgentTools(toolContext)),
       ...createFileTools(cwd, (relative) => written.add(relative)),

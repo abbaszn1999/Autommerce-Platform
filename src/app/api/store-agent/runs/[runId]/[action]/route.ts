@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { questionAnswersSchema } from "@/lib/store-agent/protocol";
+import { isAdsDomain, questionAnswersSchema } from "@/lib/store-agent/protocol";
 import { authorizeStoreAgent, callStoreAgentService, chatDomain, relayEvents } from "@/lib/store-agent/server";
 
 export const runtime = "nodejs";
@@ -62,8 +62,9 @@ export async function POST(request: NextRequest, { params }: Params) {
       .maybeSingle();
     if (!approval) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const isOwnerOrAdmin = ["owner", "admin"].includes(String(access.ctx.membershipRole));
-    if ((await chatDomain(access.admin, String(approval.chat_id))) === "google_ads" && !isOwnerOrAdmin) {
-      return NextResponse.json({ error: "Only the workspace owner or an admin can approve Google Ads changes." }, { status: 403 });
+    const approvalDomain = await chatDomain(access.admin, String(approval.chat_id));
+    if (isAdsDomain(approvalDomain) && !isOwnerOrAdmin) {
+      return NextResponse.json({ error: `Only the workspace owner or an admin can approve ${approvalDomain === "meta_ads" ? "Meta Ads" : "Google Ads"} changes.` }, { status: 403 });
     }
     if (approval.kind !== "write" && !isOwnerOrAdmin) {
       return NextResponse.json({ error: "Only the workspace owner or an admin can approve deletes and bulk changes." }, { status: 403 });
