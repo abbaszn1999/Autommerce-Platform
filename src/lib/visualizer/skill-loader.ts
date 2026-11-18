@@ -1,6 +1,5 @@
 // Loads Product Visualizer's agent skill prompts from versioned markdown
-// files, mirroring `src/lib/website-restructure/skill-loader.ts` — YAML
-// frontmatter + a markdown body, cached per-process. Skill 01 is the
+// files — YAML frontmatter + a markdown body, cached per-process. Skill 01 is the
 // description/art-director call; skill 02 is the photographer that executes
 // each slot's brief against the real product photo.
 

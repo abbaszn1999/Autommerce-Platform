@@ -166,11 +166,11 @@ export function createBrowserTools(run: AssistantRun, options?: { autoApprove?: 
     },
     list_projects: {
       description:
-        "List the workspace's projects (read-only), newest first: the 8 newest per tool, or up to 40 when you pass tool (`more: true` means there are older ones). Tools: Catalog Intelligence (catalog), Products Gallery (gallery), Products Visualizer (visualizer), Image Classification (classify), Website Restructure (website), and the connected store for Store Assistant (store). Each project has id, name, status, updatedAt, item count, and `open`: the path to pass to navigate. When a project has `select`, open the page first, then click that control. Works from any page; pass tool to read one tool only.",
+        "List the workspace's projects (read-only), newest first: the 8 newest per tool, or up to 40 when you pass tool (`more: true` means there are older ones). Tools: Catalog Intelligence (catalog), Products Gallery (gallery), Products Visualizer (visualizer), Image Classification (classify), and the connected store for Store Assistant (store). Each project has id, name, status, updatedAt, item count, and `open`: the path to pass to navigate. When a project has `select`, open the page first, then click that control. Works from any page; pass tool to read one tool only.",
       inputSchema: {
         type: "object",
         properties: {
-          tool: { type: "string", enum: ["catalog", "gallery", "visualizer", "classify", "website", "store"] },
+          tool: { type: "string", enum: ["catalog", "gallery", "visualizer", "classify", "store"] },
         },
         required: [],
       },
@@ -242,13 +242,6 @@ export function createBrowserTools(run: AssistantRun, options?: { autoApprove?: 
       inputSchema: noArgs,
       annotations: { readOnlyHint: true },
       execute: () => perform(run, { kind: "page_get_state", scope: "classify" }),
-    },
-    website_get_state: {
-      description:
-        "Website Restructure only: read the header builder. Returns the projects and the plan's project allowance, and for the open project its stage, screenshots, logo, competitors, edits left, versions, the latest builder messages and whether it is busy.",
-      inputSchema: noArgs,
-      annotations: { readOnlyHint: true },
-      execute: () => perform(run, { kind: "page_get_state", scope: "website" }),
     },
     store_get_state: {
       description:

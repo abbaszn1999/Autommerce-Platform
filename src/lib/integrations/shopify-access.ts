@@ -5,7 +5,7 @@
  * list is checked against this one in its tests).
  */
 
-export type StoreToolId = "store-assistant" | "growth-sync" | "market-research" | "website-restructure" | "google-ads-agent";
+export type StoreToolId = "store-assistant" | "growth-sync" | "market-research" | "google-ads-agent";
 
 export type ShopifyToolAccess = {
   id: StoreToolId;
@@ -72,13 +72,6 @@ export const SHOPIFY_TOOL_ACCESS: readonly ShopifyToolAccess[] = [
     name: "Market Research",
     summary: "Reads products, collections and brands, creates collections with SEO and publishes them, and writes blog articles.",
     scopes: ["read_products", "write_products", "read_publications", "write_publications", "read_content", "write_content"],
-  },
-  {
-    id: "website-restructure",
-    name: "Website Restructure",
-    hidden: true,
-    summary: "Read only: your navigation menus, collections and brands.",
-    scopes: ["read_online_store_navigation", "read_products"],
   },
 ];
 

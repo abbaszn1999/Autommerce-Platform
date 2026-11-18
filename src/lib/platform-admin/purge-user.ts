@@ -12,7 +12,6 @@ const REASSIGN_COLUMNS: Array<{ table: string; column: string }> = [
   { table: "fa_projects", column: "created_by" },
   { table: "fa_extracts", column: "created_by" },
   { table: "gs_rules", column: "created_by" },
-  { table: "wr_projects", column: "created_by" },
   { table: "job_runs", column: "created_by" },
   { table: "activity_log", column: "user_id" },
   { table: "wallet_transactions", column: "user_id" },

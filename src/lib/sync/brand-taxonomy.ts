@@ -1,10 +1,7 @@
 // Shared brand/vendor PLP discovery — a store's brand pages are real,
 // selectable taxonomy groups with real product counts, but neither Shopify
 // nor WooCommerce exposes them through the normal collection/category
-// endpoints (`ProviderTaxonomy.list`). Market Research and Website
-// Restructure both need this exact same roster (Market Research to classify
-// brand PLPs into niches, Website Restructure to elect brand pillars like
-// "Gucci" for the header), so it lives here once instead of twice.
+// endpoints (`ProviderTaxonomy.list`). Market Research uses it to classify brand PLPs into niches.
 
 import type { IntegrationRecord, ShopifyGraphQLResult } from "./core/types";
 import { shopifyGraphQL } from "./providers/shopify/graphql-client";
@@ -68,7 +65,7 @@ type ShopifyVendorsResponse = {
  * Walks products in the store (paginated, capped at `maxPages`, optionally
  * time-boxed) and tallies a real product count per vendor in the same pass —
  * no extra per-brand requests. Callers with a short wall-clock budget
- * (Website Restructure's sources route) pass `timeBudgetMs` and accept a
+ * (short request routes) pass `timeBudgetMs` and accept a
  * partial roster rather than timing the whole request out.
  */
 export async function fetchShopifyVendorBrands(

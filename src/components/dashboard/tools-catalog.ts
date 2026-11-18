@@ -8,7 +8,6 @@ import {
   Paintbrush,
   RefreshCw,
   Wallet,
-  LayoutTemplate,
   Bot,
   BarChart3,
   CreditCard,
@@ -134,18 +133,6 @@ export const TOOLS: ToolDefinition[] = [
     billing: "wallet",
     needsIntegration: true,
     keywords: ["seo", "keywords", "collections", "articles", "content", "niche"],
-  },
-  {
-    path: "/website-restructure",
-    name: "Website restructure",
-    blurb:
-      "Rebuilds your storefront header and navigation through chat, with a live preview and version history.",
-    icon: LayoutTemplate,
-    category: "agents",
-    billing: "free",
-    needsIntegration: true,
-    hidden: true,
-    keywords: ["header", "navigation", "menu", "design", "preview"],
   },
   {
     path: "/growth-sync",

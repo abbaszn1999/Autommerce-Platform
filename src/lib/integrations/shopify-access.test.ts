@@ -11,10 +11,9 @@ describe("shopify access", () => {
   });
 
   it("lists what each tool is missing", () => {
-    const granted = ["write_products", "read_online_store_navigation"];
+    const granted = ["write_products"];
     const missing = Object.fromEntries(SHOPIFY_TOOL_ACCESS.map((t) => [t.id, missingShopifyScopes(granted, t.scopes)]));
     expect(missing["growth-sync"]).toEqual([]);
-    expect(missing["website-restructure"]).toEqual([]);
     expect(missing["market-research"]).toEqual(["read_publications", "write_publications", "read_content", "write_content"]);
     expect(missing["store-assistant"]).toContain("write_inventory");
   });
@@ -24,9 +23,4 @@ describe("shopify access", () => {
     for (const tool of VISIBLE_SHOPIFY_TOOL_ACCESS) expect(missingShopifyScopes(ALL_SHOPIFY_SCOPES, tool.scopes)).toEqual([]);
   });
 
-  it("keeps Website Restructure out of the list and the copied scopes, but still locked by its scope", () => {
-    expect(SHOPIFY_TOOL_ACCESS.find((t) => t.id === "website-restructure")?.hidden).toBe(true);
-    expect(VISIBLE_SHOPIFY_TOOL_ACCESS.some((t) => t.id === "website-restructure")).toBe(false);
-    expect(ALL_SHOPIFY_SCOPES).not.toContain("read_online_store_navigation");
-  });
 });

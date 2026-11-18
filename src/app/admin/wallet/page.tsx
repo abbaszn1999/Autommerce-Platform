@@ -85,7 +85,7 @@ export default function AdminWalletPage() {
     <>
       <PageHeader
         title={<PageTitle label="USD wallet" badge={<LiveBadge>{total} live</LiveBadge>} />}
-        description="Real-dollar balance for Market Research, Growth Sync, and Website Restructure. Not AI credits."
+        description="Real-dollar balance for Market Research and Growth Sync. Not AI credits."
       />
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <AdminListLayout>

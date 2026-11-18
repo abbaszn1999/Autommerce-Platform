@@ -65,6 +65,10 @@ export function describeTool(name: string, args: Args): Described {
       return { kind: "store_read", title: "Checking the store's API", detail: str(args.path) || undefined };
     case "woo_image_link":
       return { kind: "file", title: "Preparing an image for the store", detail: base(args.path) || undefined };
+    case "inline_image":
+      return { kind: "file", title: "Putting the logo into the page", detail: base(args.image) || undefined };
+    case "read_skill":
+      return { kind: "other", title: "Reading its guide", detail: str(args.name).replace(/-/g, " ") || undefined };
     case "save_store_note":
       return { kind: "other", title: "Remembering for this store", detail: clip(str(args.note), 120) || undefined };
     case "ads_overview":

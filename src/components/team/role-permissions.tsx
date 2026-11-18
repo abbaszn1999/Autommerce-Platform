@@ -12,7 +12,6 @@ import {
   Image as ImageIcon,
   Images,
   LayoutDashboard,
-  LayoutTemplate,
   Paintbrush,
   Package,
   PenLine,
@@ -129,9 +128,6 @@ const GROUPS: PermGroup[] = [
   {
     label: "Tools",
     rows: [
-      { page: "Website restructure", action: "View header projects", access: ALL },
-      { page: "Website restructure", action: "New project / build / edit", access: EDITOR },
-      { page: "Website restructure", action: "Delete projects", access: ADMIN },
       { page: "Store assistant", action: "View chat & sheet", access: ALL },
       { page: "Store assistant", action: "Send messages / apply to store", access: EDITOR },
       { page: "Usage", action: "View credit usage", access: ALL },
@@ -161,7 +157,6 @@ const PAGE_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   Customize: Paintbrush,
   Sync: RefreshCw,
   Wallet: Wallet,
-  "Website restructure": LayoutTemplate,
   "Store assistant": Bot,
   Usage: CreditCard,
   Team: Users,

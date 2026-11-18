@@ -158,7 +158,6 @@ describe("event mapping", () => {
       detail: "Title, Brand",
     });
     expect(mapSdkMessage(call("running", "classify_get_state", {}))[0]).toMatchObject({ title: "Reading the classification" });
-    expect(mapSdkMessage(call("running", "website_get_state", {}))[0]).toMatchObject({ title: "Reading the header project" });
     expect(mapSdkMessage(call("running", "store_get_state", {}))[0]).toMatchObject({ title: "Reading the Store Assistant" });
     expect(mapSdkMessage(call("running", "upload_file", { target: "classify.new.file", fileIds: ["a", "b", "c"] }))[0]).toMatchObject({
       title: "Uploading the files",

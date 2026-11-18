@@ -32,7 +32,8 @@ export const CREDIT_OPERATION_LABELS: Record<AdminCreditOperation, string> = {
 export const WALLET_MODULE_LABELS: Record<AdminWalletModule, string> = {
   "market-research": "Market Research",
   "growth-sync": "Growth Sync",
-  "website-restructure": "Website Restructure",
+  // The tool is gone; charges it made earlier still carry this module.
+  "website-restructure": "Website Restructure (retired)",
   topup: "Wallet Top-up",
   Billing: "Billing",
 };

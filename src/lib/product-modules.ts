@@ -25,7 +25,6 @@ export const STORE_ASSISTANT = {
 export const WALLET_MODULE = {
   marketResearch: "market-research",
   growthSync: "growth-sync",
-  websiteRestructure: "website-restructure",
   topup: "topup",
   billing: "Billing",
 } as const;

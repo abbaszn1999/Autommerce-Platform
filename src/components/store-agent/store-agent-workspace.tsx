@@ -15,6 +15,7 @@ import {
   FileSearch,
   History,
   ImagePlus,
+  LayoutTemplate,
   Loader2,
   Megaphone,
   PackageSearch,
@@ -82,6 +83,7 @@ const SUGGESTIONS = [
   { icon: Tags, title: "Organize collections", prompt: "Review my collections: which products are in no collection, which collections are empty, and propose a cleaner structure." },
   { icon: Megaphone, title: "Publish drafts", prompt: "List my draft products that look ready to sell and help me publish them to the Online Store." },
   { icon: BarChart3, title: "Catalog overview", prompt: "Give me an overview of my catalog: product count by status, type and vendor, price ranges, and the biggest data quality gaps." },
+  { icon: LayoutTemplate, title: "Website restructure", prompt: "Redesign my store's header and navigation: build a new menu from my real categories and brands, and show me the new header as a page. Guide me through what you need from me first." },
   { icon: PackageSearch, title: "Price research", prompt: "Pick my 5 most important products and research how competitors price similar items online. Summarize in a table." },
 ] as const;
 

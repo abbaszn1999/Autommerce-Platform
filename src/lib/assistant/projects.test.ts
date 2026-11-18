@@ -57,7 +57,6 @@ describe("listAgentProjects", () => {
         gallery_sessions: [row("g1", { total_rows: 3 })],
         visualizer_sessions: [row("v1")],
         image_classification_sessions: [row("i1", { total_images: 40 })],
-        wr_projects: [row("w1", { phase: "build" })],
         workspace_integrations: [{ id: "s1", integration_name: "My Shop", provider: "shopify", status: "connected" }],
       },
       calls
@@ -71,12 +70,8 @@ describe("listAgentProjects", () => {
     expect(result.gallery).toMatchObject({ projects: [{ open: "/w/acme/products-gallery?project=g1" }] });
     expect(result.visualizer).toMatchObject({ projects: [{ open: "/w/acme/products-visualizer?project=v1" }] });
     expect(result.classify).toMatchObject({ projects: [{ items: 40, open: "/w/acme/image-classify/i1" }] });
-    expect(result.website).toMatchObject({
-      projects: [{ open: "/w/acme/website-restructure", select: "website.project.w1", phase: "build" }],
-    });
     expect(result.store).toMatchObject({ projects: [{ name: "My Shop", open: "/w/acme/store-assistant" }] });
     expect(calls.every((call) => call.workspaceId === "ws1")).toBe(true);
-    expect(calls.find((call) => call.table === "wr_projects")?.columns).not.toContain("provider");
   });
 
   it("returns more rows for one tool and flags older ones", async () => {

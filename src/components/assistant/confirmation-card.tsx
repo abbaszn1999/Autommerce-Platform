@@ -31,14 +31,8 @@ export function ConfirmationCard({
   const [estimate, setEstimate] = useState<Estimate>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [allowanceNote] = useState(() =>
-    confirmation.actionTarget.startsWith("website.")
-      ? getPageHandlers("website")?.allowanceNote?.(confirmation.actionTarget) ?? null
-      : null,
-  );
 
   useEffect(() => {
-    if (allowanceNote) return;
     let alive = true;
     const scope = confirmation.actionTarget.startsWith("gallery.")
       ? "gallery"
@@ -64,7 +58,7 @@ export function ConfirmationCard({
     return () => {
       alive = false;
     };
-  }, [workspaceId, confirmation.callId, allowanceNote]);
+  }, [workspaceId, confirmation.callId]);
 
   return (
     <div className="mx-3 mb-2 rounded-xl border border-[#F76D01]/40 bg-[#F76D01]/5 p-3 text-xs">
@@ -78,9 +72,7 @@ export function ConfirmationCard({
       </ul>
       <div className="mb-2 flex items-center gap-1.5 rounded-lg bg-background/70 px-2 py-1.5">
         <Coins className="h-3.5 w-3.5 text-muted-foreground" />
-        {allowanceNote ? (
-          <span>{allowanceNote}</span>
-        ) : !loaded ? (
+        {!loaded ? (
           <span className="text-muted-foreground">Estimating cost…</span>
         ) : estimate ? (
           <span>

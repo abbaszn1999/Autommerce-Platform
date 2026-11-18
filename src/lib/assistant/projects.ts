@@ -87,19 +87,6 @@ const SOURCES: Record<Exclude<ProjectTool, "store">, Source> = {
       open: `/w/${slug}/image-classify/${str(row.id)}`,
     }),
   },
-  website: {
-    table: "wr_projects",
-    columns: "id, name, status, phase, updated_at",
-    toProject: (row, slug) => ({
-      id: str(row.id),
-      name: str(row.name),
-      status: str(row.status),
-      updatedAt: str(row.updated_at) || null,
-      phase: str(row.phase) || undefined,
-      open: `/w/${slug}/website-restructure`,
-      select: `website.project.${str(row.id)}`,
-    }),
-  },
 };
 
 async function listFrom(supabase: SupabaseClient, source: Source, workspaceId: string, slug: string, limit: number) {
@@ -150,7 +137,7 @@ export async function listAgentProjects(
   supabase: SupabaseClient,
   params: { workspaceId: string; workspaceSlug: string; tool?: ProjectTool }
 ): Promise<AgentProjectList> {
-  const tools: ProjectTool[] = params.tool ? [params.tool] : ["catalog", "gallery", "visualizer", "classify", "website", "store"];
+  const tools: ProjectTool[] = params.tool ? [params.tool] : ["catalog", "gallery", "visualizer", "classify", "store"];
   const limit = params.tool ? PROJECTS_PER_TOOL.one : PROJECTS_PER_TOOL.all;
   const entries = await Promise.all(
     tools.map(async (tool) => {

@@ -31,6 +31,7 @@ import { ChatFiles } from "./files";
 import { veraRule } from "./instructions";
 import type { StoreAgentRegistry, StoreAgentRun } from "./run";
 import { createScriptTool } from "./script-tool";
+import { createSkillTools } from "./skills";
 import { loadShopifyConnection, type ShopifyConnection } from "./shopify/client";
 import { storePlatform } from "./store-connection";
 import { loadWooConnection, type WooConnection } from "./woocommerce/client";
@@ -698,7 +699,7 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
             ...createChatTools(toolContext),
             ...(storeForAds ? { ...createStoreCmsTools(toolContext), ...createStoreSalesTools(toolContext) } : {}),
           }
-        : createStoreAgentTools(toolContext)),
+        : { ...createStoreAgentTools(toolContext), ...createSkillTools(cwd, (relative) => written.add(relative)) }),
       ...createFileTools(cwd, (relative) => written.add(relative)),
       ...createScriptTool(cwd, (relative, inputs) => {
         written.add(relative);
