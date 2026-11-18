@@ -2,6 +2,8 @@ import type { Hono } from "hono";
 import { MODEL_PRICING, usdToCredits } from "../../../src/lib/store-agent/pricing";
 import { chargeRun } from "./billing/charge";
 import { isAbandoned } from "./billing/settle";
+import { Agent, type AgentOptions } from "@cursor/sdk";
+import { readBilledCents } from "../usage";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   answerSchema,
@@ -325,13 +327,53 @@ const RECOVER_AGAIN_MS = 2 * 60 * 1000;
  * saved estimate, since Cursor billed the work. Returns true when some runs
  * were too recent to judge.
  */
-async function recoverAbandonedRuns(deps: Pick<StoreAgentDeps, "db" | "registry">): Promise<boolean> {
+/**
+ * What Cursor billed an abandoned run: the agent's total now minus the total when
+ * the run started, plus the paid work outside the agent. Undefined when any piece is
+ * missing, so the caller keeps the saved estimate.
+ */
+async function billedUsdOfAbandonedRun(
+  deps: Pick<StoreAgentDeps, "store" | "cursorApiKey" | "log">,
+  row: { cursor_agent_id?: string | null; billed_before_cents?: number | string | null; extra_usd?: number | string | null }
+): Promise<number | undefined> {
+  const before = row.billed_before_cents === null || row.billed_before_cents === undefined ? NaN : Number(row.billed_before_cents);
+  if (!row.cursor_agent_id || !Number.isFinite(before) || !deps.cursorApiKey) return undefined;
+  let agent: Awaited<ReturnType<typeof Agent.resume>> | undefined;
+  try {
+    const options = { apiKey: deps.cursorApiKey, local: { cwd: process.cwd(), store: deps.store } } as unknown as AgentOptions;
+    agent = await Agent.resume(row.cursor_agent_id, options);
+    const after = await readBilledCents(agent);
+    if (after === undefined || after <= before) return undefined;
+    return (after - before) / 100 + (Number(row.extra_usd) || 0);
+  } catch (error) {
+    deps.log(`billed usage of agent ${row.cursor_agent_id} unavailable; using the saved estimate`, (error as Error).message);
+    return undefined;
+  } finally {
+    await agent?.[Symbol.asyncDispose]().catch(() => undefined);
+  }
+}
+
+async function recoverAbandonedRuns(deps: Pick<StoreAgentDeps, "db" | "registry" | "store" | "cursorApiKey" | "log">): Promise<boolean> {
   const { db, registry } = deps;
   const live = new Set(registry.live.map((r) => r.id));
-  const { data: stale } = await db
-    .from("store_agent_runs")
-    .select("id, chat_id, workspace_id, user_id, owner_user_id, usd, started_at, estimate_saved_at")
-    .eq("status", "running");
+  const columns = "id, chat_id, workspace_id, user_id, owner_user_id, usd, started_at, estimate_saved_at, cursor_agent_id";
+  type RunningRow = {
+    id: string;
+    chat_id: string;
+    workspace_id: string;
+    user_id: string;
+    owner_user_id: string | null;
+    usd: number | string | null;
+    started_at: string | null;
+    estimate_saved_at: string | null;
+    cursor_agent_id: string | null;
+    billed_before_cents?: number | string | null;
+    extra_usd?: number | string | null;
+  };
+  const withBasis = await db.from("store_agent_runs").select(`${columns}, billed_before_cents, extra_usd`).eq("status", "running");
+  let stale = withBasis.data as RunningRow[] | null;
+  // The billing-basis migration may not have run yet: recover from the estimates alone.
+  if (withBasis.error) stale = (await db.from("store_agent_runs").select(columns).eq("status", "running")).data as RunningRow[] | null;
   let waiting = false;
   for (const row of stale ?? []) {
     if (live.has(row.id)) continue;
@@ -339,9 +381,11 @@ async function recoverAbandonedRuns(deps: Pick<StoreAgentDeps, "db" | "registry"
       waiting = true;
       continue;
     }
-    const credits = usdToCredits(Number(row.usd) || 0);
+    // Cursor's own figure wins, as for a finished run; the saved estimate is the fallback.
+    const billedUsd = await billedUsdOfAbandonedRun(deps, row);
+    const credits = usdToCredits(billedUsd ?? (Number(row.usd) || 0));
     const charge = row.owner_user_id && credits > 0
-      ? await chargeRun(db, { ownerUserId: row.owner_user_id, workspaceId: row.workspace_id, actorUserId: row.user_id, runId: row.id, credits, details: { chatId: row.chat_id, recoveredAfterCrash: true } })
+      ? await chargeRun(db, { ownerUserId: row.owner_user_id, workspaceId: row.workspace_id, actorUserId: row.user_id, runId: row.id, credits, details: { chatId: row.chat_id, recoveredAfterCrash: true, source: billedUsd === undefined ? "estimated" : "billed", usd: billedUsd ?? Number(row.usd) } })
       : { charged: 0 };
     const { data: closed } = await db
       .from("store_agent_runs")
@@ -360,7 +404,7 @@ async function recoverAbandonedRuns(deps: Pick<StoreAgentDeps, "db" | "registry"
  * - agents and files of deleted workspaces are removed (Storage has no cascade).
  */
 export async function sweepStoreAgent(
-  deps: Pick<StoreAgentDeps, "db" | "store" | "registry" | "log">,
+  deps: Pick<StoreAgentDeps, "db" | "store" | "registry" | "log" | "cursorApiKey">,
   opts: { startup: boolean }
 ) {
   const { db, store, log } = deps;

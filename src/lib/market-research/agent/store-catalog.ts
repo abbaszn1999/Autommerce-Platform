@@ -10,9 +10,7 @@ import type { MarketResearchProduct } from "@/components/market-research/workspa
 // ─── Brand / vendor discovery ──────────────────────────────────────────────
 //
 // The actual Shopify/WooCommerce fetch logic lives in
-// `@/lib/sync/brand-taxonomy` (shared with Website Restructure, which needs
-// the identical brand roster to elect brand pillars like "Gucci" for the
-// header). Each vendor/brand becomes its own PLP-shaped item (`kind:
+// `@/lib/sync/brand-taxonomy`. Each vendor/brand becomes its own PLP-shaped item (`kind:
 // "brand"`), treated by every downstream stage exactly like a normal
 // collection/category.
 

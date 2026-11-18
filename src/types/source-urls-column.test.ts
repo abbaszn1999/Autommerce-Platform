@@ -13,10 +13,6 @@ describe("Source URLs default column", () => {
     expect(isProductModeColumn(SOURCE_URLS_COLUMN_ID, "product")).toBe(true);
   });
 
-  it("stays in the list for PLP sheets, which keep their own Source URLs flow", () => {
-    expect(isProductModeColumn(SOURCE_URLS_COLUMN_ID, "plp")).toBe(false);
-  });
-
   it("keeps all five defaults, each with an editable starting instruction", () => {
     const five = DEFAULT_ENRICHMENT_COLUMNS.slice(0, 5);
     expect(five.map((c) => c.id)).toEqual([
@@ -33,10 +29,6 @@ describe("Source URLs default column", () => {
     const sources = DEFAULT_ENRICHMENT_COLUMNS.filter((c) => c.type === "sourceUrls").map((c) => c.id);
     expect(sources).toEqual(["sourceUrls", "imageSourceUrls", "lensFounds"]);
   });
-
-  it("leaves PLP defaults alone", () => {
-    expect(getDefaultEnrichmentColumns("plp").find((c) => c.id === "sourceUrls")?.enabled).toBe(false);
-  });
 });
 
 describe("ensureSourceUrlsColumn", () => {
@@ -49,9 +41,8 @@ describe("ensureSourceUrlsColumn", () => {
     expect(migrated.find((c) => c.id === "sourceUrls")?.enabled).toBe(false);
   });
 
-  it("does nothing when the column is already there, for PLP, or when the user moved things", () => {
+  it("does nothing when the column is already there", () => {
     expect(ensureSourceUrlsColumn(DEFAULT_ENRICHMENT_COLUMNS, "product")).toBe(DEFAULT_ENRICHMENT_COLUMNS);
-    expect(ensureSourceUrlsColumn(withoutSourceUrls, "plp")).toBe(withoutSourceUrls);
   });
 
   it("falls back to before Categories, then to the end", () => {

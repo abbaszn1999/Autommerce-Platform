@@ -11,6 +11,7 @@ import {
   flexRender,
   type ColumnDef,
   type ColumnSizingState,
+  type Row,
   type SortingState,
   type Updater,
 } from "@tanstack/react-table";
@@ -55,6 +56,8 @@ import {
   GripVertical,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronsUpDown,
   ChevronsLeft,
   ChevronsRight,
   ImageIcon,
@@ -118,7 +121,7 @@ import {
 /** Leading checkbox + row-number columns: the only place the row resize grip lives. */
 const ROW_HEADER_COLUMNS = new Set(["select", "rowNum"]);
 import type { ProductRow, EnrichmentColumn } from "@/types";
-import { FileSpreadsheet, Package, Cloud, CloudOff } from "lucide-react";
+import { Cloud, CloudOff } from "lucide-react";
 import { StoredImageCell } from "@/components/stored-image";
 import { hasStoredImageRef } from "@/lib/stored-image-ref";
 import {
@@ -1897,13 +1900,8 @@ export function DataTable({
     redo,
     canUndo,
     canRedo,
-    activeSheet,
-    setActiveSheet,
     saveStatus,
-    enrichingTab,
-    enrichingExistingColumns,
-    enrichingNewColumns,
-    sessionKind,
+    enrichingColumns,
     productGroupColumn,
     projectId,
     workspaceId,
@@ -1911,12 +1909,6 @@ export function DataTable({
 
   const { role } = useWorkspaceStore();
   const isViewer = readOnly || role === "viewer";
-
-  const isPlp = sessionKind === "plp";
-
-  const sheetLabels = isPlp
-    ? { existing: "Existing pages", new: "New pages" }
-    : { existing: "Existing", new: "New" };
 
   const [globalFilter, setGlobalFilter] = useState(initialView?.search ?? "");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(
@@ -1940,9 +1932,8 @@ export function DataTable({
         sort: sorting[0] ? { column: sorting[0].id, direction: sorting[0].desc ? "desc" : "asc" } : null,
         search: globalFilter,
         status: statusFilter,
-        activeSheet,
       }),
-    [columnFilters, sorting, globalFilter, statusFilter, activeSheet]
+    [columnFilters, sorting, globalFilter, statusFilter]
   );
   const searchInputRef = useRef<HTMLInputElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -1980,14 +1971,41 @@ export function DataTable({
     [rows, productGroupColumn]
   );
 
-  // Pre-filter rows by active sheet (existing/new), collapsing variant rows
-  // when a product group column is set.
-  const sheetFilteredRows = useMemo(() => {
-    return visibleCatalogRows(rows, {
-      groupColumn: productGroupColumn,
-      activeSheet,
+  // Variable products: a parent row expands to show every row of its group.
+  const rowsById = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(() => new Set());
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
-  }, [rows, activeSheet, productGroupColumn]);
+  }, []);
+  const expandableParentIds = useMemo(() => {
+    if (!groupIndex.enabled) return [] as string[];
+    return [...groupIndex.sizeByPrimary.entries()].filter(([, size]) => size > 1).map(([id]) => id);
+  }, [groupIndex]);
+  const allExpanded =
+    expandableParentIds.length > 0 && expandableParentIds.every((id) => expandedParents.has(id));
+  // A parent matches a search when it, or any of its variation rows, does.
+  const rowOrVariationMatches = useCallback(
+    (original: ProductRow, filterValue: string) => {
+      if (rowMatchesGlobalSearch(original, filterValue)) return true;
+      if (!groupIndex.enabled) return false;
+      for (const memberId of groupIndex.memberIdsByPrimary.get(original.id) ?? []) {
+        const member = rowsById.get(memberId);
+        if (member && member.id !== original.id && rowMatchesGlobalSearch(member, filterValue)) return true;
+      }
+      return false;
+    },
+    [groupIndex, rowsById]
+  );
+
+  // Collapse variant rows when a product group column is set.
+  const sheetFilteredRows = useMemo(() => {
+    return visibleCatalogRows(rows, { groupColumn: productGroupColumn });
+  }, [rows, productGroupColumn]);
 
   // Selection state scoped to current sheet only
   const sheetSelectedCount = useMemo(() => {
@@ -2010,20 +2028,6 @@ export function DataTable({
     }
   }, [pageAllSelected, pageRowIds, selectedRowIds, selectRowsByIds]);
 
-  // Count rows per sheet
-  const sheetCounts = useMemo(() => {
-    return {
-      existing: visibleCatalogRows(rows, {
-        groupColumn: productGroupColumn,
-        activeSheet: "existing",
-      }).length,
-      new: visibleCatalogRows(rows, {
-        groupColumn: productGroupColumn,
-        activeSheet: "new",
-      }).length,
-    };
-  }, [rows, productGroupColumn]);
-
   // Pre-filter rows by status
   const statusFilteredRows = useMemo(() => {
     if (statusFilter === "all") return sheetFilteredRows;
@@ -2042,8 +2046,8 @@ export function DataTable({
   // all" picks exactly what is shown instead of the whole sheet when narrowed.
   const narrowedVisibleRows = useMemo(() => {
     if (!globalFilter) return columnFilteredRows;
-    return columnFilteredRows.filter((r) => rowMatchesGlobalSearch(r, globalFilter));
-  }, [columnFilteredRows, globalFilter]);
+    return columnFilteredRows.filter((r) => rowOrVariationMatches(r, globalFilter));
+  }, [columnFilteredRows, globalFilter, rowOrVariationMatches]);
   const hasNarrowingFilter = hasActiveFilters(columnFilters) || !!globalFilter;
 
   // Status counts (based on sheet-filtered rows)
@@ -2103,8 +2107,8 @@ export function DataTable({
   // Global filter function — delegates to the shared matcher so "Select all"
   // (computed separately, above) always agrees with what the table shows.
   const globalFilterFn = useCallback(
-    (row: any, _columnId: string, filterValue: string) => rowMatchesGlobalSearch(row.original as ProductRow, filterValue),
-    []
+    (row: any, _columnId: string, filterValue: string) => rowOrVariationMatches(row.original as ProductRow, filterValue),
+    [rowOrVariationMatches]
   );
 
   // Enriched (AI) columns - show if enabled OR has data in any row.
@@ -2194,9 +2198,10 @@ export function DataTable({
           />
         </div>
       ),
-      size: 65,
-      minSize: 65,
-      maxSize: 65,
+      // Variable products leave room for the expand arrow.
+      size: groupIndex.enabled ? 88 : 65,
+      minSize: groupIndex.enabled ? 88 : 65,
+      maxSize: groupIndex.enabled ? 88 : 65,
       enableSorting: false,
       enableResizing: false,
     });
@@ -2257,22 +2262,15 @@ export function DataTable({
           </div>
         ),
         cell: ({ row }) => {
-          if (row.original.status === "processing" && enrichingTab === "existing" && enrichingExistingColumns.includes(colName)) {
-            return (
-              <div className="py-1 space-y-1.5 w-full">
-                <div className="h-1.5 w-3/4 bg-primary/10 animate-pulse rounded-full" />
-                <div className="h-1.5 w-1/2 bg-primary/10 animate-pulse rounded-full" />
-                <div className="h-1.5 w-5/6 bg-primary/10 animate-pulse rounded-full" />
-              </div>
-            );
-          }
           const canEdit =
             !isViewer &&
             (!isEnriching ||
             row.original.status === "done" ||
             row.original.status === "pending");
+          const isVariation = (row as unknown as { variation?: boolean }).variation === true;
           const groupSize = groupIndex.sizeByPrimary.get(row.original.id) ?? 1;
           const showGroupBadge =
+            !isVariation &&
             groupIndex.enabled &&
             groupIndex.column === colName &&
             groupSize > 1;
@@ -2333,10 +2331,10 @@ export function DataTable({
         ),
         cell: ({ row }) => {
           const isGenerating =
-            enrichingNewColumns.length > 0
-              ? enrichingNewColumns.includes(enrichCol.id)
+            enrichingColumns.length > 0
+              ? enrichingColumns.includes(enrichCol.id)
               : enrichCol.enabled;
-          if (row.original.status === "processing" && isGenerating && enrichingTab === "new") {
+          if (row.original.status === "processing" && isGenerating) {
             return (
               <div className="py-1 space-y-1.5 w-full">
                 <div className="h-1.5 w-3/4 bg-primary/10 animate-pulse rounded-full" />
@@ -2345,7 +2343,9 @@ export function DataTable({
               </div>
             );
           }
-          const canEditEnriched = !isViewer && row.original.status !== "processing";
+          const isVariation = (row as unknown as { variation?: boolean }).variation === true;
+          // Variation rows show the parent's result; enrichment edits happen on the parent.
+          const canEditEnriched = !isViewer && !isVariation && row.original.status !== "processing";
           const notFoundReason =
             row.original.enrichedData[imageFinderNotFoundKey(enrichCol.id)];
           const matchBasis =
@@ -2354,7 +2354,7 @@ export function DataTable({
             row.original.enrichedData[imageFinderMatchNoteKey(enrichCol.id)];
           const alsoFound = row.original.enrichedData[lensAlsoFoundKey(enrichCol.id)];
           const setAside = row.original.enrichedData[lensSetAsideKey(enrichCol.id)];
-          return (
+          const enrichedCell = (
             <EditableEnrichedCell
               value={row.original.enrichedData[enrichCol.id]}
               rowId={row.original.id}
@@ -2371,6 +2371,7 @@ export function DataTable({
               setAside={isLensSetAside(setAside) ? setAside : undefined}
             />
           );
+          return isVariation ? <div className="w-full opacity-60">{enrichedCell}</div> : enrichedCell;
         },
         size:
           enrichCol.id === "marketingDescription" ||
@@ -2413,10 +2414,7 @@ export function DataTable({
     selectRowsByIds,
     sheetFilteredRows,
     renameColumn,
-    activeSheet,
-    enrichingTab,
-    enrichingExistingColumns,
-    enrichingNewColumns,
+    enrichingColumns,
     groupIndex,
     productGroupColumn,
   ]);
@@ -2452,7 +2450,7 @@ export function DataTable({
   // Back to the first page only when the user changes what is shown.
   useEffect(() => {
     setPagination((prev) => (prev.pageIndex === 0 ? prev : { ...prev, pageIndex: 0 }));
-  }, [globalFilter, statusFilter, columnFilters, sorting, activeSheet]);
+  }, [globalFilter, statusFilter, columnFilters, sorting]);
 
   // If rows are deleted or filtered away so the current page no longer exists,
   // show the last page that does. While no rows are loaded the page is kept.
@@ -2477,16 +2475,41 @@ export function DataTable({
   }, [tableRows]);
   const rowHeightFor = (rowId: string | undefined) =>
     (rowId && rowHeights[rowId]) || DEFAULT_ROW_HEIGHT;
+
+  // What is drawn: each parent row, followed by all of its group's rows when it
+  // is expanded. Variation rows are never selectable; pagination counts parents.
+  const displayRows = useMemo(() => {
+    const out: Array<{ key: string; row: Row<ProductRow>; variation: ProductRow | null; heightKey: string }> = [];
+    for (const row of tableRows) {
+      const parentId = row.original.id;
+      out.push({ key: row.id, row, variation: null, heightKey: parentId });
+      if (!groupIndex.enabled || !expandedParents.has(parentId)) continue;
+      if ((groupIndex.sizeByPrimary.get(parentId) ?? 1) < 2) continue;
+      for (const memberId of groupIndex.memberIdsByPrimary.get(parentId) ?? []) {
+        const member = rowsById.get(memberId);
+        if (!member) continue;
+        out.push({
+          key: `${row.id}:v:${memberId}`,
+          row,
+          variation: member,
+          heightKey: `v:${parentId}:${memberId}`,
+        });
+      }
+    }
+    return out;
+  }, [tableRows, groupIndex, expandedParents, rowsById]);
+
   const rowVirtualizer = useVirtualizer({
-    count: tableRows.length,
+    count: displayRows.length,
     getScrollElement: () => tableContainerRef.current,
-    estimateSize: (index) => rowHeightFor(tableRows[index]?.original.id),
+    estimateSize: (index) => rowHeightFor(displayRows[index]?.heightKey),
+    getItemKey: (index) => displayRows[index]?.key ?? index,
     overscan: 20,
   });
 
   useEffect(() => {
     rowVirtualizer.measure();
-  }, [rowHeights, rowVirtualizer]);
+  }, [rowHeights, displayRows, rowVirtualizer]);
 
   // Resizes write straight to the DOM while dragging (no React render per
   // mouse move) and commit to state once on release.
@@ -2609,39 +2632,17 @@ export function DataTable({
               })}
             </div>
 
-            {/* Sheet toggle tabs — PLP has no "existing" concept, so it never shows this */}
-            {!isPlp && (
-              <div className="flex items-center border rounded-lg overflow-hidden mx-2">
-                <button
-                  onClick={() => setActiveSheet("existing")}
-                  disabled={sheetCounts.existing === 0}
-                  className={`flex items-center gap-1.5 px-3 py-1 text-[10px] font-medium transition-colors ${
-                    activeSheet === "existing"
-                      ? "bg-primary text-primary-foreground"
-                      : sheetCounts.existing === 0
-                      ? "bg-background text-muted-foreground/40 cursor-not-allowed"
-                      : "bg-background text-muted-foreground hover:bg-muted/50"
-                  }`}
-                >
-                  <Package className="h-3 w-3" />
-                  {sheetLabels.existing} ({sheetCounts.existing})
-                </button>
-                <div className="w-px h-5 bg-border" />
-                <button
-                  onClick={() => setActiveSheet("new")}
-                  disabled={sheetCounts.new === 0}
-                  className={`flex items-center gap-1.5 px-3 py-1 text-[10px] font-medium transition-colors ${
-                    activeSheet === "new"
-                      ? "bg-primary text-primary-foreground"
-                      : sheetCounts.new === 0
-                      ? "bg-background text-muted-foreground/40 cursor-not-allowed"
-                      : "bg-background text-muted-foreground hover:bg-muted/50"
-                  }`}
-                >
-                  <FileSpreadsheet className="h-3 w-3" />
-                  {sheetLabels.new} ({sheetCounts.new})
-                </button>
-              </div>
+            {/* Variable products: open or close every parent at once */}
+            {expandableParentIds.length > 0 && (
+              <button
+                type="button"
+                data-agent-id="ci.expand-all"
+                onClick={() => setExpandedParents(allExpanded ? new Set() : new Set(expandableParentIds))}
+                className="flex items-center gap-1 rounded border border-border/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <ChevronsUpDown className="h-2.5 w-2.5" />
+                {allExpanded ? "Collapse all" : "Expand all"}
+              </button>
             )}
 
             {/* Row count */}
@@ -2888,24 +2889,30 @@ export function DataTable({
               }}
             >
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const row = tableRows[virtualRow.index];
-                if (!row) return null;
-                const isSelected = selectedRowIds.has(row.original.id);
-                const status = row.original.status;
-                const isPreviewing = previewRowId === row.original.id;
-                const rowHeight = rowHeightFor(row.original.id);
+                const displayRow = displayRows[virtualRow.index];
+                if (!displayRow) return null;
+                const { row, variation } = displayRow;
+                // A variation row shows its own sheet data but is never selected or enriched itself.
+                const data = variation ?? row.original;
+                const isSelected = !variation && selectedRowIds.has(data.id);
+                const status = data.status;
+                const isPreviewing = previewRowId === data.id;
+                const rowHeight = rowHeightFor(displayRow.heightKey);
+                const groupSize = groupIndex.sizeByPrimary.get(row.original.id) ?? 1;
+                const isExpanded = expandedParents.has(row.original.id);
 
                 return (
                   <div
-                    key={row.id}
+                    key={displayRow.key}
                     data-index={virtualRow.index}
                     className={`
                       flex border-b border-border/20 text-[12px] absolute w-full
+                      ${variation ? "border-l-2 border-l-primary/30 bg-muted/30" : ""}
                       ${isSelected ? "bg-primary/[0.03]" : ""}
-                      ${status === "processing" ? "bg-amber-50/40 dark:bg-amber-950/10" : ""}
-                      ${status === "done" ? "bg-green-50/30 dark:bg-green-950/10" : ""}
-                      ${status === "error" ? "bg-red-50/30 dark:bg-red-950/10" : ""}
-                      ${!isSelected && status === "pending" ? "opacity-60" : ""}
+                      ${!variation && status === "processing" ? "bg-amber-50/40 dark:bg-amber-950/10" : ""}
+                      ${!variation && status === "done" ? "bg-green-50/30 dark:bg-green-950/10" : ""}
+                      ${!variation && status === "error" ? "bg-red-50/30 dark:bg-red-950/10" : ""}
+                      ${!variation && !isSelected && status === "pending" ? "opacity-60" : ""}
                       ${isPreviewing ? "ring-1 ring-primary/40 bg-primary/5" : ""}
                       hover:bg-muted/40 transition-colors
                     `}
@@ -2917,39 +2924,78 @@ export function DataTable({
                       } as React.CSSProperties
                     }
                   >
-                    {row.getVisibleCells().map((cell) => (
-                      <div
-                        key={cell.id}
-                        className={`px-3 py-2 border-r last:border-r-0 border-border/20 flex-shrink-0 overflow-hidden ${
-                          ROW_HEADER_COLUMNS.has(cell.column.id) ? "relative" : ""
-                        }`}
-                        style={{
-                          width: columnVar.get(cell.column.id),
-                          minWidth: columnVar.get(cell.column.id),
-                        }}
-                        onClick={() => {
-                          if (cell.column.id === "rowNum") {
-                            setPreviewRowId(previewRowId === row.original.id ? null : row.original.id);
+                    {row.getVisibleCells().map((cell) => {
+                      const context = variation
+                        ? {
+                            ...cell.getContext(),
+                            row: { ...row, id: variation.id, original: variation, variation: true } as Row<ProductRow>,
                           }
-                        }}
-                      >
-                        {cell.column.id === "rowNum" ? (
-                          <span className="text-[10px] text-muted-foreground/50 font-mono cursor-pointer hover:text-primary transition-colors">
-                            {row.original.rowIndex + 1}
-                          </span>
-                        ) : (
-                          flexRender(cell.column.columnDef.cell, cell.getContext())
-                        )}
-                        {ROW_HEADER_COLUMNS.has(cell.column.id) && (
-                          <RowResizeHandle
-                            onPointerDown={(e) =>
-                              startRowResize(e, virtualRow.index, row.original.id, rowHeight)
+                        : cell.getContext();
+                      const isSelectCell = cell.column.id === "select";
+                      return (
+                        <div
+                          key={cell.id}
+                          className={`px-3 py-2 border-r last:border-r-0 border-border/20 flex-shrink-0 overflow-hidden ${
+                            ROW_HEADER_COLUMNS.has(cell.column.id) ? "relative" : ""
+                          }`}
+                          style={{
+                            width: columnVar.get(cell.column.id),
+                            minWidth: columnVar.get(cell.column.id),
+                          }}
+                          onClick={() => {
+                            if (cell.column.id === "rowNum") {
+                              setPreviewRowId(previewRowId === data.id ? null : data.id);
                             }
-                            onReset={() => setRowHeight(row.original.id, null)}
-                          />
-                        )}
-                      </div>
-                    ))}
+                          }}
+                        >
+                          {cell.column.id === "rowNum" ? (
+                            <span className="text-[10px] text-muted-foreground/50 font-mono cursor-pointer hover:text-primary transition-colors">
+                              {data.rowIndex + 1}
+                            </span>
+                          ) : isSelectCell && groupIndex.enabled ? (
+                            <div className="flex items-center gap-1">
+                              {!variation && groupSize > 1 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpanded(row.original.id)}
+                                  aria-label={isExpanded ? "Hide variations" : "Show variations"}
+                                  title={isExpanded ? "Hide variations" : `Show ${groupSize} variations`}
+                                  data-agent-id={`ci.row.expand.${row.original.id}`}
+                                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                              ) : (
+                                <span className="w-4 shrink-0" />
+                              )}
+                              {variation ? (
+                                // Variations have no checkbox: enrichment is always on the parent.
+                                <div className="flex items-center justify-center gap-2">
+                                  <span className="inline-block w-3.5 shrink-0" />
+                                  <StatusCell status={variation.status} errorMessage={variation.errorMessage} />
+                                </div>
+                              ) : (
+                                flexRender(cell.column.columnDef.cell, context)
+                              )}
+                            </div>
+                          ) : (
+                            flexRender(cell.column.columnDef.cell, context)
+                          )}
+                          {ROW_HEADER_COLUMNS.has(cell.column.id) && !variation && (
+                            <RowResizeHandle
+                              onPointerDown={(e) =>
+                                startRowResize(e, virtualRow.index, row.original.id, rowHeight)
+                              }
+                              onReset={() => setRowHeight(row.original.id, null)}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}

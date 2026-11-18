@@ -357,7 +357,7 @@ export async function chargeCatalogRow(params: {
       actorUserId: params.settings.actorUserId,
       amount,
       operation: "catalog_intelligence",
-      entityType: params.settings.kind === "plp" ? "catalog_plp_row" : "catalog_row",
+      entityType: "catalog_row",
       entityId: params.rowId,
       idempotencyKey: catalogCreditIdempotencyKey(params.runId, params.rowId, params.recheck, params.sourceUrlsRetry),
       details: {

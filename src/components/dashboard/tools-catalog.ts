@@ -1,5 +1,4 @@
 import {
-  Package,
   FolderTree,
   Upload,
   Image as ImageIcon,
@@ -9,7 +8,6 @@ import {
   Paintbrush,
   RefreshCw,
   Wallet,
-  LayoutTemplate,
   Bot,
   BarChart3,
   CreditCard,
@@ -35,6 +33,8 @@ export interface ToolDefinition {
   billing: ToolBilling;
   /** True when the tool cannot run without a connected store. */
   needsIntegration?: boolean;
+  /** Hidden everywhere in the app for now (the page still exists). */
+  hidden?: boolean;
   /** Only visible to admins/owners ("admin") or owners ("owner"). */
   requiresRole?: "admin" | "owner";
   /** Extra keywords so search finds the tool by what it does, not just its name. */
@@ -135,17 +135,6 @@ export const TOOLS: ToolDefinition[] = [
     keywords: ["seo", "keywords", "collections", "articles", "content", "niche"],
   },
   {
-    path: "/website-restructure",
-    name: "Website restructure",
-    blurb:
-      "Rebuilds your storefront header and navigation through chat, with a live preview and version history.",
-    icon: LayoutTemplate,
-    category: "agents",
-    billing: "free",
-    needsIntegration: true,
-    keywords: ["header", "navigation", "menu", "design", "preview"],
-  },
-  {
     path: "/growth-sync",
     name: "Growth Sync",
     blurb:
@@ -199,15 +188,6 @@ export const TOOLS: ToolDefinition[] = [
     category: "data",
     billing: "credits",
     keywords: ["import", "excel", "csv", "spreadsheet", "enrich", "mapping"],
-  },
-  {
-    path: "/products",
-    name: "Products",
-    blurb: "Your master catalog — search, review and clean up every product you own.",
-    icon: Package,
-    category: "data",
-    billing: "free",
-    keywords: ["catalog", "table", "list", "skus"],
   },
   {
     path: "/categories",
@@ -301,6 +281,7 @@ export function visibleTools(opts: {
   isOwner: boolean;
 }): ToolDefinition[] {
   return TOOLS.filter((tool) => {
+    if (tool.hidden) return false;
     if (tool.requiresRole === "owner") return opts.isOwner;
     if (tool.requiresRole === "admin") return opts.canAdmin;
     return true;

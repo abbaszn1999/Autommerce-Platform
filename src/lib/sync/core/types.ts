@@ -129,38 +129,6 @@ export type TaxonomySummary = {
   kind?: "collection" | "brand";
 };
 
-/** One entry in a store's public navigation menu, with nested children. */
-export type NavigationItem = {
-  title: string;
-  /** Customer-facing URL, absolute or relative to the storefront root. */
-  url: string;
-  /** Present when the item resolves to a taxonomy group the store already has. */
-  resourceId?: string;
-  children?: NavigationItem[];
-};
-
-export type NavigationMenu = {
-  id: string;
-  title: string;
-  /** Storefront "handle", e.g. Shopify's main-menu. */
-  handle?: string;
-  items: NavigationItem[];
-};
-
-/**
- * Optional read of the store's real public navigation, for tools that build
- * on top of it (Website Restructure) rather than the flat taxonomy list.
- * Absent on providers with no navigation concept or no API for it.
- */
-export interface ProviderNavigation {
-  list(input: { integration: IntegrationRecord }): Promise<{
-    menus: NavigationMenu[];
-    /** Set when the API call failed for a permission reason — the caller
-     *  should fall back to taxonomy-only reasoning instead of failing. */
-    unavailableReason?: string;
-  }>;
-}
-
 /** A product discovered by `detectNewProducts`, flattened to what the
  *  classification pipeline actually reads. */
 export type DetectedProduct = {
@@ -262,9 +230,6 @@ export interface SyncProvider {
   /** Optional new-product detection. Absent → Growth Sync rules are refused
    *  for this provider with a clear message instead of silently idling. */
   growthSync?: ProviderGrowthSync;
-  /** Optional real navigation menu read. Absent → callers reason from the
-   *  flat taxonomy list alone (Website Restructure). */
-  navigation?: ProviderNavigation;
   /** Fields the user enters when connecting this provider. */
   configFields: ProviderConfigField[];
   /** Save: returns `{ baseUrl, config }` to persist after a successful test. */

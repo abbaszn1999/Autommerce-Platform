@@ -1,6 +1,6 @@
 import type { ColumnSpec } from "../types";
 import { sourceUrlsSpec } from "../shared/source-urls";
-import { faqSpec } from "../plp/faq";
+import { faqSpec } from "./faq";
 import { enhancedTitleSpec } from "./enhanced-title";
 import { marketingDescriptionSpec } from "./marketing-description";
 import { titleTagSpec } from "./title-tag";

@@ -8,6 +8,11 @@ describe("settledCost", () => {
     expect(settledCost({ ...base, billedUsd: 4, outsideAgentUsd: 0.01 })).toEqual({ usd: 4.01, source: "billed" });
   });
 
+  it("adds generated images and the title to Cursor's figure, since Cursor does not bill them", () => {
+    expect(settledCost({ ...base, billedUsd: 2, outsideAgentUsd: 0.134 * 2 + 0.01 })).toMatchObject({ source: "billed" });
+    expect(settledCost({ ...base, billedUsd: 2, outsideAgentUsd: 0.134 * 2 + 0.01 }).usd).toBeCloseTo(2.278, 6);
+  });
+
   it("falls back to the token counts when Cursor does not report a cost", () => {
     expect(settledCost(base)).toEqual({ usd: 0.5, source: "estimated" });
     expect(settledCost({ ...base, billedUsd: 0 })).toEqual({ usd: 0.5, source: "estimated" });

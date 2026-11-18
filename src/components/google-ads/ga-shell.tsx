@@ -6,7 +6,10 @@ import { useWorkspaceContext } from "@/app/(dashboard)/w/[workspaceSlug]/workspa
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import { useGoogleAds } from "@/lib/google-ads/store";
 import type { GaView } from "@/lib/google-ads/types";
+import { boardLocked, onboardingStageOf, type OnboardingStage } from "@/lib/business-profile";
+import { useStoreAgent } from "@/components/store-agent/use-store-agent";
 import { ProfileSetup } from "./profile-setup";
+import { ONBOARDING_START, OnboardingLock } from "./onboarding-lock";
 import { GaCampaignEditor } from "./ga-campaign-editor";
 import { GaChat } from "./ga-chat";
 import { GaVera } from "./ga-vera";
@@ -143,7 +146,7 @@ export function GoogleAdsShell({ live = false }: { live?: boolean }) {
         <WorkspaceSkeleton />
       ) : (
         <TooltipProvider delayDuration={200}>
-          <Workspace />
+          <Workspace stage={live ? setup.stage : null} workspaceId={workspaceId} onUnlockAnyway={setup.unlockAnyway} />
         </TooltipProvider>
       )}
       <MerchantConnectDialog />
@@ -151,41 +154,90 @@ export function GoogleAdsShell({ live = false }: { live?: boolean }) {
   );
 }
 
-const FILL_FROM_WEBSITE =
-  "I just set up my business profile. Read my website and fill in the rest of it: key selling points, competitive advantages, shipping and returns, " +
-  "languages, product categories, brand identity, voice, visual direction, logo and colours. Save what you find as suggestions for me to confirm, then summarise in a few lines what you saved.";
+/** The workspace whose onboarding chat the page already started (this tab), so it is never started twice. */
+let onboardingStarted: string | null = null;
 
 /**
  * Live accounts: the first time an owner or admin enters, ask whether the
- * business profile setup was done. A failed check never blocks the workspace.
+ * business profile setup was done, and whether the first-run onboarding is
+ * still going (the board is locked until Vera has filled the workspace).
+ * A failed check never blocks the workspace.
  */
 function useFirstRunSetup(workspaceId: string | undefined) {
   // The answer is kept per workspace, so switching workspaces checks again.
-  const [answer, setAnswer] = useState<{ workspaceId: string; show: boolean } | null>(null);
+  const [answer, setAnswer] = useState<{ workspaceId: string; show: boolean; stage: OnboardingStage | null } | null>(null);
   useEffect(() => {
     if (!workspaceId) return;
     let alive = true;
     fetch(`/api/business-profile/setup?${new URLSearchParams({ workspaceId })}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : { show: false }))
-      .then((d: { show?: boolean }) => alive && setAnswer({ workspaceId, show: !!d.show }))
-      .catch(() => alive && setAnswer({ workspaceId, show: false }));
+      .then((d: { show?: boolean; onboardingStage?: OnboardingStage | null }) => alive && setAnswer({ workspaceId, show: !!d.show, stage: d.onboardingStage ?? null }))
+      .catch(() => alive && setAnswer({ workspaceId, show: false, stage: null }));
     return () => {
       alive = false;
     };
   }, [workspaceId]);
-  const finish = useCallback(
-    ({ fillFromWebsite }: { fillFromWebsite: boolean }) => {
-      if (workspaceId) setAnswer({ workspaceId, show: false });
-      useGoogleAds.getState().setView("profile");
-      if (fillFromWebsite) runAgentTurn(FILL_FROM_WEBSITE);
-    },
-    [workspaceId]
-  );
+
+  // While Vera works, follow the stage until she unlocks the board.
+  const locked = !!workspaceId && answer?.workspaceId === workspaceId && !answer.show && boardLocked(answer.stage);
+  useEffect(() => {
+    if (!workspaceId || !locked) return;
+    let alive = true;
+    const timer = setInterval(() => {
+      fetch(`/api/business-profile?${new URLSearchParams({ workspaceId })}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { profile?: { values?: Record<string, unknown> } } | null) => {
+          if (!alive || !d?.profile) return;
+          const stage = onboardingStageOf(d.profile.values ?? {});
+          setAnswer((a) => (a && a.workspaceId === workspaceId && a.stage !== stage ? { ...a, stage } : a));
+        })
+        .catch(() => undefined);
+    }, 4000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [workspaceId, locked]);
+
+  const finish = useCallback(() => {
+    if (!workspaceId) return;
+    // The popup just saved everything and started the onboarding: Vera opens the chat and asks her questions.
+    setAnswer({ workspaceId, show: false, stage: "interview" });
+    useGoogleAds.getState().setView("profile");
+    onboardingStarted = workspaceId;
+    runAgentTurn(ONBOARDING_START);
+  }, [workspaceId]);
+  const unlockAnyway = useCallback(async () => {
+    if (!workspaceId) return;
+    const res = await fetch("/api/business-profile/setup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspaceId, action: "unlock" }) });
+    if (res.ok) setAnswer((a) => (a ? { ...a, stage: "done" } : a));
+  }, [workspaceId]);
   const state = !workspaceId ? "done" : answer?.workspaceId !== workspaceId ? "checking" : answer.show ? "show" : "done";
-  return { state, finish };
+  const stage = answer && answer.workspaceId === workspaceId ? answer.stage : null;
+  return { state, finish, stage, unlockAnyway };
 }
 
-function Workspace() {
+/** Reloaded in the middle of the onboarding with no chat at all (it never started): open it now. */
+function OnboardingStarter({ workspaceId }: { workspaceId: string }) {
+  useEffect(() => {
+    if (onboardingStarted === workspaceId) return;
+    const ready = () => {
+      const s = useStoreAgent.getState();
+      if (s.domain !== "google_ads" || s.availability !== "ready" || !s.chatsLoaded) return false;
+      onboardingStarted = workspaceId;
+      if (s.chats.length === 0) runAgentTurn(ONBOARDING_START);
+      return true;
+    };
+    if (ready()) return;
+    const unsubscribe = useStoreAgent.subscribe(() => {
+      if (ready()) unsubscribe();
+    });
+    return unsubscribe;
+  }, [workspaceId]);
+  return null;
+}
+function Workspace({ stage, workspaceId, onUnlockAnyway }: { stage: OnboardingStage | null; workspaceId: string | undefined; onUnlockAnyway: () => Promise<void> }) {
+  const locked = boardLocked(stage);
   const view = useGoogleAds((s) => s.view);
   // Live accounts talk to Vera; the demo keeps its simulated agent.
   const live = useGoogleAds((s) => s.mode === "live");
@@ -235,7 +287,12 @@ function Workspace() {
       />
       <div className="flex min-w-0 flex-1 flex-col bg-[#F6F4FA] dark:bg-background">
         {!live && <DocTabs />}
-        {activeTab === "account" ? (
+        {locked && stage ? (
+          <>
+            {workspaceId && <OnboardingStarter workspaceId={workspaceId} />}
+            <OnboardingLock stage={stage} onUnlockAnyway={onUnlockAnyway} />
+          </>
+        ) : activeTab === "account" ? (
           <>
             <GaTopbar />
             <div className="flex min-h-0 flex-1">

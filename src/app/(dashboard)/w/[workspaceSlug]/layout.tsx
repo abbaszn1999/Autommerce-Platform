@@ -32,7 +32,6 @@ import {
   Search,
   Paintbrush,
   RefreshCw,
-  LayoutTemplate,
   Wallet,
   Bot,
   Apple,
@@ -141,7 +140,6 @@ export default function WorkspaceLayout({
   const isSyncPage =
     pathname === `${basePath}/store-assistant` || pathname.startsWith(`${basePath}/store-assistant/`);
   const isMarketResearchPage = pathname.includes("/market-research");
-  const isWebsiteRestructurePage = pathname.includes("/website-restructure");
   const isGoogleAdsPage = pathname.includes("/google-ads");
   const isMetaAdsPage = pathname.includes("/meta-ads");
   const isProductsGalleryPage = pathname.includes("/products-gallery");
@@ -154,7 +152,6 @@ export default function WorkspaceLayout({
     isProductsGalleryProject ||
     isProductsVisualizerProject ||
     isMarketResearchPage ||
-    isWebsiteRestructurePage ||
     isGoogleAdsPage ||
     isMetaAdsPage ||
     isSyncPage;
@@ -167,7 +164,6 @@ export default function WorkspaceLayout({
     isSyncPage ||
     isMarketResearchPage ||
     (isFreeAssessmentPage && !isFreeAssessmentWalletPage) ||
-    isWebsiteRestructurePage ||
     isGoogleAdsPage ||
     isMetaAdsPage;
   // Subscription page should be accessible without an active subscription
@@ -187,8 +183,7 @@ export default function WorkspaceLayout({
     { href: `${basePath}/products-visualizer`, label: "Products Visualizer", icon: Boxes },
   ];
 
-  // Parent group only — Store assistant and Website restructure are
-  // top-level items, not nested here.
+  // Parent group only — Store assistant is a top-level item, not nested here.
   const growthEngineChildren = [
     {
       href: toolLocks["market-research"] ? "" : `${basePath}/market-research`,
@@ -266,19 +261,11 @@ export default function WorkspaceLayout({
 
   const sidebarLinksBeforeMedia = [
     { href: `${basePath}`, label: "Dashboard", icon: LayoutDashboard },
-    { href: `${basePath}/products`, label: "Products", icon: Package },
     { href: `${basePath}/categories`, label: "Categories", icon: FolderTree },
     { href: `${basePath}/catalog-intelligence`, label: "Catalog Intelligence", icon: Upload },
   ];
 
   const agentLinks = [
-    {
-      href: toolLocks["website-restructure"] ? "" : `${basePath}/website-restructure`,
-      label: "Website restructure",
-      icon: LayoutTemplate,
-      disabled: !!toolLocks["website-restructure"],
-      tool: "website-restructure" as const,
-    },
     {
       href: toolLocks["store-assistant"] ? "" : `${basePath}/store-assistant`,
       label: "Store assistant",
@@ -872,7 +859,7 @@ export default function WorkspaceLayout({
               <SubscriptionGate subscription={subscription} isActive={isActive} isLoading={subLoading} role={role}>
                 <div
                   className={
-                    isEnrichPage || isMarketResearchPage || isWebsiteRestructurePage || isGoogleAdsPage || isMetaAdsPage
+                    isEnrichPage || isMarketResearchPage || isGoogleAdsPage || isMetaAdsPage
                       ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden"
                       : "flex min-h-0 flex-1 flex-col"
                   }

@@ -52,6 +52,7 @@ export const LIVE_ERRORS: Record<string, string> = {
   unauthorized: "Your session ended. Sign in again.",
   not_configured: "Google Ads isn't set up on this server yet.",
   not_connected: "The Google connection was removed. Connect again.",
+  reconnect_required: "The person who connected Google left this team, so Google access is paused. An owner or admin must reconnect it on the Connections tab.",
   account_not_accessible: "That account isn't available to the Google sign-in you used.",
   google_request_failed: "Google didn't answer. Try again in a moment.",
   connect_failed: "Couldn't start Google sign-in. Try again.",
@@ -116,7 +117,7 @@ export const liveApi = {
 
   /** Read-only snapshot of the chosen Google Ads account for a date range. */
   account: (workspaceId: string, range: { start: string; end: string }, force: boolean) =>
-    call<{ data: AccountData; fetchedAt: string }>(
+    call<{ data: AccountData; fetchedAt: string; refreshLimited?: boolean }>(
       `/api/google-ads/data?${qs({ workspaceId, start: range.start, end: range.end, ...(force ? { refresh: "1" } : {}) })}`
     ),
 

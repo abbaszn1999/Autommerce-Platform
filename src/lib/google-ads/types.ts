@@ -630,7 +630,8 @@ export type Metrics = BaseMetrics & {
   roas: number;
 };
 
-export type DailyPoint = BaseMetrics & { date: string; searchImprShare?: number };
+/** Search impression share of the day, and the part of the loss Google puts on budget and on rank (live accounts). */
+export type DailyPoint = BaseMetrics & { date: string; searchImprShare?: number; searchBudgetLost?: number; searchRankLost?: number };
 
 export type MetricKey = keyof Metrics;
 

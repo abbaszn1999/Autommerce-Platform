@@ -314,11 +314,9 @@ describe("Source URLs rows (Google AI Mode)", () => {
       chargeCatalogRow({ runId: "run", sessionId: "s", workspaceId: "w", rowId: "row-1", rowIndex: 0, credits: 0.04, cost: 0.004, tokens: 0, settings: s });
     await charge(onlySourceUrls);
     await charge(mixed);
-    await charge({ ...onlySourceUrls, kind: "plp" });
     const models = vi.mocked(deductCreditsIdempotent).mock.calls.map(([args]) => (args.details as { model: string }).model);
     expect(models[0]).toBe("searchapi-google-ai-mode");
     expect(models[1]).toMatch(/^gpt-.+\+searchapi-google-ai-mode$/);
-    expect(models[2]).not.toContain("searchapi");
   });
 
   it("charges a row exactly its Google searches plus its OpenAI call, split per provider", async () => {

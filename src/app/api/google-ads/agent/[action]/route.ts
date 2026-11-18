@@ -11,17 +11,20 @@ import { loadLiveAccount } from "@/lib/google-ads/live-report.server";
 import { REPORTS, REPORT_DAYS, isReportName, type ReportDays } from "@/lib/google-ads/live-reports";
 import { runReport } from "@/lib/google-ads/live-reports.server";
 import { MerchantPlanError, merchantOverview, type MerchantOp } from "@/lib/google-ads/merchant-live";
-import { applyMerchantChange, loadMerchantSnapshot, previewMerchantChange } from "@/lib/google-ads/merchant.server";
+import { AGENT_PAGES, applyMerchantChange, listFeedSources, loadMerchantSnapshot, previewMerchantChange } from "@/lib/google-ads/merchant.server";
 import { rangeFor, todayIn } from "@/lib/google-ads/metrics";
-import { PROFILE_SOURCES, ProfileEditError, fieldLabel, formatValue, isProfileField, missingRequired, profileForAgent, userStatedValue, type ProfileEdit, type ProfileSource } from "@/lib/business-profile";
-import { editProfile, loadProfile } from "@/lib/business-profile.server";
+import { PROFILE_SOURCES, ProfileEditError, fieldLabel, formatValue, isProfileField, missingRequired, onboardingStageOf, profileForAgent, userStatedValue, type ProfileEdit, type ProfileSource } from "@/lib/business-profile";
+import { SECTIONS, appendToSection, docBytes, isProfileSection, sectionsFilled, setSection } from "@/lib/business-profile-doc";
+import { editDocument, editProfile, loadProfile, setOnboardingStage } from "@/lib/business-profile.server";
+import { BUSINESS_FILE_KIND_IDS, addFileToDocument, businessFileLink, isBusinessFileKind, safeFileName } from "@/lib/business-files";
+import { listBusinessFiles } from "@/lib/business-files.server";
 import { DocInputError, parsePlanInput, parseReportInput } from "@/lib/google-ads/live-docs";
 import { approvalBinding, type ApprovalTarget } from "@/lib/google-ads/approval-binding";
 import { KeywordInputError, regionNameIndex, rowsForAgent } from "@/lib/google-ads/keyword-planner";
 import { keywordForecast, keywordResearch } from "@/lib/google-ads/keyword-planner.server";
 import { docConnections, getDoc, savePlan, saveReport } from "@/lib/google-ads/live-docs.server";
 import { CompetitorInputError, analysisForAgent, parseTarget } from "@/lib/google-ads/competitor-ads";
-import { CompetitorCreditsError, CompetitorUnavailableError, quoteAnalysis, runAnalysis } from "@/lib/google-ads/competitor-ads.server";
+import { CompetitorCreditsError, CompetitorUnavailableError, listAnalyses, quoteAnalysis, runAnalysis } from "@/lib/google-ads/competitor-ads.server";
 import type { MutateOp } from "@/lib/google-ads/types";
 
 export const runtime = "nodejs";
@@ -39,6 +42,9 @@ const ACTIONS = new Set([
   "merchant_apply",
   "profile",
   "profile_update",
+  "profile_doc",
+  "profile_file",
+  "onboarding",
   "doc_plan",
   "doc_report",
   "doc_read",
@@ -85,7 +91,8 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (!member || !["owner", "admin"].includes(String(member.role))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
     if (!chat) return NextResponse.json({ error: "not_found" }, { status: 404 });
     if (action.startsWith("merchant")) return await merchantAction(action, body, { admin, workspaceId, chatId });
-    if (action === "profile" || action === "profile_update") return await profileAction(action, body, { admin, workspaceId, chatId }, caller.userId);
+    if (action === "profile" || action === "profile_update" || action === "profile_doc" || action === "profile_file") return await profileAction(action, body, { admin, workspaceId, chatId }, caller.userId);
+    if (action === "onboarding") return await onboardingAction(body, { admin, workspaceId, chatId }, caller.userId);
     if (action.startsWith("doc_")) return await docAction(action, body, { admin, workspaceId, chatId }, caller.userId);
     if (action === "competitor_ads") return await competitorAction(body, { admin, workspaceId, chatId }, caller.userId);
     const row = await loadConnection(admin, workspaceId, "ads");
@@ -217,6 +224,44 @@ async function approvedChange(admin: Ctx["admin"], body: Record<string, unknown>
 async function profileAction(action: string, body: Record<string, unknown>, { admin, workspaceId, chatId }: Ctx, userId: string) {
   const currency = (await loadConnection(admin, workspaceId, "ads"))?.account_currency ?? "";
   if (action === "profile") return NextResponse.json({ ok: true, profile: profileForAgent(await loadProfile(admin, workspaceId), currency) });
+  if (action === "profile_file") {
+    // A file the agent service has just saved for the workspace: record it in the document, where each kind belongs.
+    const name = safeFileName(typeof body.name === "string" ? body.name : "");
+    if (!isBusinessFileKind(body.kind)) return NextResponse.json({ ok: false, error: `kind must be one of: ${BUSINESS_FILE_KIND_IDS.join(", ")}.` });
+    const kind = body.kind;
+    if (!name || !(await listBusinessFiles(admin, workspaceId)).some((f) => f.name === name)) return NextResponse.json({ ok: false, error: "That file is not saved for the business yet." });
+    const description = typeof body.description === "string" ? body.description : undefined;
+    try {
+      await editDocument(admin, workspaceId, (doc) => addFileToDocument(doc, kind, workspaceId, name, description), { source: "chat", status: "confirmed" }, { userId, chatId });
+    } catch (err) {
+      if (err instanceof ProfileEditError) return NextResponse.json({ ok: false, error: err.message });
+      throw err;
+    }
+    return NextResponse.json({ ok: true, name, link: businessFileLink(workspaceId, name) });
+  }
+  if (action === "profile_doc") {
+    // The knowledge document: written straight in, as the owner's own would be, and kept in the version history.
+    const section = body.section;
+    const markdown = typeof body.markdown === "string" ? body.markdown : "";
+    if (!isProfileSection(section)) return NextResponse.json({ ok: false, error: `section must be one of: ${SECTIONS.map((s) => `${s.id} ("${s.label}")`).join(", ")}.` });
+    if (body.mode !== "replace" && body.mode !== "append") return NextResponse.json({ ok: false, error: 'mode must be "replace" or "append".' });
+    if (!markdown.trim() && body.mode === "append") return NextResponse.json({ ok: false, error: "Nothing to add." });
+    const source = PROFILE_SOURCES.includes(body.source as ProfileSource) && body.source !== "owner" && body.source !== "chat" ? (body.source as ProfileSource) : "website";
+    try {
+      const result = await editDocument(
+        admin,
+        workspaceId,
+        (doc) => (body.mode === "append" ? appendToSection(doc, section, markdown) : setSection(doc, section, markdown)),
+        { source: body.statedByUser === true ? "chat" : source, status: "confirmed" },
+        { userId, chatId }
+      );
+      const text = typeof result.profile.values.document === "string" ? result.profile.values.document : "";
+      return NextResponse.json({ ok: true, section: SECTIONS.find((s) => s.id === section)!.label, changed: result.changes.length > 0, documentBytes: docBytes(text) });
+    } catch (err) {
+      if (err instanceof ProfileEditError) return NextResponse.json({ ok: false, error: err.message });
+      throw err;
+    }
+  }
   try {
     const all = Array.isArray(body.edits) ? (body.edits as ProfileEdit[]) : [];
     if (!all.length || !all.every((e) => e && typeof e === "object")) return NextResponse.json({ ok: false, error: "Give at least one { field, value } edit." });
@@ -248,6 +293,32 @@ async function profileAction(action: string, body: Record<string, unknown>, { ad
     if (err instanceof ProfileEditError) return NextResponse.json({ ok: false, error: err.message });
     throw err;
   }
+}
+
+/**
+ * First-run onboarding: Vera moves it from the interview to the final fill, then
+ * unlocks the board. The page stays locked until the business profile and the
+ * competitor ads are both filled in, so "done" is refused until they are.
+ */
+async function onboardingAction(body: Record<string, unknown>, { admin, workspaceId }: Ctx, userId: string) {
+  const stage = onboardingStageOf((await loadProfile(admin, workspaceId)).values);
+  if (!stage || stage === "done") return NextResponse.json({ ok: true, stage: stage ?? "done", note: "No onboarding is in progress; nothing to change." });
+  if (body.stage === "filling") {
+    if (stage === "filling") return NextResponse.json({ ok: true, stage });
+    await setOnboardingStage(admin, workspaceId, "filling", userId);
+    return NextResponse.json({ ok: true, stage: "filling" });
+  }
+  if (body.stage !== "done") return NextResponse.json({ ok: false, error: 'stage must be "filling" or "done".' });
+  if (stage !== "filling") return NextResponse.json({ ok: false, error: 'Set the stage to "filling" first, do the final fill, then set "done".' });
+  const { values } = await loadProfile(admin, workspaceId);
+  const missing: string[] = [];
+  if (!sectionsFilled(typeof values.document === "string" ? values.document : "").overview) missing.push('the "Business overview" section of the document (edit_profile_document)');
+  if (values.competitors == null) missing.push("the competitors (field competitors)");
+  if (!(await listAnalyses(admin, workspaceId)).length && body.competitorsUnavailable !== true)
+    missing.push("the competitor ads lookups (run competitor_ads for each competitor; if the data source is unavailable, pass competitorsUnavailable: true)");
+  if (missing.length) return NextResponse.json({ ok: false, error: `The board cannot be unlocked yet. Still missing: ${missing.join("; ")}.` });
+  await setOnboardingStage(admin, workspaceId, "done", userId);
+  return NextResponse.json({ ok: true, stage: "done" });
 }
 
 /**
@@ -303,8 +374,10 @@ async function merchantAction(action: string, body: Record<string, unknown>, { a
   if (!row?.composio_connected_account_id || !row.account_id) return NextResponse.json({ error: "merchant_not_connected" }, { status: 409 });
 
   if (action === "merchant") {
-    const snapshot = await loadMerchantSnapshot(row, { force: body.refresh === true });
-    return NextResponse.json({ overview: merchantOverview(snapshot), fetchedAt: snapshot.fetchedAt });
+    const snapshot = await loadMerchantSnapshot(row, { force: body.refresh === true, maxPages: AGENT_PAGES });
+    // How the feeds are wired (primary vs supplemental sources) explains many product issues; it is optional.
+    const feeds = await listFeedSources(row).catch(() => undefined);
+    return NextResponse.json({ overview: { ...merchantOverview(snapshot, { issuesOnly: body.issuesOnly === true }), ...(feeds ? { dataSources: feeds } : {}) }, fetchedAt: snapshot.fetchedAt });
   }
 
   // Only updates come from the agent; restores are built by the server for undo.

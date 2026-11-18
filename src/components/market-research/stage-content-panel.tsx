@@ -56,7 +56,7 @@ import {
   unionSelectedIds,
 } from "@/lib/market-research/collection-sheet";
 import { buildCollectionsSitemapXml } from "@/lib/market-research/sitemap";
-import { buildWrStoreLinks } from "@/lib/website-restructure/provider-links";
+import { buildStoreLinks } from "@/lib/market-research/store-links";
 import {
   USD_PER_COLLECTION,
   type CollectionContent,
@@ -258,7 +258,7 @@ export function StageContentPanel({
   // "/collections/{handle}" and WooCommerce/WordPress's
   // "/product-category/{handle}" are never guessed here.
   const storeLinks = useMemo(
-    () => (storeUrl ? buildWrStoreLinks(storeProvider || "shopify", storeUrl) : null),
+    () => (storeUrl ? buildStoreLinks(storeProvider || "shopify", storeUrl) : null),
     [storeUrl, storeProvider]
   );
   const liveUrlFor = (row: ProposedCollection): string | null => {

@@ -16,11 +16,12 @@ import { oncePerToolCall } from "./call-once";
 import { guidanceText, withGuidance } from "./guidance";
 import { buildMessage, finishBuild, savePlan, startBuild } from "./plans";
 import { convertAttachment } from "./attachments";
+import { BUSINESS_FILES_BUCKET, businessFilesFolder } from "../../../src/lib/business-files";
 import { grantedScopes } from "./shopify/client";
 import { missingScopes } from "./shopify/guard";
 import { SCOPE_LABELS, STORE_AGENT_SCOPES } from "./shopify/scopes";
 import { plainMentions } from "../../../src/lib/store-agent/mentions";
-import { PROFILE_UNREADABLE, profileBrief } from "../../../src/lib/business-profile";
+import { PROFILE_UNREADABLE, boardLocked, onboardingStageOf, profileBrief } from "../../../src/lib/business-profile";
 import { loadProfile } from "../../../src/lib/business-profile.server";
 import { mentionContext, type MentionContext } from "./mentions";
 import { createDocumentTool } from "./document-tool";
@@ -30,12 +31,16 @@ import { ChatFiles } from "./files";
 import { veraRule } from "./instructions";
 import type { StoreAgentRegistry, StoreAgentRun } from "./run";
 import { createScriptTool } from "./script-tool";
+import { createSkillTools } from "./skills";
 import { loadShopifyConnection, type ShopifyConnection } from "./shopify/client";
 import { storePlatform } from "./store-connection";
 import { loadWooConnection, type WooConnection } from "./woocommerce/client";
-import { createChatTools, createStoreAgentTools } from "./tools";
+import { createChatTools, createStoreAgentTools, createStoreCmsTools } from "./tools";
 import { veraAdsRule } from "./google-ads/instructions";
 import { createGoogleAdsTools } from "./google-ads/tools";
+import { createStoreSalesTools } from "./google-ads/store-sales";
+import { createKeywordBatchTools } from "./google-ads/keyword-batch";
+import { createCreativeTools } from "./google-ads/creative-tools";
 import { veraMetaRule, type MetaAccountInfo } from "./meta-ads/instructions";
 import { createMetaAdsTools, loadMetaTools } from "./meta-ads/tools";
 
@@ -230,10 +235,11 @@ async function loadMetaAccount(db: SupabaseClient, workspaceId: string): Promise
 async function loadBusinessContext(db: SupabaseClient, workspaceId: string, currency: string, log: (m: string, e?: unknown) => void) {
   try {
     const profile = await loadProfile(db, workspaceId);
-    return { brief: profileBrief(profile, currency), filled: Object.keys(profile.values).length > 0 };
+    const stage = onboardingStageOf(profile.values);
+    return { brief: profileBrief(profile, currency), filled: Object.keys(profile.values).length > 0, onboarding: boardLocked(stage) ? (stage as "interview" | "filling") : null };
   } catch (error) {
     log("reading the business profile failed", error);
-    return { brief: PROFILE_UNREADABLE, filled: false };
+    return { brief: PROFILE_UNREADABLE, filled: false, onboarding: null };
   }
 }
 
@@ -353,6 +359,13 @@ export function isCorruptMemory(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const text = `${error.message} ${String((error as { cause?: unknown }).cause ?? "")}`;
   return /corrupt local agent checkpoint|missing root blob|checkpoint.*(missing|not found)/i.test(text);
+}
+
+/** The business files kept for the workspace (name and size), newest first. */
+async function listBusinessFileNames(db: SupabaseClient, workspaceId: string): Promise<{ name: string; size: number }[]> {
+  const { data, error } = await db.storage.from(BUSINESS_FILES_BUCKET).list(businessFilesFolder(workspaceId), { limit: 100, sortBy: { column: "updated_at", order: "desc" } });
+  if (error) throw new Error(error.message);
+  return (data ?? []).filter((f) => f.id && !f.name.startsWith(".")).map((f) => ({ name: f.name, size: Number((f.metadata as { size?: number } | null)?.size ?? 0) }));
 }
 
 /**
@@ -521,8 +534,6 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
   let estimateSoFar = () => extraUsd;
   /** Rough size of what tools returned: the model reads it on every later call. */
   let toolResultTokens = 0;
-  /** Paid work that is not part of this agent on Cursor's side (the chat title). */
-  let titleUsd = 0;
   /** The agent's billed total before this run; undefined while Cursor does not report it for this account. */
   let billedBefore: number | undefined;
   let lastSendReported = false;
@@ -542,29 +553,46 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     chatFiles = files;
     await files.prepare();
 
-    // Ads chats (the Google Ads and Meta Ads pages) never touch the store: no store connection, store rules or store tools.
+    // A Google Ads chat (Vera) works on the Google Ads account; when the workspace also has a store, she gets
+    // the store's tools too (read the catalogue, fix product data, always on an approval card).
+    // A Meta Ads chat works on the Meta ad account only: no store connection, store rules or store tools.
     const isMeta = req.domain === "meta_ads";
-    const isAds = req.domain === "google_ads" || isMeta;
+    const isGoogle = req.domain === "google_ads";
+    const isAds = isGoogle || isMeta;
     /** What the agent works on, for the notes it gets about earlier runs. */
-    const where = isMeta ? "Meta ad account" : isAds ? "Google Ads account" : "store";
+    const where = isMeta ? "Meta ad account" : isGoogle ? "Google Ads account" : "store";
     const adsLabel = isMeta ? "Meta Ads" : "Google Ads";
-    const platform = isAds ? ("shopify" as const) : await storePlatform(db, req.workspaceId);
+    const adsStore = isGoogle ? await storePlatform(db, req.workspaceId).catch(() => null) : null;
+    const platform = isAds ? (adsStore ?? ("shopify" as const)) : await storePlatform(db, req.workspaceId);
     let connection: ShopifyConnection | null = null;
     const getConnection = async () => (connection ??= await loadShopifyConnection(db, req.workspaceId));
     let wooConnection: WooConnection | null = null;
     const getWoo = async () => (wooConnection ??= await loadWooConnection(db, req.workspaceId));
-    const storeInfo = isAds
-      ? { name: "", domain: "" }
-      : platform === "woocommerce"
-        ? await getWoo().then((c) => ({ name: c.storeName, domain: c.domain }))
-        : await getConnection().then((c) => ({ name: c.storeName || c.shopDomain, domain: c.shopDomain }));
+    const loadStoreInfo = () =>
+      platform === "woocommerce"
+        ? getWoo().then((c) => ({ name: c.storeName, domain: c.domain }))
+        : getConnection().then((c) => ({ name: c.storeName || c.shopDomain, domain: c.shopDomain }));
+    // For Vera a store whose connection cannot be read counts as not connected: she plans from the feed and the site.
+    let storeForAds = adsStore !== null;
+    let storeInfo = { name: "", domain: "" };
+    if (!isAds || adsStore) {
+      try {
+        storeInfo = await loadStoreInfo();
+      } catch (error) {
+        if (!isAds) throw error;
+        log("reading the store connection failed", error);
+        storeForAds = false;
+      }
+    }
 
     // What this store's token may do: told to the agent up front, and kept for the sidebar's locks.
     let missingAccess: string[] = [];
-    if (!isAds && platform === "shopify") {
+    if ((!isAds || storeForAds) && platform === "shopify") {
       try {
         const granted = await grantedScopes(await getConnection());
         missingAccess = missingScopes(STORE_AGENT_SCOPES, granted).map((scope) => SCOPE_LABELS[scope]);
+        // Vera works without the store: without even the catalogue she gets no store tools and plans from the feed and the site.
+        if (isAds && missingScopes(["read_products"], granted).length) storeForAds = false;
         const { error } = await db
           .from("workspace_integrations")
           .update({ granted_scopes: [...granted], scopes_checked_at: new Date().toISOString() })
@@ -579,17 +607,24 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     await fs.mkdir(path.join(cwd, ".cursor", "rules"), { recursive: true });
     if (isAds && (!deps.secret || !deps.platformUrl)) throw new Error(`The ${adsLabel} agent is not configured (PLATFORM_URL).`);
     const metaPlatform = isMeta ? { url: deps.platformUrl!, secret: deps.secret! } : null;
-    const adsAccount = isAds && !isMeta ? await loadAdsAccount(db, req.workspaceId) : null;
+    const adsAccount = isGoogle ? await loadAdsAccount(db, req.workspaceId) : null;
     const metaAccount = isMeta ? await loadMetaAccount(db, req.workspaceId) : null;
     // Meta's tools come from Meta's server through the site; the rules list them and the tools use them.
     const metaTools = metaPlatform ? await loadMetaTools(metaPlatform, { run }) : [];
     const business = await loadBusinessContext(db, req.workspaceId, adsAccount?.currency ?? metaAccount?.currency ?? "", log);
-    await fs.writeFile(
-      path.join(cwd, ".cursor", "rules", "vera.mdc"),
-      metaAccount
+    // The rule file is written after the attachments are in the folder, so it can list them.
+    const writeRule = async (extra: { businessFiles?: { name: string; size: number }[]; chatFiles?: { path: string; size: number }[] } = {}) => {
+      const rule = metaAccount
         ? veraMetaRule({ account: metaAccount, tools: metaTools, profile: business.brief, mode: req.mode })
         : adsAccount
-        ? veraAdsRule({ ...adsAccount, profile: business.brief, mode: req.mode })
+        ? veraAdsRule({
+            ...adsAccount,
+            profile: business.brief,
+            onboarding: business.onboarding,
+            storeCms: storeForAds ? { platform, name: storeInfo.name, domain: storeInfo.domain, missingAccess } : null,
+            ...extra,
+            mode: req.mode,
+          })
         : veraRule({
             businessProfile: business.filled ? business.brief : "",
             platform,
@@ -600,8 +635,9 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
             autoRunBulk: req.autoRunBulk,
             notes: await loadStoreNotes(db, req.workspaceId),
             missingAccess,
-          })
-    );
+          });
+      await fs.writeFile(path.join(cwd, ".cursor", "rules", "vera.mdc"), rule);
+    };
 
     const images: NonNullable<SDKUserMessage["images"]> = [];
     const placed: string[] = [];
@@ -618,6 +654,18 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
       const conversion = await convertAttachment(cwd, relative);
       if (conversion) converted.push(conversion.note);
     }
+    // Vera (Google Ads) is given the standing lists of files in every run: the workspace's business files and this chat's folder.
+    await writeRule(
+      isGoogle
+        ? {
+            businessFiles: await listBusinessFileNames(db, req.workspaceId).catch((error) => {
+              log("listing the business files failed", error);
+              return [];
+            }),
+            chatFiles: files.listForAgent(),
+          }
+        : {}
+    );
     // Files and plans of this chat the user @-mentioned.
     const mentioned = await mentionContext(db, req.chatId, cwd, req.message).catch((error) => {
       log("reading mentioned files failed", error);
@@ -676,9 +724,15 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     const customTools = oncePerToolCall(withGuidance({
       ...(metaPlatform
         ? { ...createMetaAdsTools(toolContext, metaPlatform, metaTools), ...createChatTools(toolContext) }
-        : isAds
-        ? { ...createGoogleAdsTools(toolContext, { url: deps.platformUrl!, secret: deps.secret! }), ...createChatTools(toolContext) }
-        : createStoreAgentTools(toolContext)),
+        : isGoogle
+        ? {
+            ...createGoogleAdsTools(toolContext, { url: deps.platformUrl!, secret: deps.secret! }),
+            ...createKeywordBatchTools(toolContext, { url: deps.platformUrl!, secret: deps.secret! }),
+            ...createCreativeTools(toolContext),
+            ...createChatTools(toolContext),
+            ...(storeForAds ? { ...createStoreCmsTools(toolContext), ...createStoreSalesTools(toolContext) } : {}),
+          }
+        : { ...createStoreAgentTools(toolContext), ...createSkillTools(cwd, (relative) => written.add(relative)) }),
       ...createFileTools(cwd, (relative) => written.add(relative)),
       ...createScriptTool(cwd, (relative, inputs) => {
         written.add(relative);
@@ -958,7 +1012,22 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
         });
     };
     saveEstimate();
-    estimateTimer = setInterval(saveEstimate, ESTIMATE_SAVE_EVERY_MS);
+    // Kept apart so a database without these columns still saves the estimate above.
+    const saveBillingBasis = () => {
+      void db
+        .from("store_agent_runs")
+        .update({ billed_before_cents: billedBefore ?? null, extra_usd: extraUsd })
+        .eq("id", req.runId)
+        .eq("status", "running")
+        .then(({ error }) => {
+          if (error) log("saving the run's billing basis failed", error.message);
+        });
+    };
+    saveBillingBasis();
+    estimateTimer = setInterval(() => {
+      saveEstimate();
+      saveBillingBasis();
+    }, ESTIMATE_SAVE_EVERY_MS);
     estimateTimer.unref?.();
     deadline = setTimeout(() => {
       run.emit({ type: "error", message: "This run reached the one-hour limit and was stopped." });
@@ -1057,7 +1126,6 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     });
     if (titled) {
       extraUsd += titled.usd;
-      titleUsd = titled.usd;
       await db.from("store_agent_chats").update({ title: titled.title }).eq("id", req.chatId);
     }
   }
@@ -1070,7 +1138,8 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     const cost = settledCost({
       status,
       billedUsd: billedBefore !== undefined && billedAfter !== undefined ? (billedAfter - billedBefore) / 100 : undefined,
-      outsideAgentUsd: titleUsd,
+      // Cursor's figure covers the agent only: generated images and the chat title are billed to us separately.
+      outsideAgentUsd: extraUsd,
       reportedUsd: extraUsd + estimateUsd(req.model.id, req.model.params, usage, modelCalls),
       runningEstimateUsd: estimateSoFar(),
       lastSendReported,

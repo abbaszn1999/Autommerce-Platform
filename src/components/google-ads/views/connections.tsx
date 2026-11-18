@@ -9,6 +9,7 @@ import { MERCHANT_SCOPE, merchantLinkState } from "@/lib/google-ads/merchant";
 import { useGoogleAds } from "@/lib/google-ads/store";
 import { Card, Pill, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
+import { useWorkspaceContext } from "@/app/(dashboard)/w/[workspaceSlug]/workspace-context";
 
 const ADS_SCOPE = "https://www.googleapis.com/auth/adwords";
 
@@ -22,6 +23,8 @@ const BTN_PRIMARY = "inline-flex items-center gap-1.5 rounded-lg bg-[#400095] px
  */
 export function ConnectionsView() {
   const { data } = useGa();
+  const { hasStoreAgentStore, toolLocks } = useWorkspaceContext();
+  const storeLock = toolLocks["google-ads-agent"];
   const email = useGoogleAds((s) => s.googleEmail);
   const merchant = useGoogleAds((s) => s.merchant);
   const setView = useGoogleAds((s) => s.setView);
@@ -63,7 +66,7 @@ export function ConnectionsView() {
 
       {[adsBy && !adsBy.onTeam ? "Google Ads" : null, merchantBy && !merchantBy.onTeam ? "Merchant Center" : null].filter(Boolean).map((what) => (
         <p key={what} role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-          {what} still uses the Google sign-in of {what === "Google Ads" ? adsBy?.name : merchantBy?.name}, who is no longer on this team. Reconnect it with your own Google account so their access isn&apos;t used.
+          {what} still uses the Google sign-in of {what === "Google Ads" ? adsBy?.name : merchantBy?.name}, who is no longer on this team, so Google access is paused for this workspace. Reconnect it with your own Google account to resume.
         </p>
       ))}
 
@@ -179,6 +182,17 @@ export function ConnectionsView() {
             on={!!mc}
             title="Merchant Center tools"
             body={mc ? "Read product statuses and issues, propose feed fixes. Fixes wait for your approval." : "Locked until Merchant Center is connected. The agent can still see product status that Google Ads reports."}
+          />
+          <Access
+            on={hasStoreAgentStore && !storeLock}
+            title="Store tools"
+            body={
+              !hasStoreAgentStore
+                ? "Locked until your store is connected (Settings, Integrations). Then the agent plans from your real catalogue and sales, and can fix product data that breaks your feed."
+                : storeLock?.reason === "missing-scopes"
+                  ? `The store is connected but its access is missing ${storeLock.missing.join(", ")}. Add it in Settings so the agent can read your catalogue.`
+                  : "Read the catalogue and sales totals (no customer data), fix product data that breaks Merchant Center. Every change waits for your approval; the theme and orders stay out of reach."
+            }
           />
         </div>
       </Card>

@@ -26,12 +26,9 @@ type Row = Record<string, unknown>;
 const str = (value: unknown) => (typeof value === "string" ? value : "");
 const num = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : undefined);
 
-/** Same rule as the Catalog Intelligence list: a project opens on the step it is at. */
-export function catalogProjectPath(slug: string, id: string, status: string): string {
-  const base = `/w/${slug}/catalog-intelligence/${id}`;
-  if (status === "enriching" || status === "completed") return base;
-  if (status === "review") return `${base}/review`;
-  return `${base}/rules`;
+/** A catalog project always opens straight on its enrichment workspace. */
+export function catalogProjectPath(slug: string, id: string, _status?: string): string {
+  return `/w/${slug}/catalog-intelligence/${id}`;
 }
 
 type Source = {
@@ -90,19 +87,6 @@ const SOURCES: Record<Exclude<ProjectTool, "store">, Source> = {
       open: `/w/${slug}/image-classify/${str(row.id)}`,
     }),
   },
-  website: {
-    table: "wr_projects",
-    columns: "id, name, status, phase, updated_at",
-    toProject: (row, slug) => ({
-      id: str(row.id),
-      name: str(row.name),
-      status: str(row.status),
-      updatedAt: str(row.updated_at) || null,
-      phase: str(row.phase) || undefined,
-      open: `/w/${slug}/website-restructure`,
-      select: `website.project.${str(row.id)}`,
-    }),
-  },
 };
 
 async function listFrom(supabase: SupabaseClient, source: Source, workspaceId: string, slug: string, limit: number) {
@@ -153,7 +137,7 @@ export async function listAgentProjects(
   supabase: SupabaseClient,
   params: { workspaceId: string; workspaceSlug: string; tool?: ProjectTool }
 ): Promise<AgentProjectList> {
-  const tools: ProjectTool[] = params.tool ? [params.tool] : ["catalog", "gallery", "visualizer", "classify", "website", "store"];
+  const tools: ProjectTool[] = params.tool ? [params.tool] : ["catalog", "gallery", "visualizer", "classify", "store"];
   const limit = params.tool ? PROJECTS_PER_TOOL.one : PROJECTS_PER_TOOL.all;
   const entries = await Promise.all(
     tools.map(async (tool) => {

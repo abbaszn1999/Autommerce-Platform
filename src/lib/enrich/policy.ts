@@ -61,8 +61,7 @@ export function buildEnrichToolPolicy(
     }
   }
 
-  // PLP pages are fronted by curated banners, not web packshots.
-  const needsImages = kind === "plp" ? false : needs.images;
+  const needsImages = needs.images;
 
   return {
     needsImages,

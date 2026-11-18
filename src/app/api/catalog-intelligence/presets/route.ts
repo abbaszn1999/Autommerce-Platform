@@ -24,8 +24,8 @@ async function authorize(workspaceId: string, needEdit: boolean) {
   return { user };
 }
 
-function kindOf(value: unknown): "product" | "plp" {
-  return value === "plp" ? "plp" : "product";
+function kindOf(_value: unknown): "product" {
+  return "product";
 }
 
 function cleanName(value: unknown): string {

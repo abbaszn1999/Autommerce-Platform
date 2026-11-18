@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { publicOriginFromRequest } from "@/lib/app-origin";
+import { trustedOriginFromRequest } from "@/lib/app-origin";
 import {
   connectionConfigured,
   connectedByInfo,
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     if (kind === "ads" && !loginCustomerId) return NextResponse.json({ error: "invalid_customer_id" }, { status: 400 });
 
     const { user, admin } = await requireConnectionAccess(workspaceId, { admin: true });
-    const callback = new URL("/api/google-ads/connection/complete", publicOriginFromRequest(request));
+    const callback = new URL("/api/google-ads/connection/complete", trustedOriginFromRequest(request));
     callback.searchParams.set("workspaceId", workspaceId);
     callback.searchParams.set("kind", kind);
     const redirectUrl = await startConnection({ admin, workspaceId, kind, userId: user.id, loginCustomerId, callbackUrl: callback.toString() });

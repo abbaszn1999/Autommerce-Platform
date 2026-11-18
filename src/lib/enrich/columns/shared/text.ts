@@ -15,7 +15,7 @@ import {
  */
 export const genericTextSpec: ColumnSpec = {
   id: "__generic__",
-  kinds: ["product", "plp"],
+  kinds: ["product"],
   preserveRawAnswer: true,
   buildSchemaProperty(ctx) {
     const isList = ctx.col.type === "list" || ctx.col.type === "keywords";

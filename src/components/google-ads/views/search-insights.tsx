@@ -115,11 +115,30 @@ function shareStats(data: ReturnType<typeof useGa>["data"], campaign: { id: stri
   const points = (data.daily[campaign.id] ?? []).filter((p) => p.date >= range.start && p.date <= range.end);
   const withShare = points.filter((p) => p.searchImprShare !== undefined);
   if (!withShare.length) return null;
+  const budget = data.budgets.find((b) => b.id === campaign.budgetId)?.amount ?? 0;
+  const avgCost = points.reduce((s, p) => s + p.cost, 0) / Math.max(1, points.length);
+  if (data.exact) {
+    // Google's own figures. A day's eligible impressions are impressions ÷ share, so the period is weighted by them, as Google does.
+    let shown = 0;
+    let eligible = 0;
+    let budgetLost = 0;
+    let rankLost = 0;
+    for (const p of withShare) {
+      const share = p.searchImprShare ?? 0;
+      if (p.impressions <= 0 || share <= 0) continue;
+      const day = p.impressions / share;
+      shown += p.impressions;
+      eligible += day;
+      budgetLost += (p.searchBudgetLost ?? 0) * day;
+      rankLost += (p.searchRankLost ?? 0) * day;
+    }
+    if (eligible <= 0) return { share: 0, lost: 1, lostBudget: 0, lostRank: 0, days: withShare, budget, avgCost };
+    const share = shown / eligible;
+    return { share, lost: Math.max(0, 1 - share), lostBudget: budgetLost / eligible, lostRank: rankLost / eligible, days: withShare, budget, avgCost };
+  }
   const share = withShare.reduce((s, p) => s + (p.searchImprShare ?? 0), 0) / withShare.length;
   const lost = Math.max(0, 1 - share);
   // Demo split: the closer the campaign gets to its daily budget, the more of the loss is budget.
-  const budget = data.budgets.find((b) => b.id === campaign.budgetId)?.amount ?? 0;
-  const avgCost = points.reduce((s, p) => s + p.cost, 0) / Math.max(1, points.length);
   const util = budget ? Math.min(1, avgCost / budget) : 0;
   const lostBudget = lost * Math.max(0, util - 0.5) * 2;
   return { share, lost, lostBudget, lostRank: lost - lostBudget, days: withShare, budget, avgCost };

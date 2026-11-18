@@ -58,9 +58,8 @@ describe("needsSourceUrlsPlan", () => {
     expect(needsSourceUrlsPlan({ ...settings, enrichmentColumns: [{ ...sourceUrlsColumn, customInstruction: undefined }] })).toBe(true);
   });
 
-  it("does not plan for other columns, PLP sheets or a Lens run", () => {
+  it("does not plan for other columns or a Lens run", () => {
     expect(needsSourceUrlsPlan({ ...settings, enabledColumns: ["titleTag"] })).toBe(false);
-    expect(needsSourceUrlsPlan({ ...settings, kind: "plp" })).toBe(false);
     expect(needsSourceUrlsPlan({ ...settings, enabledColumns: ["lensFounds"] })).toBe(false);
   });
 

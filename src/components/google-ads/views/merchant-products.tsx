@@ -12,6 +12,7 @@ import { runAgentTurn } from "@/lib/google-ads/agent-runner";
 import { liveApi } from "@/lib/google-ads/live-api";
 import type { MerchantProduct, MerchantProductStatus, MerchantSnapshot } from "@/lib/google-ads/merchant-live";
 import { useGoogleAds } from "@/lib/google-ads/store";
+import { onAccountChanged } from "@/lib/store-agent/change-signal";
 import { GaTable, type GaColumn } from "../ga-table";
 import { Card, EmptyState, Pill, Segmented, ViewHeader } from "../ga-ui";
 import { RowsSkeleton } from "../ga-skeleton";
@@ -67,6 +68,8 @@ export function LiveProductsView() {
   useEffect(() => {
     void load(false);
   }, [load]);
+  // A fix Vera applied (or undid): the server dropped its copy, so this reads the products again.
+  useEffect(() => onAccountChanged(() => void load(false)), [load]);
 
   const products = useMemo(() => data?.products ?? [], [data]);
   const rows = useMemo(() => {
@@ -176,7 +179,7 @@ export function LiveProductsView() {
     <div className="space-y-4">
       <ViewHeader
         title="Products"
-        subtitle={`Merchant Center ${merchantId} · ${products.length} products${data?.truncated ? " (first ones only)" : ""}${data ? ` · updated ${new Date(data.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}`}
+        subtitle={`Merchant Center ${merchantId} · ${products.length} products${data?.truncated ? ` (first ${products.length.toLocaleString("en")} only; ask Vera for the rest)` : ""}${data ? ` · updated ${new Date(data.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}`}
         actions={
           <>
             <SearchBox value={query} onChange={setQuery} placeholder="Find a product or ID" />

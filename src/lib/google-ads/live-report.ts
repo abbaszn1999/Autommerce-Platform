@@ -51,6 +51,8 @@ export type LiveRows = {
   customerDaily?: GaqlRow[];
   conversions?: GaqlRow[];
   conversionCounts?: GaqlRow[];
+  /** Impression share per campaign and day (optional: the tab says so when it could not be read). */
+  campaignShare?: GaqlRow[];
   recommendations?: GaqlRow[];
   assetGroupMetrics?: GaqlRow[];
   placementMetrics?: GaqlRow[];
@@ -60,7 +62,7 @@ export type LiveRows = {
   StructureRows;
 
 /** Search terms come back as the top rows only; this many means there may be more. */
-export const SEARCH_TERMS_LIMIT = 500;
+export const SEARCH_TERMS_LIMIT = 10_000;
 
 /**
  * Lists a browser can hold for one account. A bigger account shows the items that
@@ -361,6 +363,18 @@ export function buildLiveAccount(account: GoogleAccount, rows: LiveRows, range: 
     if (!campaignIds.has(id) || !date) continue;
     (daily[id] ??= []).push({ date, ...metricsOf(r) });
   }
+  // Google's impression share for the chosen range, laid onto the days it belongs to.
+  const optional = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? undefined : Math.min(1, Math.max(0, Number(v))));
+  for (const r of rows.campaignShare ?? []) {
+    const point = daily[str(r.campaign?.id)]?.find((p) => p.date === str(r.segments?.date));
+    if (!point) continue;
+    const shareOf = optional(r.metrics?.searchImpressionShare);
+    const budgetLost = optional(r.metrics?.searchBudgetLostImpressionShare);
+    const rankLost = optional(r.metrics?.searchRankLostImpressionShare);
+    if (shareOf !== undefined) point.searchImprShare = shareOf;
+    if (budgetLost !== undefined) point.searchBudgetLost = budgetLost;
+    if (rankLost !== undefined) point.searchRankLost = rankLost;
+  }
   for (const points of Object.values(daily)) points.sort((a, b) => a.date.localeCompare(b.date));
 
   const adGroups = rows.adGroups.map(mapAdGroup).filter((g): g is AdGroup => !!g && campaignIds.has(g.campaignId));
@@ -394,13 +408,15 @@ export function buildLiveAccount(account: GoogleAccount, rows: LiveRows, range: 
 
   const searchTerms: SearchTerm[] = [];
   const termChildren: { id: string; parent: string; m: BaseMetrics }[] = [];
+  const seenTerms = new Set<string>();
   for (const r of rows.searchTerms) {
     const campaignId = str(r.campaign?.id);
     const adGroupId = r.adGroup?.id ? str(r.adGroup.id) : "";
     const text = str(r.searchTermView?.searchTerm);
     if (!text || !campaignIds.has(campaignId)) continue;
     const id = searchTermId(r);
-    if (searchTerms.some((t) => t.id === id)) continue;
+    if (seenTerms.has(id)) continue;
+    seenTerms.add(id);
     const viewStatus = str(r.searchTermView?.status);
     searchTerms.push({
       id,
@@ -429,7 +445,7 @@ export function buildLiveAccount(account: GoogleAccount, rows: LiveRows, range: 
   for (const c of all) exact[c.id] = c.m;
   // Same ids as the placements and product groups they belong to (see live-structure).
   for (const r of [...(rows.placementMetrics ?? []), ...(rows.topicMetrics ?? [])]) exact[`${str(r.adGroup?.id)}-${str(r.adGroupCriterion?.criterionId)}`] = metricsOf(r);
-  for (const r of rows.productGroupMetrics ?? []) exact[str(r.adGroupCriterion?.criterionId)] = metricsOf(r);
+  for (const r of rows.productGroupMetrics ?? []) exact[`${str(r.adGroup?.id)}~${str(r.adGroupCriterion?.criterionId)}`] = metricsOf(r);
   const weights = { ...weightsFrom(assetGroupChildren), ...weightsFrom(adGroupChildren), ...weightsFrom(keywordChildren), ...weightsFrom(adChildren) };
   // Big accounts: only the lists' top items go to the browser (totals come from Google and stay whole).
   const keptKeywords = keepTop(keywords, LIST_LIMITS.keywords, exact);

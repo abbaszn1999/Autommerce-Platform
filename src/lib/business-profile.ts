@@ -1,19 +1,25 @@
 // The workspace's business profile: what every agent knows about the business
-// (Vera on the Google Ads page, the Store Assistant). Pure: the field list, the
-// checks on every value, the rules for who may set what, and the short brief
-// the agents read. Used by the platform and by the agent service.
+// (Vera on the Google Ads page, the Store Assistant). It is a knowledge document
+// (Markdown, fixed headings: see business-profile-doc) plus the few values the
+// platform itself reads as data (name, website, countries, goal, margin, target
+// ROAS, budget cap, competitors, brand names, never-advertise). Pure: the field
+// list, the checks on every value, the rules for who may set what, and the short
+// brief the agents read. Used by the platform and by the agent service.
+
+import { DOC_MAX_BYTES, SECTIONS, docBytes, isDocumentEmpty, normalizeDocument, parseDocument, type ProfileSection } from "./business-profile-doc";
+
+export { SECTIONS, type ProfileSection };
 
 export type Competitor = { name: string; url: string };
-export type PaletteColor = { name: string; hex: string; role: string };
 
-type Kind = "text" | "longtext" | "url" | "list" | "choice" | "percent" | "ratio" | "money" | "competitors" | "palette";
-
-export type ProfileSection = "business" | "markets" | "economics" | "positioning" | "guardrails" | "brand";
+type Kind = "text" | "longtext" | "url" | "list" | "choice" | "percent" | "ratio" | "money" | "competitors" | "document";
 
 type FieldDef = {
   label: string;
   kind: Kind;
   section: ProfileSection;
+  /** Not an ordinary field: platform state or the document itself. Never listed, and only written through its own function. */
+  hidden?: boolean;
   /** Shown under the field on the page, and to the agent. */
   hint?: string;
   /** Money and goals: only the owner knows them, so an agent never suggests them. */
@@ -29,37 +35,51 @@ export const GOALS = [
 ] as const;
 
 export const PROFILE_FIELDS = {
-  businessName: { label: "Business name", kind: "text", section: "business", max: 120 },
-  website: { label: "Website", kind: "url", section: "business" },
-  languages: { label: "Languages", kind: "list", section: "business", hint: "The website's languages, and the languages ads are written in." },
-  brandTerms: { label: "Brand names", kind: "list", section: "business", hint: "Every way people search for the brand, in every language and spelling." },
-  markets: { label: "Countries you sell and ship to", kind: "list", section: "markets", hint: "Ads outside these countries waste money." },
-  categories: { label: "Product categories", kind: "list", section: "markets" },
-  focusProducts: { label: "Products to push", kind: "list", section: "markets", hint: "Best sellers or products you want to grow." },
+  businessName: { label: "Business name", kind: "text", section: "facts", max: 120 },
+  website: { label: "Website", kind: "url", section: "facts" },
+  languages: { label: "Languages", kind: "list", section: "facts", hint: "The website's languages, and the languages ads are written in." },
+  brandTerms: { label: "Brand names", kind: "list", section: "names", hint: "Every way people search for the brand, in every language and spelling." },
+  markets: { label: "Countries you sell and ship to", kind: "list", section: "markets", hint: "Ads outside these countries waste money. The first one is where competitor keywords are looked up." },
   goal: { label: "Main goal", kind: "choice", section: "economics", ownerOnly: true, choices: GOALS },
   margin: { label: "Gross margin", kind: "percent", section: "economics", ownerOnly: true, hint: "After product cost, before ads. Break-even ROAS = 1 ÷ margin." },
   targetRoas: { label: "Target ROAS", kind: "ratio", section: "economics", ownerOnly: true, hint: "Sales per 1 spent on ads, e.g. 4 = 400%." },
   monthlyBudgetCap: { label: "Monthly budget cap", kind: "money", section: "economics", ownerOnly: true, hint: "Vera warns before any change that would go above it." },
   averageOrderValue: { label: "Average order value", kind: "money", section: "economics" },
-  keySellingPoints: { label: "Key selling points", kind: "list", section: "positioning" },
-  competitiveAdvantages: { label: "Competitive advantages", kind: "list", section: "positioning" },
-  competitors: { label: "Competitors", kind: "competitors", section: "positioning" },
-  shippingReturns: { label: "Shipping and returns", kind: "longtext", section: "positioning", max: 1000, hint: "Delivery times, costs and the returns policy, as customers see them." },
-  peakSeasons: { label: "Peak seasons", kind: "list", section: "guardrails" },
+  competitors: { label: "Competitors", kind: "competitors", section: "competitors", hint: "Their paid keywords are on the Competitor ads tab." },
   neverAdvertise: { label: "Never advertise", kind: "list", section: "guardrails", hint: "Products, words or claims Vera must never use." },
-  brandIdentity: { label: "Identity", kind: "longtext", section: "brand", max: 1500 },
-  brandVoice: { label: "Brand voice", kind: "longtext", section: "brand", max: 1500 },
-  visualDirection: { label: "Visual direction", kind: "longtext", section: "brand", max: 1500 },
-  logoUrl: { label: "Logo", kind: "url", section: "brand" },
-  palette: { label: "Colour palette", kind: "palette", section: "brand" },
+  /** The knowledge document itself: written only through the document tools and the page's section editor. */
+  document: { label: "Business knowledge document", kind: "document", section: "facts", hidden: true },
+  onboardingStage: {
+    label: "Onboarding",
+    kind: "choice",
+    section: "facts",
+    hidden: true,
+    ownerOnly: true,
+    choices: [
+      { value: "interview", label: "Vera is asking questions" },
+      { value: "filling", label: "Vera is filling in the workspace" },
+      { value: "done", label: "Done" },
+    ],
+  },
 } as const satisfies Record<string, FieldDef>;
 
 export type ProfileField = keyof typeof PROFILE_FIELDS;
 export const FIELD_KEYS = Object.keys(PROFILE_FIELDS) as ProfileField[];
+/** The fields that make up the document (everything but platform state). */
+export const DOC_FIELDS: ProfileField[] = FIELD_KEYS.filter((f) => !(PROFILE_FIELDS[f] as FieldDef).hidden);
+
+/** First-run onboarding: Vera interviews the owner, then fills the workspace; the board is locked until it is done. */
+export const ONBOARDING_STAGES = ["interview", "filling", "done"] as const;
+export type OnboardingStage = (typeof ONBOARDING_STAGES)[number];
+export const isOnboardingStage = (v: unknown): v is OnboardingStage => ONBOARDING_STAGES.includes(v as OnboardingStage);
+/** The stage saved in the profile; null for workspaces that never started it. */
+export const onboardingStageOf = (values: ProfileValues): OnboardingStage | null => (isOnboardingStage(values.onboardingStage) ? values.onboardingStage : null);
+/** The board stays locked while Vera interviews the owner or fills the workspace. */
+export const boardLocked = (stage: OnboardingStage | null | undefined) => stage === "interview" || stage === "filling";
 export const isProfileField = (v: unknown): v is ProfileField => typeof v === "string" && Object.prototype.hasOwnProperty.call(PROFILE_FIELDS, v);
 const def = (f: ProfileField): FieldDef => PROFILE_FIELDS[f];
 
-export type ProfileValue = string | number | string[] | Competitor[] | PaletteColor[];
+export type ProfileValue = string | number | string[] | Competitor[];
 export type ProfileValues = Partial<Record<ProfileField, ProfileValue>>;
 
 /** Where a value came from. */
@@ -70,22 +90,24 @@ export type ProfileMeta = Partial<Record<ProfileField, FieldMeta>>;
 
 export type BusinessProfileData = { values: ProfileValues; meta: ProfileMeta; updatedAt: string | null };
 
-export const SECTIONS: { id: ProfileSection; label: string; hint: string }[] = [
-  { id: "business", label: "Business", hint: "Who you are, and how people search for you." },
-  { id: "markets", label: "Markets & catalog", hint: "Where you sell and what you sell." },
-  { id: "economics", label: "Economics", hint: "Vera judges every plan and change against these numbers." },
-  { id: "positioning", label: "Positioning", hint: "Why customers choose you, and who you compete with." },
-  { id: "guardrails", label: "Guardrails", hint: "Timing to plan around, and what must never be advertised." },
-  { id: "brand", label: "Brand guidelines", hint: "Vera follows these when she writes ads and picks images." },
-];
-
 /**
  * What an agent must know before it advises on money: who the business is,
  * where it sells, the goal, the budget, and either the margin or a target ROAS.
  */
 export const REQUIRED: readonly (ProfileField | readonly ProfileField[])[] = ["businessName", "website", "markets", "goal", ["margin", "targetRoas"], "monthlyBudgetCap"];
 
-export class ProfileEditError extends Error {}
+/** `code` is stable: "conflict" (someone else saved at the same moment) and "too_large" (the whole profile is over its size limit). */
+export class ProfileEditError extends Error {
+  constructor(
+    message: string,
+    readonly code?: "conflict" | "too_large"
+  ) {
+    super(message);
+  }
+}
+
+/** The database refuses a profile of 100 KB or more; refuse earlier, with a message that says what to do. */
+export const PROFILE_MAX_BYTES = 95_000;
 
 const LIST_MAX = 30;
 const ITEM_MAX = 200;
@@ -186,17 +208,12 @@ export function normalizeValue(field: ProfileField, raw: unknown): ProfileValue 
       if (out.length > 15) fail("can hold at most 15 competitors");
       return out.length ? out : null;
     }
-    case "palette": {
-      if (!Array.isArray(raw)) return fail("must be a list of { name, hex, role }");
-      const out: PaletteColor[] = [];
-      for (const c of raw) {
-        const o = (c ?? {}) as Record<string, unknown>;
-        const hex = typeof o.hex === "string" ? o.hex.trim().toUpperCase() : "";
-        if (!/^#[0-9A-F]{6}$/.test(hex)) fail("colours need a hex code like #400095");
-        out.push({ name: typeof o.name === "string" ? clean(o.name).slice(0, 60) : hex, hex, role: typeof o.role === "string" ? clean(o.role).slice(0, 60) : "" });
-      }
-      if (out.length > 10) fail("can hold at most 10 colours");
-      return out.length ? out : null;
+    case "document": {
+      if (typeof raw !== "string") return fail("must be text");
+      const doc = normalizeDocument(raw);
+      if (isDocumentEmpty(doc)) return null;
+      if (docBytes(doc) > DOC_MAX_BYTES) fail(`is too long (the limit is about ${Math.round(DOC_MAX_BYTES / 1000)} KB, roughly ${Math.round(DOC_MAX_BYTES / 6000) * 1000} words)`);
+      return doc;
     }
   }
 }
@@ -243,7 +260,7 @@ export type ProfileChange = { field: ProfileField; before: ProfileValue | null; 
  */
 export type Editor = { source: ProfileSource; status: "confirmed" | "suggested" };
 
-export function planProfileEdits(current: BusinessProfileData, edits: ProfileEdit[], editor: Editor, now = new Date().toISOString()) {
+export function planProfileEdits(current: BusinessProfileData, edits: ProfileEdit[], editor: Editor, now = new Date().toISOString(), opts: { allowHidden?: boolean } = {}) {
   if (!edits.length) throw new ProfileEditError("Nothing to change.");
   if (edits.length > FIELD_KEYS.length) throw new ProfileEditError("Too many edits at once.");
   const values: ProfileValues = { ...current.values };
@@ -252,7 +269,7 @@ export function planProfileEdits(current: BusinessProfileData, edits: ProfileEdi
   const skipped: { field: ProfileField; reason: string }[] = [];
 
   for (const edit of edits) {
-    if (!isProfileField(edit.field)) throw new ProfileEditError(`Unknown field "${String(edit.field)}". Fields: ${FIELD_KEYS.join(", ")}.`);
+    if (!isProfileField(edit.field) || (def(edit.field).hidden && !opts.allowHidden)) throw new ProfileEditError(`Unknown field "${String(edit.field)}". Fields: ${DOC_FIELDS.join(", ")}.`);
     const { field } = edit;
     if (changes.some((c) => c.field === field)) throw new ProfileEditError(`${def(field).label} is edited twice.`);
     const after = normalizeValue(field, edit.value);
@@ -298,13 +315,14 @@ export function missingRequired(values: ProfileValues): string[] {
 }
 
 export function completeness(values: ProfileValues) {
+  const filledSections = parseDocument(typeof values.document === "string" ? values.document : "");
+  // A section counts its data fields and, as one more item, whether its document text has been written.
   const sections = SECTIONS.map((s) => {
-    const fields = FIELD_KEYS.filter((f) => def(f).section === s.id);
-    return { ...s, filled: fields.filter((f) => values[f] != null).length, total: fields.length };
+    const fields = DOC_FIELDS.filter((f) => def(f).section === s.id);
+    return { ...s, filled: fields.filter((f) => values[f] != null).length + (filledSections[s.id] ? 1 : 0), total: fields.length + 1 };
   });
-  return { sections, filled: sections.reduce((n, s) => n + s.filled, 0), total: FIELD_KEYS.length, missing: missingRequired(values) };
+  return { sections, filled: sections.reduce((n, s) => n + s.filled, 0), total: sections.reduce((n, s) => n + s.total, 0), missing: missingRequired(values) };
 }
-
 /** A value as one line of text, for the agents and the change history. */
 export function formatValue(field: ProfileField, value: ProfileValue | null | undefined, currency = ""): string {
   if (value == null) return "(empty)";
@@ -322,27 +340,51 @@ export function formatValue(field: ProfileField, value: ProfileValue | null | un
       return (value as string[]).join("; ");
     case "competitors":
       return (value as Competitor[]).map((c) => (c.url ? `${c.name} (${c.url})` : c.name)).join("; ");
-    case "palette":
-      return (value as PaletteColor[]).map((c) => `${c.name} ${c.hex}${c.role ? ` (${c.role})` : ""}`).join("; ");
     default:
       return String(value);
   }
 }
 
-/** Longest value given whole in the brief: every text field's own limit fits; only very long lists are shortened. */
+/** Longest value given whole in the brief: only very long lists are shortened. */
 const BRIEF_VALUE_MAX = 1500;
+/** How much of the knowledge document the brief carries; the rest is read with business_profile. */
+const BRIEF_DOC_MAX = 60_000;
 
 /** What the agents read when the profile couldn't be loaded for a chat: never "empty". */
 export const PROFILE_UNREADABLE =
   "- (The business profile couldn't be read for this chat. It is NOT empty: read it with `business_profile` before relying on it, and don't ask the user for anything it may already hold.)";
 
 /**
- * The profile as the agents read it at the start of every chat: every filled
- * field (very long lists shortened), what is only suggested, and what is missing.
+ * The document's written sections as one text (empty ones left out). Sections
+ * are given whole, never cut in the middle; when the document is longer than
+ * `max` characters, the ones that no longer fit are listed in an index (heading
+ * and size) so the agent knows they exist and reads them with `business_profile`.
+ */
+export function documentBrief(values: ProfileValues, max = BRIEF_DOC_MAX): string {
+  const sections = parseDocument(typeof values.document === "string" ? values.document : "");
+  const parts: string[] = [];
+  const left: string[] = [];
+  let used = 0;
+  for (const s of SECTIONS) {
+    const body = sections[s.id];
+    if (!body) continue;
+    const chunk = `### ${s.label}\n${body}`;
+    if (used + chunk.length <= max) {
+      parts.push(chunk);
+      used += chunk.length + 2;
+    } else left.push(`- ${s.label} (${body.length.toLocaleString("en-US")} characters)`);
+  }
+  if (left.length) parts.push(`### Not shown here (too long): read them with \`business_profile\` before relying on them\n${left.join("\n")}`);
+  return parts.join("\n\n");
+}
+
+/**
+ * The profile as the agents read it at the start of every chat: the data
+ * fields, then the knowledge document (its written sections), and what is missing.
  */
 export function profileBrief(profile: BusinessProfileData, currency = ""): string {
   const lines: string[] = [];
-  for (const f of FIELD_KEYS) {
+  for (const f of DOC_FIELDS) {
     const v = profile.values[f];
     if (v == null) continue;
     let text = formatValue(f, v, currency);
@@ -352,16 +394,19 @@ export function profileBrief(profile: BusinessProfileData, currency = ""): strin
   }
   const margin = profile.values.margin;
   if (typeof margin === "number") lines.push(`- Break-even ROAS (from the margin): ${(1 / margin).toFixed(2)}×`);
+  const doc = documentBrief(profile.values);
+  if (!lines.length && !doc) lines.push("- (empty: nothing filled in yet)");
+  if (doc) lines.push(`\nBusiness knowledge document (written by the owner and Vera):\n${doc}`);
   const missing = missingRequired(profile.values);
-  if (!lines.length) lines.push("- (empty: nothing filled in yet)");
   if (missing.length) lines.push(`\nStill missing (required): ${missing.join(", ")}.`);
   return lines.join("\n");
 }
-
-/** Every field with its value, source and status, for the agent's read tool. */
+/** Every data field with its value, source and status, and the document by section, for the agent's read tool. */
 export function profileForAgent(profile: BusinessProfileData, currency = "") {
+  const text = typeof profile.values.document === "string" ? profile.values.document : "";
+  const parsed = parseDocument(text);
   return {
-    fields: FIELD_KEYS.map((f) => ({
+    fields: DOC_FIELDS.map((f) => ({
       field: f,
       label: def(f).label,
       section: def(f).section,
@@ -372,10 +417,14 @@ export function profileForAgent(profile: BusinessProfileData, currency = "") {
       source: profile.meta[f]?.source ?? null,
       ...(def(f).hint ? { hint: def(f).hint } : {}),
     })),
+    document: {
+      bytes: docBytes(text),
+      maxBytes: DOC_MAX_BYTES,
+      sections: SECTIONS.map((s) => ({ id: s.id, heading: s.label, guide: s.guide, text: parsed[s.id] })),
+    },
     missingRequired: missingRequired(profile.values),
     updatedAt: profile.updatedAt,
   };
 }
-
 export const fieldLabel = (f: ProfileField) => def(f).label;
 export const fieldDef = (f: ProfileField): FieldDef => def(f);

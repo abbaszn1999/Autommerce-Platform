@@ -108,10 +108,10 @@ export function GaTopbar() {
           onClick={() => void refreshData({ force: true })}
           disabled={acc.sync.status === "loading"}
           className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 px-2.5 text-xs hover:bg-muted disabled:opacity-60"
-          title={`${getDataSource().label}. Reload the latest numbers.`}
+          title={acc.sync.note ?? `${getDataSource().label}. Reload the latest numbers.`}
         >
           <RefreshCw className={cn("h-3.5 w-3.5 text-muted-foreground", acc.sync.status === "loading" && "animate-spin")} />
-          <span className="hidden text-muted-foreground xl:inline">{acc.sync.status === "loading" ? "Refreshing" : `Updated ${new Date(acc.sync.refreshedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}</span>
+          <span className="hidden text-muted-foreground xl:inline">{acc.sync.status === "loading" ? "Refreshing" : acc.sync.note ? "Already up to date" : `Updated ${new Date(acc.sync.refreshedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}</span>
         </button>
 
         <GaDateRange />

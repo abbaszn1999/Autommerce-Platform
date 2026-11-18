@@ -17,7 +17,6 @@ import {
   SERVER_FILTER_KEYS,
   CLIENT_PREDICATE_KINDS,
 } from "./schema-catalog";
-import { fetchShopifyNavigationMenus } from "./navigation";
 
 export const ShopifyProvider: SyncProvider = {
   id: "shopify",
@@ -94,11 +93,6 @@ export const ShopifyProvider: SyncProvider = {
         since,
         maxPages,
       });
-    },
-  },
-  navigation: {
-    async list({ integration }) {
-      return fetchShopifyNavigationMenus({ integration });
     },
   },
   configFields: [

@@ -1,7 +1,8 @@
+import { skillsSection } from "./skills";
 import type { StorePlatform } from "./store-connection";
 
 /** The parts of the instructions that differ by platform. */
-type PlatformText = {
+export type PlatformText = {
   name: string;
   reach: string;
   tools: string;
@@ -60,6 +61,9 @@ How WooCommerce works:
   resultsDir: "woo-results",
   attachImage: "by their URL in the product's images (keep the current ones as { id } and append { src, alt })",
 };
+
+/** The platform-specific reach and tool text (also given to Vera on the Google Ads page when a store is connected). */
+export const platformText = (platform: StorePlatform): PlatformText => (platform === "woocommerce" ? WOOCOMMERCE : SHOPIFY);
 
 /**
  * Vera's standing instructions. Written into each chat folder as an
@@ -132,6 +136,7 @@ There is no shell and no access outside your folder; do not try to work around t
 6. Finish with a short, honest summary: what changed (counts), what failed and why, what is left. Do not repeat long tables in the chat when they are in a file on the right.
 7. A message the user sends while you work adds to the request; it does not replace it unless it says so ("stop", "instead", "forget that"). Do both, and answer both in your final reply.
 
+${skillsSection()}
 ## Writing in the chat
 - The chat shows Markdown only. Never use LaTeX or math markup (\`\\times\`, \`\\frac\`, \`\\mathbf\`, \`$…$\`, \`\\(…\\)\`): write calculations with plain characters, like 549 × 0.8 = 439.20.
 - When a diagram helps (a plan's flow, a process), use a \`\`\`mermaid block with a simple \`flowchart\`. Keep node ids in English and put labels in quotes: \`read["قراءة المنتجات"] --> price["تحديد السعر"]\`. Labels say what happens, in the user's language: never tool names, file paths or formats (\`run_script\`, \`write_file\`, \`jsonl\`).

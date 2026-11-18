@@ -682,25 +682,17 @@ export async function updateImportSession(id: string, updates: Partial<ImportSes
   if (error) throw error;
 }
 
-export async function deleteImportSession(id: string) {
-  const supabase = getClient();
-
-  // 1. Get session to find workspace_id for Storage cleanup
-  const { data: session } = await supabase
-    .from("catalog_sessions")
-    .select("workspace_id")
-    .eq("id", id)
-    .single();
-
-  if (session?.workspace_id) {
-    // Delete project JSON from Storage
-    const projectPath = `${session.workspace_id}/projects/${id}.json`;
-    await supabase.storage.from("workspace-files").remove([projectPath]).catch(() => {});
-  }
-
-  // 2. Delete session from DB
-  const { error } = await supabase.from("catalog_sessions").delete().eq("id", id);
-  if (error) throw error;
+/**
+ * Permanently deletes a project: records, run history, share links, the saved
+ * project file and its pictures. Runs on the server so every place is cleaned.
+ */
+export async function deleteImportSession(workspaceId: string, id: string) {
+  const res = await fetch(
+    `/api/catalog-intelligence/sessions/${encodeURIComponent(id)}?workspaceId=${encodeURIComponent(workspaceId)}`,
+    { method: "DELETE" }
+  );
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(body.error || "Failed to delete project");
 }
 
 // ─── Import Rows ─────────────────────────────────────────

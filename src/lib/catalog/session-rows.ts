@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProjectJson, ProjectRow } from "@/lib/storage-helpers";
-import type { SessionKind } from "@/types";
 import { loadAllOrderedRows } from "@/lib/catalog/row-store-page";
 
 const UPSERT_CHUNK = 250;
@@ -13,20 +12,8 @@ type SessionRowRecord = {
   error_message: string | null;
   original_data: Record<string, string>;
   enriched_data: Record<string, unknown>;
-  match_type: ProjectRow["matchType"] | null;
   updated_at: string;
 };
-
-export function shouldRecomputeMatchTypes(
-  project: Pick<ProjectJson, "rows" | "matchingSkipped">,
-  kind: SessionKind
-): boolean {
-  if (kind === "plp") return false;
-  if (project.matchingSkipped) return false;
-  return !project.rows.every(
-    (row) => row.matchType === "existing" || row.matchType === "new"
-  );
-}
 
 export function projectRowToRecord(
   sessionId: string,
@@ -40,7 +27,6 @@ export function projectRowToRecord(
     error_message: row.errorMessage ?? null,
     original_data: row.originalData ?? {},
     enriched_data: row.enrichedData ?? {},
-    match_type: row.matchType ?? null,
     updated_at: new Date().toISOString(),
   };
 }
@@ -53,7 +39,6 @@ export function recordToProjectRow(row: SessionRowRecord): ProjectRow {
     errorMessage: row.error_message ?? undefined,
     originalData: row.original_data ?? {},
     enrichedData: row.enriched_data ?? {},
-    matchType: (row.match_type as ProjectRow["matchType"]) ?? null,
   };
 }
 
@@ -78,7 +63,7 @@ export async function loadCatalogSessionRows(
       const { data, error } = await admin
         .from("catalog_session_rows")
         .select(
-          "session_id, row_id, row_index, status, error_message, original_data, enriched_data, match_type, updated_at"
+          "session_id, row_id, row_index, status, error_message, original_data, enriched_data, updated_at"
         )
         .eq("session_id", sessionId)
         .order("row_index", { ascending: true })
@@ -156,14 +141,13 @@ export async function patchCatalogSessionRows(
     errorMessage?: string | null;
     enrichedData?: Record<string, unknown>;
     originalData?: Record<string, string>;
-    matchType?: ProjectRow["matchType"];
   }>
 ): Promise<void> {
   for (const patch of patches) {
     const { data: current, error: readError } = await admin
       .from("catalog_session_rows")
       .select(
-        "row_id, row_index, status, error_message, original_data, enriched_data, match_type"
+        "row_id, row_index, status, error_message, original_data, enriched_data"
       )
       .eq("session_id", sessionId)
       .eq("row_id", patch.id)
@@ -186,8 +170,6 @@ export async function patchCatalogSessionRows(
           "errorMessage" in patch ? (patch.errorMessage ?? null) : current.error_message,
         original_data: original,
         enriched_data: enriched,
-        match_type:
-          patch.matchType !== undefined ? patch.matchType : current.match_type,
         updated_at: new Date().toISOString(),
       })
       .eq("session_id", sessionId)

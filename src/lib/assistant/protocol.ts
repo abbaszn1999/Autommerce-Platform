@@ -29,10 +29,10 @@ export const agentTargetSchema = z
   .regex(/^[a-z0-9][a-z0-9._:-]*$/i, "Invalid target id");
 
 /** Pages that register state handlers with the driver (see driver/page-handlers). */
-export const pageScopeSchema = z.enum(["gallery", "visualizer", "classify", "website", "store"]);
+export const pageScopeSchema = z.enum(["gallery", "visualizer", "classify", "store"]);
 
 /** Tools whose projects `list_projects` can read. */
-export const projectToolSchema = z.enum(["catalog", "gallery", "visualizer", "classify", "website", "store"]);
+export const projectToolSchema = z.enum(["catalog", "gallery", "visualizer", "classify", "store"]);
 export type ProjectTool = z.infer<typeof projectToolSchema>;
 
 export const browserActionSchema = z.discriminatedUnion("kind", [

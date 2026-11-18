@@ -37,14 +37,14 @@ export async function GET(request: NextRequest) {
 /**
  * mode "quote": what a lookup would cost now (nothing when this month's shared
  * copy has it). mode "run": run or reopen it, charging our cost for what had
- * to be bought. Members who can work in the workspace (not viewers).
+ * to be bought. Owners and admins only (it spends workspace credits).
  */
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     const workspaceId = typeof body?.workspaceId === "string" ? body.workspaceId : "";
-    const { admin, user, role } = await requireConnectionAccess(workspaceId);
-    if (role === "viewer") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    // Lookups spend the workspace's credits, so only owners and admins can run them.
+    const { admin, user } = await requireConnectionAccess(workspaceId, { admin: true });
     try {
       const target = parseTarget({ domain: body?.domain, country: body?.country }, (nameToCode ??= regionNameIndex()));
       const pages = Number(body?.pages) || 1;

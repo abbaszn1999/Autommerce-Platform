@@ -139,7 +139,9 @@ function weightOf(data: AccountData, id: string) {
 /** Real totals from Google when the account was loaded for exactly this range. */
 function exactFor(data: AccountData, id: string, range: DateRange): BaseMetrics | null {
   const e = data.exact;
-  if (!e || e.start !== range.start || e.end !== range.end) return null;
+  if (!e) return null;
+  // A real account never shows estimates: while a new range loads, per-item numbers are empty rather than guessed.
+  if (e.start !== range.start || e.end !== range.end) return EMPTY_BASE;
   return e.byId[id] ?? EMPTY_BASE;
 }
 

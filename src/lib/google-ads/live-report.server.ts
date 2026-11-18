@@ -39,6 +39,9 @@ const structureCache = new Map<string, { at: number; rows: Partial<LiveRows>; we
 /** Without these the page has nothing true to show, so a failure stops the load. */
 const REQUIRED = new Set<string>(["customer", "campaigns", "campaignDaily"]);
 
+/** Queries the totals depend on: tried once more before the page says they are missing. */
+const RETRIED = new Set<string>(["customerDaily", "campaignDaily", "keywordMetrics", "adGroupMetrics"]);
+
 /** Google refuses bursts: at most this many queries of one account at a time. */
 const PARALLEL = 6;
 
@@ -58,7 +61,15 @@ async function inBatches<T, R>(items: T[], run: (item: T) => Promise<R>): Promis
 /** Runs the queries together. An optional one that fails is listed and comes back empty. */
 async function runQueries(row: ConnectionRow, customerId: string, queries: Record<string, string>) {
   const names = Object.keys(queries);
-  const settled = await inBatches(names, (n) => searchGaqlAll<GaqlRow>(row, customerId, queries[n]));
+  const settled = await inBatches(names, async (n) => {
+    try {
+      return await searchGaqlAll<GaqlRow>(row, customerId, queries[n]);
+    } catch (error) {
+      if (!RETRIED.has(n)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      return searchGaqlAll<GaqlRow>(row, customerId, queries[n]);
+    }
+  });
   const rows: Record<string, GaqlRow[]> = {};
   const failed: string[] = [];
   const tooLong: string[] = [];
@@ -103,7 +114,6 @@ async function loadStructure(row: ConnectionRow, customerId: string, force?: boo
     schedule: LIVE_QUERIES.schedule(),
     deviceBids: LIVE_QUERIES.deviceBids(),
     conversions: LIVE_QUERIES.conversions(),
-    conversionCounts: LIVE_QUERIES.conversionCounts(),
     recommendations: LIVE_QUERIES.recommendations(),
     ...Object.fromEntries(Object.entries(STRUCTURE_QUERIES).map(([name, query]) => [name, query()])),
   });
@@ -133,6 +143,8 @@ export async function loadLiveAccount(row: ConnectionRow, range: LiveRange, opts
     runQueries(row, customerId, {
       campaignDaily: LIVE_QUERIES.campaignDaily(dailyStart, range.end),
       customerDaily: LIVE_QUERIES.customerDaily(dailyStart, range.end),
+      campaignShare: LIVE_QUERIES.campaignShare(range.start, range.end),
+      conversionCounts: LIVE_QUERIES.conversionCounts(range.start, range.end),
       adGroupMetrics: LIVE_QUERIES.adGroupMetrics(range.start, range.end),
       keywordMetrics: LIVE_QUERIES.keywordMetrics(range.start, range.end),
       adMetrics: LIVE_QUERIES.adMetrics(range.start, range.end),
@@ -168,7 +180,7 @@ export async function loadLiveAccount(row: ConnectionRow, range: LiveRange, opts
 
   const at = Date.now();
   // A partial answer is shown once, then asked for again.
-  if (!failed.length) fit(cache, key, { at, data, weight: data.keywords.length + data.ads.length + data.adGroups.length + Object.keys(data.exact?.byId ?? {}).length + Object.values(data.daily).reduce((n, d) => n + d.length, 0) }, structureCache);
+  if (!failed.length) fit(cache, key, { at, data, weight: data.keywords.length + data.ads.length + data.adGroups.length + data.searchTerms.length + Object.keys(data.exact?.byId ?? {}).length + Object.values(data.daily).reduce((n, d) => n + d.length, 0) }, structureCache);
   return { data, fetchedAt: new Date(at).toISOString() };
 }
 

@@ -1,13 +1,15 @@
 "use client";
 
-// Competitor ads: the search keywords a competitor's site pays for in a
+// Competitor ads: the search keywords each competitor's site pays for in a
 // country, with the ad it shows on each, its landing page and what a click
-// costs. SE Ranking's estimates, bought at cost: the page says the price before
+// costs. Vera fills this page (from the competitors in the business profile and
+// the ones she finds) and adds new ones when asked in the chat; there is no form
+// here. SE Ranking's estimates, bought at cost: the page says the price before
 // anything is charged, and a lookup this month's copy already has is free.
 // Picked keywords go to Vera, who turns them into a plan.
 
-import { useEffect, useMemo, useState } from "react";
-import { ClipboardList, ExternalLink, History, Loader2, Search, Swords } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Bot, ClipboardList, ExternalLink, Search, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWorkspaceContext } from "@/app/(dashboard)/w/[workspaceSlug]/workspace-context";
 import { runAgentTurn } from "@/lib/google-ads/agent-runner";
@@ -15,21 +17,23 @@ import type { CompetitorAnalysis, CompetitorKeyword } from "@/lib/google-ads/com
 import { money, num } from "@/lib/google-ads/metrics";
 import { useGoogleAds } from "@/lib/google-ads/store";
 import { GaTable, type GaColumn } from "../ga-table";
-import { Card, EmptyState, Pill, Segmented, ViewHeader } from "../ga-ui";
+import { EmptyState, Pill, Segmented, ViewHeader } from "../ga-ui";
 import { RowsSkeleton } from "../ga-skeleton";
-import { countryNames } from "../profile-setup";
 
 type Summary = { id: string; domain: string; country: string; month: string; pages: number; creditsCharged: number; totals: { keywords?: number; traffic?: number; cost?: number }; updatedAt: string };
 type Quote = { credits: number; pagesToBuy: number; creditsPerPage: number };
 type Asked = { domain: string; country: string; pages: number };
-
-const INPUT =
-  "h-10 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none focus:border-[#400095]/50 focus:ring-[3px] focus:ring-[#400095]/15 dark:bg-input/30";
+/** A competitor of the business: from the business profile (named by the owner or found by Vera) and/or a lookup already run. */
+type Rival = { domain: string; name: string; country: string; summary: Summary | null };
 
 const credits = (v: number) => `${v.toLocaleString("en-US", { maximumFractionDigits: 3 })} credit${v === 1 ? "" : "s"}`;
 const regionName = (code: string) => new Intl.DisplayNames(["en"], { type: "region" }).of(code) ?? code;
 const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 const thisMonth = () => new Date().toISOString().slice(0, 7);
+const domainOf = (raw: string): string | null => {
+  const host = raw.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[/?#].*$/, "");
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host) ? host : null;
+};
 
 class LookupError extends Error {
   constructor(
@@ -52,29 +56,52 @@ async function call<T>(workspaceId: string, body: Record<string, unknown>): Prom
 
 export function LiveCompetitorAdsView() {
   const workspaceId = useWorkspaceContext().workspace?.id ?? "";
-  const [domain, setDomain] = useState("");
-  const [country, setCountry] = useState("");
+  const [profile, setProfile] = useState<{ competitors: { name: string; url: string }[]; market: string } | null>(null);
   const [history, setHistory] = useState<Summary[] | null>(null);
-  const [perPage, setPerPage] = useState<number | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [pending, setPending] = useState<(Asked & { quote: Quote }) | null>(null);
   const [analysis, setAnalysis] = useState<CompetitorAnalysis | null>(null);
   const [busy, setBusy] = useState<"quote" | "run" | null>(null);
   const [error, setError] = useState<LookupError | null>(null);
-  const options = useMemo(() => countryNames(), []);
+  const agentBusy = useGoogleAds((s) => s.agentBusy);
 
-  const loadHistory = async () => {
+  const load = async () => {
     if (!workspaceId) return;
-    const res = await fetch(`/api/google-ads/competitor-ads?workspaceId=${workspaceId}`);
-    const json = (await res.json().catch(() => ({}))) as { analyses?: Summary[]; creditsPerPage?: number | null };
-    setHistory(json.analyses ?? []);
-    setPerPage(json.creditsPerPage ?? null);
-    // Start from the country of the last lookup.
-    if (json.analyses?.[0]) setCountry((c) => c || regionName(json.analyses![0]!.country));
+    const [h, p] = await Promise.all([
+      fetch(`/api/google-ads/competitor-ads?workspaceId=${workspaceId}`).then((r) => r.json().catch(() => ({}))) as Promise<{ analyses?: Summary[] }>,
+      fetch(`/api/business-profile?workspaceId=${workspaceId}`, { cache: "no-store" }).then((r) => r.json().catch(() => ({}))) as Promise<{ profile?: { values?: { competitors?: { name: string; url: string }[]; markets?: string[] } } }>,
+    ]);
+    setHistory(h.analyses ?? []);
+    setProfile({ competitors: p.profile?.values?.competitors ?? [], market: p.profile?.values?.markets?.[0] ?? "" });
   };
+  // Vera fills this page while the user is on it: read again every 20 s and when the tab comes back.
   useEffect(() => {
-    void loadHistory();
+    void load();
+    const again = () => document.visibilityState === "visible" && void load();
+    const timer = setInterval(again, 20_000);
+    window.addEventListener("focus", again);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", again);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
+
+  // The competitors: the profile's list first, then any other site Vera looked up.
+  const rivals: Rival[] = [];
+  if (profile && history) {
+    const latest = (domain: string) => history.filter((h) => h.domain === domain).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null;
+    for (const c of profile.competitors) {
+      const domain = domainOf(c.url || c.name);
+      if (domain && !rivals.some((r) => r.domain === domain)) {
+        const s = latest(domain);
+        rivals.push({ domain, name: c.name, country: s ? regionName(s.country) : profile.market, summary: s });
+      }
+    }
+    for (const h of history) {
+      if (!rivals.some((r) => r.domain === h.domain)) rivals.push({ domain: h.domain, name: h.domain, country: regionName(h.country), summary: latest(h.domain) });
+    }
+  }
 
   const run = async (asked: Asked) => {
     setBusy("run");
@@ -83,7 +110,7 @@ export function LiveCompetitorAdsView() {
     try {
       const { analysis } = await call<{ analysis: CompetitorAnalysis }>(workspaceId, { mode: "run", ...asked });
       setAnalysis(analysis);
-      void loadHistory();
+      void load();
     } catch (e) {
       setError(e as LookupError);
     } finally {
@@ -108,54 +135,84 @@ export function LiveCompetitorAdsView() {
     }
   };
 
-  const submit = () => {
-    if (!domain.trim() || !country.trim()) return;
-    void lookUp({ domain: domain.trim(), country: country.trim(), pages: 1 });
+  const open = (r: Rival) => {
+    setSelected(r.domain);
+    setAnalysis(null);
+    if (!r.country) return setError(new LookupError("Ask Vera which country to look up this competitor in."));
+    void lookUp({ domain: r.domain, country: r.country, pages: r.summary?.pages ?? 1 });
   };
+
+  // Open the first competitor Vera already looked up this month (free) as soon as the list is known.
+  const first = rivals.find((r) => r.summary?.month === thisMonth());
+  useEffect(() => {
+    if (selected || !first) return;
+    open(first);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [first?.domain]);
 
   return (
     <div className="space-y-5">
       <ViewHeader
         title="Competitor ads"
-        subtitle="The searches a competitor pays Google to show up on, with the ad they run on each and what a click costs. Pick keywords and Vera turns them into a plan."
+        subtitle="The searches each of your competitors pays Google to show up on, with the ad they run on each and what a click costs. Vera fills this page; pick keywords and she turns them into a plan."
+        actions={
+          <button
+            type="button"
+            disabled={agentBusy}
+            onClick={() => runAgentTurn("I want to add a competitor to Competitor ads. Ask me for its website, then add it to my business profile and pull its paid keywords.")}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#400095] px-3 text-xs font-semibold text-white hover:bg-[#33007a] disabled:opacity-50 dark:bg-violet-600"
+          >
+            <Bot className="h-3.5 w-3.5" /> Add a competitor with Vera
+          </button>
+        }
       />
 
-      <Card className="space-y-3 p-4">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-          className="grid gap-3 lg:grid-cols-[1fr_220px_auto]"
-        >
-          <label className="space-y-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Competitor&apos;s website</span>
-            <input value={domain} onChange={(e) => setDomain(e.target.value)} dir="ltr" placeholder="competitor.com" className={INPUT} />
-          </label>
-          <label className="space-y-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Country</span>
-            <input value={country} onChange={(e) => setCountry(e.target.value)} list="competitor-countries" placeholder="e.g. Lebanon" className={INPUT} />
-            <datalist id="competitor-countries">
-              {options.map((o) => (
-                <option key={o} value={o} />
-              ))}
-            </datalist>
-          </label>
-          <div className="flex items-end">
-            <button
-              type="submit"
-              disabled={!!busy || !domain.trim() || !country.trim()}
-              className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-[#400095] px-4 text-sm font-semibold text-white hover:bg-[#33007a] disabled:opacity-50 lg:w-auto dark:bg-violet-600"
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} {busy === "run" ? "Looking up…" : busy === "quote" ? "Checking…" : "Look up"}
-            </button>
+      {history === null || profile === null ? (
+        <RowsSkeleton rows={4} />
+      ) : rivals.length === 0 ? (
+        <EmptyState
+          icon={Swords}
+          title="No competitors yet"
+          body="Tell Vera who you compete with in the chat on the left. She adds them to your business profile and pulls the keywords each one pays for on Google, in your first country."
+        />
+      ) : (
+        <>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {rivals.map((r) => {
+              const active = selected === r.domain;
+              return (
+                <button
+                  key={r.domain}
+                  type="button"
+                  disabled={!!busy}
+                  onClick={() => open(r)}
+                  className={cn(
+                    "rounded-2xl border p-3 text-left transition-all hover:-translate-y-0.5 disabled:opacity-70",
+                    active ? "border-[#400095] bg-[#400095]/[0.05] shadow-[0_8px_24px_rgba(64,0,149,.12)] dark:border-violet-400" : "border-border/70 bg-card hover:border-[#400095]/40"
+                  )}
+                >
+                  <p className="truncate text-sm font-bold" dir="ltr">
+                    {r.domain}
+                  </p>
+                  {r.name !== r.domain && <p className="truncate text-[11px] text-muted-foreground">{r.name}</p>}
+                  <p className="mt-1.5 text-[11.5px] text-muted-foreground">
+                    {r.summary ? (
+                      <>
+                        <b className="text-foreground">{(r.summary.totals.keywords ?? 0).toLocaleString()}</b> paid keyword{r.summary.totals.keywords === 1 ? "" : "s"} · {regionName(r.summary.country)} · {monthLabel(r.summary.month)}
+                      </>
+                    ) : (
+                      "Not looked up yet. Ask Vera."
+                    )}
+                  </p>
+                </button>
+              );
+            })}
           </div>
-        </form>
-        <p className="text-[11px] text-muted-foreground">
-          Estimates from SE Ranking, which watches Google&apos;s results and records who advertises where. Billed at cost
-          {perPage ? `: ${credits(perPage)} per 1,000 keywords` : ""}, and free when this month&apos;s data for the site is already here. Nothing changes in your account.
-        </p>
-      </Card>
+          <p className="text-[11px] text-muted-foreground">
+            Estimates from SE Ranking, which watches Google&apos;s results and records who advertises where. Billed at cost, and free when this month&apos;s data for the site is already here. Nothing changes in your account.
+          </p>
+        </>
+      )}
 
       {pending && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#400095]/25 bg-[#400095]/[0.04] px-4 py-3 dark:border-violet-400/30">
@@ -181,7 +238,7 @@ export function LiveCompetitorAdsView() {
       {error && (
         <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/[0.05] px-3 py-2 text-[12.5px] text-red-700 dark:text-red-300">
           {error.message}
-          {(error.code === "no_credits" || error.code === "no_subscription") && <span className="ms-1">Top up from Billing, then look up again.</span>}
+          {(error.code === "no_credits" || error.code === "no_subscription") && <span className="ms-1">Top up from Billing, then open it again.</span>}
         </div>
       )}
 
@@ -189,19 +246,10 @@ export function LiveCompetitorAdsView() {
         <RowsSkeleton rows={6} />
       ) : analysis ? (
         <Results analysis={analysis} busy={!!busy} onMore={() => void lookUp({ domain: analysis.domain, country: analysis.country, pages: analysis.pages + 1 })} />
-      ) : (
-        <EmptyState
-          icon={Swords}
-          title="See what a competitor pays for on Google"
-          body="Enter their website and the country you sell in. You get the keywords their ads appear on, the ad text, the page each ad opens, and which of those keywords your account doesn't have yet."
-        />
-      )}
-
-      <RecentLookups history={history} onOpen={(h) => void lookUp({ domain: h.domain, country: h.country, pages: h.pages })} busy={!!busy} />
+      ) : null}
     </div>
   );
 }
-
 function Results({ analysis, busy, onMore }: { analysis: CompetitorAnalysis; busy: boolean; onMore: () => void }) {
   const agentBusy = useGoogleAds((s) => s.agentBusy);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -408,38 +456,5 @@ function Results({ analysis, busy, onMore }: { analysis: CompetitorAnalysis; bus
         </div>
       )}
     </div>
-  );
-}
-
-function RecentLookups({ history, onOpen, busy }: { history: Summary[] | null; onOpen: (h: Summary) => void; busy: boolean }) {
-  if (history === null) return <RowsSkeleton rows={2} />;
-  if (!history.length) return null;
-  const current = thisMonth();
-  return (
-    <Card className="p-4">
-      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        <History className="h-3.5 w-3.5" /> Recent lookups
-      </p>
-      <ul className="divide-y divide-border/60">
-        {history.map((h) => (
-          <li key={h.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-[12.5px]">
-            <span className="font-semibold" dir="ltr">
-              {h.domain}
-            </span>
-            <span className="text-muted-foreground">
-              {regionName(h.country)} · {monthLabel(h.month)} · {(h.totals.keywords ?? 0).toLocaleString()} keywords
-            </span>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onOpen(h)}
-              className={cn("ms-auto rounded-lg px-2.5 py-1 text-xs font-semibold disabled:opacity-50", h.month === current ? "text-[#400095] hover:bg-[#400095]/[0.07] dark:text-violet-300" : "border border-border/70 hover:bg-muted")}
-            >
-              {h.month === current ? "Open (free)" : "Look up again"}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </Card>
   );
 }

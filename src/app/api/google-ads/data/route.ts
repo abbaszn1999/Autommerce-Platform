@@ -21,11 +21,13 @@ export async function GET(request: NextRequest) {
     const row = await loadConnection(admin, workspaceId, "ads");
     if (!row?.composio_connected_account_id || !row.account_id) return NextResponse.json({ error: "not_connected" }, { status: 409 });
 
-    const { data, fetchedAt } = await loadLiveAccount(row, { start, end }, { force: params.get("refresh") === "1" && allowForcedRefresh(workspaceId, "ads") });
+    const wantsFresh = params.get("refresh") === "1";
+    const force = wantsFresh && allowForcedRefresh(workspaceId, "ads");
+    const { data, fetchedAt } = await loadLiveAccount(row, { start, end }, { force });
     // Accounts picked through a manager were saved without these; the agent's dates and reports use them.
     if (!row.account_currency || !row.account_time_zone)
       await selectAccount(admin, row, { id: row.account_id, name: row.account_name ?? data.account.name, currency: data.account.currency, timeZone: data.account.timeZone });
-    return NextResponse.json({ data, fetchedAt }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ data, fetchedAt, ...(wantsFresh && !force ? { refreshLimited: true } : {}) }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     const { status, code } = errorStatus(err);
     if (status >= 500) console.error("[google-ads/data]", code, (err as { detail?: string }).detail ?? (err as Error).message);

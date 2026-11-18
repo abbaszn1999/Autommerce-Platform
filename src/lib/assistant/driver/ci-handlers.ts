@@ -26,7 +26,7 @@ function requireSheet() {
 
 function visibleRows() {
   const state = requireSheet();
-  return visibleCatalogRows(state.rows, { groupColumn: state.productGroupColumn, activeSheet: state.activeSheet });
+  return visibleCatalogRows(state.rows, { groupColumn: state.productGroupColumn });
 }
 
 /** What `ci.run` runs with the tool that is open, mirroring the sidebar's run columns. */
@@ -71,7 +71,6 @@ export function ciGetState() {
   return {
     sheetName: state.fileName,
     kind: state.sessionKind,
-    activeSheet: state.activeSheet,
     mode: state.sidebarMode,
     toolPanelOpen: state.sidebarOpen,
     ...toolSummary(state),

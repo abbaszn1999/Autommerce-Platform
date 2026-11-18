@@ -218,6 +218,7 @@ export const UNAVAILABLE_LABELS: Record<string, string> = {
   adMetrics: "ad numbers",
   searchTerms: "search terms",
   customerDaily: "account totals",
+  campaignShare: "impression share",
   locations: "locations",
   languages: "languages",
   schedule: "ad schedules",

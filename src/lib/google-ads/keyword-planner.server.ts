@@ -182,8 +182,22 @@ export async function keywordResearch(admin: SupabaseClient, row: ConnectionRow,
   };
 }
 
-/** What a set of keywords would bring with a daily budget (nothing is created in the account). */
+const FORECAST_TTL_MS = 30 * 60 * 1000;
+const FORECAST_MAX = 200;
+const forecasts = new Map<string, { at: number; value: Forecast }>();
+
+/** What a set of keywords would bring with a daily budget (nothing is created in the account). Same question within 30 minutes: same answer, no new Google call. */
 export async function keywordForecast(admin: SupabaseClient, row: ConnectionRow, raw: Record<string, unknown>): Promise<Forecast> {
+  const key = `${row.workspace_id}:${row.account_id}:${JSON.stringify(raw)}`;
+  const hit = forecasts.get(key);
+  if (hit && Date.now() - hit.at < FORECAST_TTL_MS) return hit.value;
+  const value = await computeForecast(admin, row, raw);
+  if (forecasts.size >= FORECAST_MAX) forecasts.delete(forecasts.keys().next().value!);
+  forecasts.set(key, { at: Date.now(), value });
+  return value;
+}
+
+async function computeForecast(admin: SupabaseClient, row: ConnectionRow, raw: Record<string, unknown>): Promise<Forecast> {
   const customerId = row.account_id;
   if (!customerId) throw new ConnectionHttpError(409, "not_connected");
   const input = parseForecast(raw);

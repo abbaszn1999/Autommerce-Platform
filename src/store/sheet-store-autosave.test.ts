@@ -35,7 +35,6 @@ function makeRows(prefix = "r"): ProductRow[] {
     status: "pending",
     originalData: { Title: `Item ${index}` },
     enrichedData: {},
-    matchType: "new",
   }));
 }
 

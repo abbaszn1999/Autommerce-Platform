@@ -12,7 +12,7 @@ import { visibleCatalogRows } from "@/lib/catalog/product-groups";
 
 export function Header() {
   const router = useRouter();
-  const { fileName, rows, undo, redo, canUndo, canRedo, undoVersion, saveStatus, projectId, activeSheet, setActiveSheet, productGroupColumn } = useSheetStore();
+  const { fileName, rows, undo, redo, canUndo, canRedo, undoVersion, saveStatus, projectId, productGroupColumn } = useSheetStore();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -26,10 +26,7 @@ export function Header() {
   const doneCount = rows.filter((r) => r.status === "done").length;
   const errorCount = rows.filter((r) => r.status === "error").length;
   const processingCount = rows.filter((r) => r.status === "processing").length;
-  const productCount = visibleCatalogRows(rows, {
-    groupColumn: productGroupColumn,
-    activeSheet: "all",
-  }).length;
+  const productCount = visibleCatalogRows(rows, { groupColumn: productGroupColumn }).length;
 
   const cycleTheme = () => {
     if (theme === "light") setTheme("dark");
@@ -77,35 +74,6 @@ export function Header() {
               <span className="text-xs text-muted-foreground truncate max-w-[250px]">
                 {fileName}
               </span>
-            </>
-          )}
-
-          {/* Sheet Toggle */}
-          {fileName && (
-            <>
-              <span className="text-muted-foreground/30">|</span>
-              <div className="flex items-center bg-muted rounded-lg p-0.5">
-                <button
-                  onClick={() => setActiveSheet("existing")}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
-                    activeSheet === "existing"
-                      ? "bg-background shadow-sm text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Existing
-                </button>
-                <button
-                  onClick={() => setActiveSheet("new")}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
-                    activeSheet === "new"
-                      ? "bg-background shadow-sm text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  New
-                </button>
-              </div>
             </>
           )}
 

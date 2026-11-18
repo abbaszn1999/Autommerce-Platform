@@ -218,7 +218,7 @@ describe("render smoke", () => {
     connect();
     useGoogleAds.setState({ scope: {}, view: "recommendations" });
     const html = renderToString(createElement(GoogleAdsShell));
-    expect(html).toContain("Ask agent to apply");
+    expect(html).toContain("Ask Vera to implement");
     expect(html).toContain("Ask agent to explain");
     expect(html).not.toContain("Dismiss");
   });

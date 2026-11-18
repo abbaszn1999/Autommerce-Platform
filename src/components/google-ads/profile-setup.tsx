@@ -2,12 +2,13 @@
 
 // First run, live accounts: before Vera's workspace opens, the owner tells her
 // what only they know (goal, margin or target ROAS, budget cap) and confirms
-// what Google already tells us (name, website, countries). Three short steps,
-// saved as they go; "Skip for now" never blocks anyone.
+// what Google already tells us (name, website, countries) and names their
+// competitors. Three short steps, saved as they go; nothing can be skipped.
+// Finishing it starts Vera's interview in the chat, with the board locked.
 
 import { useEffect, useId, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, ArrowRight, Check, Globe2, Loader2, Megaphone, Rocket, ShieldBan, ShoppingBag, Sparkles, Target, TrendingUp, UserPlus, Wallet, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Globe2, Loader2, Megaphone, Rocket, ShieldBan, ShoppingBag, Swords, Target, TrendingUp, UserPlus, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeValue, type ProfileField, type ProfileValues } from "@/lib/business-profile";
 import type { SetupPrefill } from "@/lib/business-profile-setup.server";
@@ -18,7 +19,7 @@ type Source = "google_ads" | "merchant";
 const STEPS = [
   { id: "business", title: "Your business", hint: "Who you are and where you sell" },
   { id: "numbers", title: "Your numbers", hint: "What counts as a good result" },
-  { id: "brand", title: "Brand & guardrails", hint: "Optional, but it helps" },
+  { id: "brand", title: "Competitors & guardrails", hint: "Who you compete with" },
 ] as const;
 
 const GOALS = [
@@ -28,7 +29,12 @@ const GOALS = [
 ] as const;
 
 const fmt = (n: number, currency: string) => `${n.toLocaleString("en", { maximumFractionDigits: n < 100 ? 2 : 0 })}${currency ? ` ${currency}` : ""}`;
-const hostOf = (u: string) => u.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/.*$/, "");
+/** A competitor typed as a link or a domain, as a bare domain (null when it is not one). */
+const domainOf = (raw: string): string | null => {
+  const host = raw.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[/?#].*$/, "");
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host) ? host : null;
+};
+const MAX_COMPETITORS = 10;
 
 /** The value as the server would store it, or the reason it would refuse it. */
 function check(field: ProfileField, raw: unknown): { ok: true; value: unknown } | { ok: false; error: string } {
@@ -42,7 +48,7 @@ function check(field: ProfileField, raw: unknown): { ok: true; value: unknown } 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { ...init, headers: { "Content-Type": "application/json" }, cache: "no-store" });
   const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
-  if (!res.ok) throw new Error(body.message ?? (body.error === "network" ? "Couldn't reach the server. Try again." : "Something went wrong. Try again."));
+  if (!res.ok) throw Object.assign(new Error(body.message ?? (body.error === "network" ? "Couldn't reach the server. Try again." : "Something went wrong. Try again.")), { code: body.error });
   return body as T;
 }
 
@@ -99,11 +105,14 @@ export function ChipsInput({
   placeholder,
   tone = "brand",
   options,
+  max,
 }: {
   value: string[];
   onChange: (v: string[]) => void;
   placeholder: string;
   tone?: "brand" | "bad";
+  /** The most items the list can hold. */
+  max?: number;
   /** Suggestions shown while typing; picking one adds it. */
   options?: string[];
 }) {
@@ -111,7 +120,8 @@ export function ChipsInput({
   const [draft, setDraft] = useState("");
   const add = () => {
     const items = draft.split(/[,،\n]/).map((s) => s.trim()).filter(Boolean);
-    if (items.length) onChange([...value, ...items.filter((i) => !value.some((v) => v.toLowerCase() === i.toLowerCase()))]);
+    const fresh = items.filter((i, n) => !value.some((v) => v.toLowerCase() === i.toLowerCase()) && items.findIndex((x) => x.toLowerCase() === i.toLowerCase()) === n);
+    if (fresh.length) onChange([...value, ...fresh].slice(0, max ?? Infinity));
     setDraft("");
   };
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -150,7 +160,8 @@ export function ChipsInput({
         onBlur={add}
         list={options ? listId : undefined}
         placeholder={value.length ? "Add more…" : placeholder}
-        className="h-7 min-w-32 flex-1 bg-transparent px-1 text-sm outline-none"
+        disabled={max !== undefined && value.length >= max}
+        className="h-7 min-w-32 flex-1 bg-transparent px-1 text-sm outline-none disabled:hidden"
       />
       {options && (
         <datalist id={listId}>
@@ -182,7 +193,10 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onDone: (opts: { fillFromWebsite: boolean }) => void }) {
+/** Offered when picking the languages ads are written in; anything else can still be typed. */
+const LANGUAGE_NAMES = ["Arabic", "English", "French", "German", "Spanish", "Italian", "Portuguese", "Turkish", "Dutch", "Russian", "Persian", "Urdu", "Hindi", "Indonesian", "Japanese", "Korean", "Chinese", "Polish", "Swedish", "Greek", "Hebrew"];
+
+export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onDone: () => void }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
@@ -193,6 +207,7 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
   const [businessName, setBusinessName] = useState("");
   const [website, setWebsite] = useState("");
   const [markets, setMarkets] = useState<string[]>([]);
+  const [languages, setLanguages] = useState<string[]>([]);
   const [goal, setGoal] = useState("");
   const [judgeBy, setJudgeBy] = useState<"margin" | "roas">("margin");
   const [margin, setMargin] = useState("");
@@ -202,7 +217,7 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
   const [cap, setCap] = useState("");
   const [brandTerms, setBrandTerms] = useState<string[]>([]);
   const [neverAdvertise, setNeverAdvertise] = useState<string[]>([]);
-  const [fillFromWebsite, setFillFromWebsite] = useState(true);
+  const [competitors, setCompetitors] = useState<string[]>([]);
   const countries = useMemo(countryNames, []);
 
   useEffect(() => {
@@ -217,6 +232,7 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
         setBusinessName(String(v.businessName ?? s.businessName ?? ""));
         setWebsite(String(v.website ?? s.website ?? ""));
         setMarkets((v.markets as string[] | undefined) ?? s.markets ?? []);
+        setLanguages((v.languages as string[] | undefined) ?? []);
         setGoal(String(v.goal ?? ""));
         if (typeof v.margin === "number") setMargin(String(Math.round(v.margin * 1000) / 10));
         if (typeof v.targetRoas === "number") {
@@ -226,6 +242,7 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
         if (typeof v.monthlyBudgetCap === "number") setCap(String(v.monthlyBudgetCap));
         setBrandTerms((v.brandTerms as string[] | undefined) ?? s.brandTerms ?? []);
         setNeverAdvertise((v.neverAdvertise as string[] | undefined) ?? []);
+        setCompetitors(((v.competitors as { name: string; url: string }[] | undefined) ?? []).map((c) => domainOf(c.url || c.name)).filter((d): d is string => !!d).slice(0, MAX_COMPETITORS));
       })
       .catch((e: Error) => alive && setLoadError(e.message));
     return () => {
@@ -261,11 +278,18 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
         ? [!goal && "your goal", !(judgeBy === "margin" ? marginValue : roasValue) && (judgeBy === "margin" ? "your margin" : "your target ROAS"), !capValue && "a monthly budget cap"].filter(
             (x): x is string => !!x
           )
-        : [];
+        : [(!competitors.length || competitors.some((c) => !domainOf(c))) && "at least one competitor website"].filter((x): x is string => !!x);
 
   const save = async (edits: { field: ProfileField; value: unknown }[]) => {
     if (!edits.length) return;
-    await call("/api/business-profile", { method: "PATCH", body: JSON.stringify({ workspaceId, edits }) });
+    const send = () => call("/api/business-profile", { method: "PATCH", body: JSON.stringify({ workspaceId, edits }) });
+    try {
+      await send();
+    } catch (e) {
+      // Someone saved at the same moment (Vera, or a teammate): the server re-reads on every try, so one more try is safe.
+      if ((e as { code?: string }).code !== "conflict") throw e;
+      await send();
+    }
   };
 
   const next = async () => {
@@ -279,6 +303,7 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
           { field: "businessName", value: businessName },
           { field: "website", value: website },
           { field: "markets", value: markets },
+          ...(languages.length ? [{ field: "languages" as const, value: languages }] : []),
         ]);
       } else if (step === 1) {
         await save([
@@ -290,6 +315,7 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
         ]);
       } else {
         await save([
+          { field: "competitors", value: competitors.map((d) => ({ name: d, url: `https://${d}` })) },
           ...(brandTerms.length ? [{ field: "brandTerms" as const, value: brandTerms }] : []),
           ...(neverAdvertise.length ? [{ field: "neverAdvertise" as const, value: neverAdvertise }] : []),
         ]);
@@ -298,7 +324,7 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
           method: "POST",
           body: JSON.stringify({ workspaceId, status: "completed", suggestions: aov ? [{ field: "averageOrderValue", value: aov, source: "google_ads" }] : [] }),
         });
-        onDone({ fillFromWebsite: fillFromWebsite && !!website });
+        onDone();
         return;
       }
       setTried(false);
@@ -308,16 +334,6 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
     } finally {
       setSaving(false);
     }
-  };
-
-  const skip = async () => {
-    setSaving(true);
-    try {
-      await call("/api/business-profile/setup", { method: "POST", body: JSON.stringify({ workspaceId, status: "skipped" }) });
-    } catch {
-      // Skipping must never trap anyone: the screen just shows again next time.
-    }
-    onDone({ fillFromWebsite: false });
   };
 
   return (
@@ -335,9 +351,6 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
               </p>
             </div>
           </div>
-          <button type="button" onClick={() => void skip()} disabled={saving} className="shrink-0 rounded-lg px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-60">
-            Skip for now
-          </button>
         </div>
 
         {/* Stepper */}
@@ -376,8 +389,8 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
             <div className="py-10 text-center">
               <p className="text-sm font-semibold">Couldn&apos;t open the setup</p>
               <p className="mt-1 text-xs text-muted-foreground">{loadError}</p>
-              <button type="button" onClick={() => onDone({ fillFromWebsite: false })} className="mt-4 rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">
-                Continue to Vera
+              <button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">
+                Try again
               </button>
             </div>
           )}
@@ -424,6 +437,13 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
                             : "Vera warns you when a campaign shows ads outside these countries."}
                         </Help>
                       )}
+                    </div>
+                    <div>
+                      <Label>
+                        Languages
+                      </Label>
+                      <ChipsInput value={languages} onChange={setLanguages} placeholder="Start typing a language…" options={LANGUAGE_NAMES} />
+                      <Help>The languages your site is in and the ones ads should be written in. Vera writes ads and keywords in these.</Help>
                     </div>
                   </div>
                 )}
@@ -563,6 +583,27 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
                 {step === 2 && (
                   <div className="space-y-5">
                     <div>
+                      <Label required>
+                        <Swords className="mr-1.5 inline h-4 w-4 text-[#F76D01]" />
+                        Your competitors
+                      </Label>
+                      <ChipsInput
+                        value={competitors}
+                        onChange={(list) => setCompetitors(list.map((c) => domainOf(c) ?? c))}
+                        placeholder="Paste a domain or link, e.g. rival-store.com"
+                        max={MAX_COMPETITORS}
+                      />
+                      {competitors.some((c) => !domainOf(c)) ? (
+                        <Help tone="error">Use a website address, like rival-store.com.</Help>
+                      ) : tried && !competitors.length ? (
+                        <Help tone="error">Add at least one competitor. Vera pulls the keywords they pay for on Google.</Help>
+                      ) : (
+                        <Help>
+                          Up to {MAX_COMPETITORS} websites ({competitors.length}/{MAX_COMPETITORS}). Press Enter after each. Vera looks up the Google keywords each one pays for in your first country, and you can add more later by asking her.
+                        </Help>
+                      )}
+                    </div>
+                    <div>
                       <Label tag={brandTerms.length > 0 && brandTerms === loaded.prefill.suggestions.brandTerms && <SourceTag source={sources.brandTerms} />}>
                         Brand names
                       </Label>
@@ -577,28 +618,9 @@ export function ProfileSetup({ workspaceId, onDone }: { workspaceId: string; onD
                       <ChipsInput value={neverAdvertise} onChange={setNeverAdvertise} placeholder="Products, words or claims, e.g. clearance items" tone="bad" />
                       <Help>Vera never uses these in keywords, ads or product texts.</Help>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setFillFromWebsite((v) => !v)}
-                      disabled={!website}
-                      className={cn(
-                        "flex w-full items-start gap-3.5 rounded-2xl border p-4 text-left transition-colors",
-                        fillFromWebsite && website ? "border-[#400095]/40 bg-[#400095]/[0.04]" : "border-border/70"
-                      )}
-                    >
-                      <span className={cn("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border", fillFromWebsite && website ? "border-[#400095] bg-[#400095] text-white" : "border-border")}>
-                        {fillFromWebsite && website && <Check className="h-3.5 w-3.5" />}
-                      </span>
-                      <span>
-                        <span className="flex items-center gap-1.5 text-sm font-bold">
-                          <Sparkles className="h-4 w-4 text-[#F76D01]" /> Let Vera fill in the rest from {website ? hostOf(website) : "your website"}
-                        </span>
-                        <span className="mt-1 block text-[12px] leading-relaxed text-muted-foreground">
-                          Selling points, shipping and returns, brand voice, logo and colours. She saves them as suggestions; you confirm them on the Business profile page.
-                        </span>
-                      </span>
-                    </button>
-                  </div>
+                    <p className="rounded-2xl border border-[#400095]/15 bg-[#400095]/[0.03] p-4 text-[12px] leading-relaxed text-muted-foreground">
+                      <b className="text-foreground">What happens next:</b> Vera opens the chat and asks for your logo, brand files and knowledge about the business. Then she reads your website, researches your market and fills your business profile and competitor ads. The dashboard unlocks when she is done.
+                    </p>                  </div>
                 )}
               </motion.div>
             </AnimatePresence>

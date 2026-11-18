@@ -241,6 +241,24 @@ export function cellValue(v: string | number): { value: string | number; format?
   return { value: t };
 }
 
+/** The readable words of an agent-written page: no scripts, styles or tags. */
+export function htmlText(html: string): string {
+  return html
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<\/(p|div|li|tr|h[1-6]|table|section)>|<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ ?\n ?/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /** Sheet names: at most 31 characters, none of []:*?/\, each different. */
 function sheetName(wanted: string, used: Set<string>): string {
   const base = (wanted.replace(/[[\]:*?/\\]/g, " ").replace(/\s+/g, " ").trim() || "Sheet").slice(0, 28);
@@ -303,8 +321,14 @@ export function exportWorkbook(ExcelJS: ExcelModule, doc: ExportDoc, opts: Expor
       for (const f of c.findings) ws.addRow([SEVERITY[f.severity], f.title.replace(/\*\*/g, ""), f.impact, f.evidence.replace(/\*\*/g, ""), f.fix.replace(/\*\*/g, "")]);
       widths(ws);
     }
+    // Text, callouts, scores and interactive pages have no table of their own: keep their words in one sheet so the workbook is not missing them.
+    const notes: [string, string, string][] = [];
     for (const s of c.sections) {
       s.blocks.forEach((b, i) => {
+        if (b.kind === "text") notes.push([s.title, "Text", b.md.replace(/\*\*/g, "")]);
+        else if (b.kind === "callout") notes.push([s.title, b.tone, `${b.title ? `${b.title}: ` : ""}${b.text.replace(/\*\*/g, "")}`]);
+        else if (b.kind === "score") notes.push([s.title, "Score", `${b.label}: ${b.score}/100. ${b.parts.map((p) => `${p.label} ${p.score}`).join("; ")}`]);
+        else if (b.kind === "html") notes.push([s.title, "Interactive page", `${b.title ? `${b.title}. ` : ""}${htmlText(b.html).slice(0, 30_000)}\n(The interactive version is in the report itself.)`]);
         if (b.kind === "table") {
           const ws = sheet(s.blocks.filter((x) => x.kind === "table").length > 1 ? `${s.title} ${i + 1}` : s.title);
           header(ws, b.columns);
@@ -321,6 +345,15 @@ export function exportWorkbook(ExcelJS: ExcelModule, doc: ExportDoc, opts: Expor
           widths(ws);
         }
       });
+    }
+    if (notes.length) {
+      const ws = sheet("Notes");
+      header(ws, ["Section", "Type", "Content"]);
+      for (const n of notes) ws.addRow(n);
+      ws.getColumn(3).width = 90;
+      ws.getColumn(3).alignment = { wrapText: true, vertical: "top" };
+      widths(ws);
+      ws.getColumn(3).width = 90;
     }
   } else {
     const c = doc.content as PlanContent;

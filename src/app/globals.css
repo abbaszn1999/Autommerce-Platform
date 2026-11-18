@@ -514,56 +514,6 @@
   }
 }
 
-/* Website Restructure — always a two-pane split (chat / preview), no stage
-   collapse transition since this is a single-stage tool. The chat column's
-   width is a draggable CSS var (--wr-chat-w) set from JS; it only shrinks
-   below and grows back up to that same JS-owned value, never wider. */
-.wr-shell-frame {
-  display: grid;
-  height: 100%;
-  min-height: 0;
-  width: 100%;
-  grid-template-columns: var(--wr-chat-w, minmax(0, 0.86fr)) 6px minmax(0, 1fr);
-}
-
-.wr-resize-handle {
-  position: relative;
-  height: 100%;
-  cursor: col-resize;
-  touch-action: none;
-  background: transparent;
-}
-
-.wr-resize-handle::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  margin-inline: auto;
-  width: 1px;
-  background: var(--border);
-  transition: background-color 0.15s ease;
-}
-
-.wr-resize-handle::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 3px;
-  height: 28px;
-  border-radius: 999px;
-  background: var(--border);
-  transform: translate(-50%, -50%);
-  transition: background-color 0.15s ease;
-}
-
-.wr-resize-handle:hover::before,
-.wr-resize-handle:hover::after,
-.wr-resize-handle.is-dragging::before,
-.wr-resize-handle.is-dragging::after {
-  background: var(--foreground);
-}
-
 @keyframes welcome-ticker {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
@@ -576,16 +526,5 @@
 @media (prefers-reduced-motion: reduce) {
   .welcome-ticker-track {
     animation: none;
-  }
-}
-
-@media (max-width: 767px) {
-  .wr-shell-frame {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(16rem, 42%) minmax(0, 1fr);
-  }
-
-  .wr-resize-handle {
-    display: none;
   }
 }

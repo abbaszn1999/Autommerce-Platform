@@ -280,7 +280,6 @@ describe("Lens run helpers", () => {
   it("recognises a lens-only run and rejects mixing it with the other finder outputs", () => {
     expect(isLensRun("product", ["lensFounds"])).toBe(true);
     expect(isLensRun("product", ["lensFounds", "sourceUrls"])).toBe(false);
-    expect(isLensRun("plp", ["lensFounds"])).toBe(false);
     expect(lensRunConflict(["lensFounds"])).toBeNull();
     expect(lensRunConflict(["imageUrls", "imageSourceUrls"])).toBeNull();
     expect(lensRunConflict(["lensFounds", "imageUrls"])).toMatch(/Images or Source URLs/);

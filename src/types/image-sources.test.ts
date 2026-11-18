@@ -18,9 +18,8 @@ describe("Image sources column", () => {
     expect(column.label).toBe("Image sources");
   });
 
-  it("is a product-mode column for product sheets only", () => {
+  it("is a product-mode column", () => {
     expect(isProductModeColumn(IMAGE_SOURCES_COLUMN_ID, "product")).toBe(true);
-    expect(isProductModeColumn(IMAGE_SOURCES_COLUMN_ID, "plp")).toBe(false);
   });
 
   it("is added to an older session after Image URLs, once", () => {
@@ -32,33 +31,29 @@ describe("Image sources column", () => {
     expect(ensureImageSourcesColumn(upgraded, "product")).toBe(upgraded);
   });
 
-  it("leaves PLP sessions and sheets without Image URLs alone", () => {
+  it("leaves sheets without Image URLs alone", () => {
     const old = DEFAULT_ENRICHMENT_COLUMNS.filter((col) => col.id !== IMAGE_SOURCES_COLUMN_ID);
-    expect(ensureImageSourcesColumn(old, "plp")).toBe(old);
     const withoutImages = old.filter((col) => col.id !== "imageUrls");
     expect(ensureImageSourcesColumn(withoutImages, "product")).toBe(withoutImages);
   });
 
   it("does not change which sidebar mode a run belongs to", () => {
-    expect(catalogModeForRunColumns("new", ["imageUrls"])).toBe("images");
-    expect(catalogModeForRunColumns("new", ["imageUrls", IMAGE_SOURCES_COLUMN_ID])).toBe("images");
-    expect(catalogModeForRunColumns("new", ["imageUrls", "enhancedTitle"])).toBe("enrich");
-    expect(catalogModeForRunColumns("new", [IMAGE_SOURCES_COLUMN_ID])).toBe("enrich");
-    expect(catalogModeForRunColumns("existing", ["imageUrls"])).toBe("enrich");
+    expect(catalogModeForRunColumns(["imageUrls"])).toBe("images");
+    expect(catalogModeForRunColumns(["imageUrls", IMAGE_SOURCES_COLUMN_ID])).toBe("images");
+    expect(catalogModeForRunColumns(["imageUrls", "enhancedTitle"])).toBe("enrich");
+    expect(catalogModeForRunColumns([IMAGE_SOURCES_COLUMN_ID])).toBe("enrich");
   });
 
   it("puts a Lens-only run in the Lens Source Checker, not the Source / Image Finder", () => {
-    expect(catalogModeForRunColumns("new", ["lensFounds"])).toBe("lens");
-    expect(catalogModeForRunColumns("existing", ["lensFounds"])).toBe("enrich");
-    expect(catalogModeForRunColumns("new", ["lensFounds", "enhancedTitle"])).toBe("enrich");
+    expect(catalogModeForRunColumns(["lensFounds"])).toBe("lens");
+    expect(catalogModeForRunColumns(["lensFounds", "enhancedTitle"])).toBe("enrich");
   });
 
   it("puts Source URLs, alone or with Images, in the Source / Image Finder tool", () => {
-    expect(catalogModeForRunColumns("new", ["sourceUrls"])).toBe("images");
-    expect(catalogModeForRunColumns("new", ["imageUrls", IMAGE_SOURCES_COLUMN_ID, "sourceUrls"])).toBe("images");
+    expect(catalogModeForRunColumns(["sourceUrls"])).toBe("images");
+    expect(catalogModeForRunColumns(["imageUrls", IMAGE_SOURCES_COLUMN_ID, "sourceUrls"])).toBe("images");
     // Next to Enrichment columns it is still an Enrichment-shaped run.
-    expect(catalogModeForRunColumns("new", ["sourceUrls", "enhancedTitle"])).toBe("enrich");
-    expect(catalogModeForRunColumns("existing", ["sourceUrls"])).toBe("enrich");
+    expect(catalogModeForRunColumns(["sourceUrls", "enhancedTitle"])).toBe("enrich");
   });
 });
 
@@ -74,9 +69,8 @@ describe("isImageFinderRun", () => {
     expect(isImageFinderRun("product", ["sourceUrls", "enhancedTitle"])).toBe(false);
   });
 
-  it("is false when anything else is enabled, for PLP, and for sources alone", () => {
+  it("is false when anything else is enabled, and for sources alone", () => {
     expect(isImageFinderRun("product", ["imageUrls", "enhancedTitle"])).toBe(false);
-    expect(isImageFinderRun("plp", ["imageUrls"])).toBe(false);
     expect(isImageFinderRun("product", [IMAGE_SOURCES_COLUMN_ID])).toBe(false);
   });
 });

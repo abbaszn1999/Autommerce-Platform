@@ -82,6 +82,5 @@ describe("isImageFinderRun", () => {
     expect(isImageFinderRun("product", ["imageUrls", "imageSourceUrls", "sourceUrls"])).toBe(true);
     expect(isImageFinderRun("product", ["sourceUrls"])).toBe(false);
     expect(isImageFinderRun("product", ["imageUrls", "titleTag"])).toBe(false);
-    expect(isImageFinderRun("plp", ["imageUrls"])).toBe(false);
   });
 });
