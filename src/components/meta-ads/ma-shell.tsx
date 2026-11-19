@@ -4,7 +4,7 @@ import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent }
 import { Loader2 } from "lucide-react";
 import { useWorkspaceContext } from "@/app/(dashboard)/w/[workspaceSlug]/workspace-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { MetaConnectBanner, MetaLiveWorkspace, useLoginResult, useMetaLive } from "./ma-live";
+import { MetaLiveWorkspace, MetaRealConnect, useLoginResult, useMetaLive } from "./ma-live";
 import { useAccountState, useMetaAds } from "@/lib/meta-ads/store";
 import type { MetaView } from "@/lib/meta-ads/types";
 import { MaCampaignEditor } from "./ma-campaign-editor";
@@ -107,6 +107,8 @@ export function MetaAdsShell() {
     );
   }
   if (live.configured && live.connection) return <MetaLiveWorkspace live={live} loginError={loginError} />;
+  // Meta is set up on this server: only the real connect, never the simulated demo login.
+  if (live.configured && workspaceId) return <MetaRealConnect workspaceId={workspaceId} canManage={live.canManage} loginError={loginError} />;
 
   // Connecting Meta alone stays on the connect screen until "Go to agent".
   const inWorkspace = status === "connected" && entered;
@@ -117,10 +119,7 @@ export function MetaAdsShell() {
           <Workspace />
         </TooltipProvider>
       ) : (
-        <div className="flex h-full min-h-0 w-full flex-col">
-          {live.configured && workspaceId && <MetaConnectBanner workspaceId={workspaceId} canManage={live.canManage} loginError={loginError} />}
-          <MaConnect />
-        </div>
+        <MaConnect />
       )}
       <CatalogConnectDialog />
     </>

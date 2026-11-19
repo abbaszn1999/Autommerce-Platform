@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireConnectionAccess } from "@/lib/google-ads/connection.server";
 import { loadMetaConnection, metaErrorStatus, tokenOf } from "@/lib/meta-ads/connection.server";
-import { panelData } from "@/lib/meta-ads/live.server";
+import { isPanelRange, panelData } from "@/lib/meta-ads/live.server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -13,7 +13,8 @@ export async function GET(request: NextRequest) {
     const { admin } = await requireConnectionAccess(workspaceId);
     const row = await loadMetaConnection(admin, workspaceId);
     const token = tokenOf(row);
-    return NextResponse.json(await panelData(row!, token));
+    const range = request.nextUrl.searchParams.get("range");
+    return NextResponse.json(await panelData(row!, token, isPanelRange(range) ? range : "last_30d"));
   } catch (err) {
     const { status, code } = metaErrorStatus(err);
     return NextResponse.json({ error: code }, { status });

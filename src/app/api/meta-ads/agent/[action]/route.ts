@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAgentRequest } from "@/lib/google-ads/agent-auth.server";
 import { approvalBinding } from "@/lib/google-ads/approval-binding";
 import { createAdminClient } from "@/lib/supabase-admin";
-import { loadMetaConnection, metaErrorStatus, pagePosts, tokenOf } from "@/lib/meta-ads/connection.server";
-import { changeCard, cleanArguments, findAgentTool, withConversationId } from "@/lib/meta-ads/mcp-tools";
+import { MetaGraphError, deleteCatalog, loadMetaConnection, metaErrorStatus, pagePosts, tokenOf } from "@/lib/meta-ads/connection.server";
+import { LOCAL_TOOLS, changeCard, cleanArguments, findAgentTool, withConversationId } from "@/lib/meta-ads/mcp-tools";
 import { callTool, listAgentTools } from "@/lib/meta-ads/mcp.server";
 
 export const runtime = "nodejs";
@@ -17,6 +17,18 @@ const MAX_BODY = 200_000;
 const MAX_RESULT = 150_000;
 
 type Params = { params: Promise<{ action: string }> };
+
+/** graph_catalog_delete, run after approval. Meta's refusal comes back as a failed result, like an MCP tool's. */
+async function runCatalogDelete(token: string, args: Record<string, unknown>): Promise<{ isError: boolean; text: string }> {
+  const catalogId = String(args.catalog_id ?? "");
+  try {
+    await deleteCatalog(token, catalogId);
+    return { isError: false, text: JSON.stringify({ deleted: true, catalog_id: catalogId }) };
+  } catch (error) {
+    if (error instanceof MetaGraphError) return { isError: true, text: error.message };
+    throw error;
+  }
+}
 
 /**
  * The Meta Ads agent's tools, called by our agent service (signed), never by a
@@ -59,7 +71,8 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const row = await loadMetaConnection(admin, workspaceId);
     const token = tokenOf(row);
-    const tools = await listAgentTools(token);
+    // Meta's MCP tools plus the few the site runs itself (same read/write rules).
+    const tools = [...(await listAgentTools(token)), ...LOCAL_TOOLS];
 
     if (action === "tools") return NextResponse.json({ tools });
 
@@ -110,7 +123,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     let out: { isError: boolean; text: string };
     try {
-      out = await callTool(token, tool.name, args);
+      out = tool.name === "graph_catalog_delete" ? await runCatalogDelete(token, args) : await callTool(token, tool.name, args);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await admin.from("meta_ads_changes").insert({ workspace_id: workspaceId, chat_id: chatId, approval_id: approvalId, tool: tool.name, title, arguments: args, status: "failed", error: message.slice(0, 2000), applied_by: approval.decided_by });

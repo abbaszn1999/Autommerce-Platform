@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, ExternalLink, Infinity as InfinityIcon, Loader2, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
 import { useWorkspaceContext } from "@/app/(dashboard)/w/[workspaceSlug]/workspace-context";
 import { StoreAgentWorkspace } from "@/components/store-agent/store-agent-workspace";
+import { onAccountChanged } from "@/lib/store-agent/change-signal";
 import { cn } from "@/lib/utils";
 import { MetaMark } from "./ma-connect";
 
@@ -85,30 +86,83 @@ export function useLoginResult(): string | null {
   return error;
 }
 
-/** Shown above the demo: connect the real account (admins) or why it isn't possible. */
-export function MetaConnectBanner({ workspaceId, canManage, loginError }: { workspaceId: string; canManage: boolean; loginError: string | null }) {
+/**
+ * The connect screen when Meta is set up on the server: only the real Facebook
+ * Login for Business (no simulated demo button a person or a reviewer could
+ * mistake for it), what Autommerce does and never does, and the policies.
+ */
+export function MetaRealConnect({ workspaceId, canManage, loginError }: { workspaceId: string; canManage: boolean; loginError: string | null }) {
+  const can = [
+    "Read your ad accounts, campaigns and results",
+    "Read your business portfolios, Facebook Pages and Page posts",
+    "Read and manage your product catalogs",
+    "Prepare changes to your ads; each one runs only after you approve it",
+  ];
+  const never = ["See your Facebook password", "Change billing or payment methods", "Post on your Page", "Change anything without your approval"];
   return (
-    <div className="border-b border-border/60 bg-[#1877F2]/[0.06] px-6 py-3">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3">
-        <MetaMark className="h-7 w-7 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold">Connect your real Meta ad account</div>
-          <div className="text-xs text-muted-foreground">
-            Facebook Login for Business: you choose which ad accounts, Pages and catalogs Autommerce may use. We never see your password, and every change waits for your approval.
+    <div className="autommerce-dashboard flex-1 overflow-auto bg-background px-6 py-12 [font-family:var(--brand-font)]">
+      <div className="mx-auto max-w-2xl space-y-6">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#400095] text-white dark:bg-[#F76D01]">
+            <InfinityIcon className="h-5 w-5" />
+          </span>
+          <div>
+            <h1 className="text-2xl font-black tracking-[-0.03em]">Connect your Meta ad account</h1>
+            <p className="text-sm text-muted-foreground">Vera, Autommerce&apos;s ads agent, works on the Facebook and Instagram ad accounts you choose.</p>
           </div>
-          {loginError && (
-            <div className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-red-600">
-              <AlertTriangle className="h-3.5 w-3.5" /> {errorText(loginError)}
-            </div>
+        </div>
+        {loginError && <Notice>{errorText(loginError)}</Notice>}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-border/70 p-4">
+            <h2 className="mb-2 text-sm font-black">With your permission, Autommerce can</h2>
+            <ul className="space-y-1.5 text-[13px]">
+              {can.map((t) => (
+                <li key={t} className="flex gap-2">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> {t}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-border/70 p-4">
+            <h2 className="mb-2 text-sm font-black">Autommerce never</h2>
+            <ul className="space-y-1.5 text-[13px]">
+              {never.map((t) => (
+                <li key={t} className="flex gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" /> {t}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div className="flex flex-col items-start gap-3 rounded-2xl bg-[#1877F2]/[0.06] p-5">
+          <div className="flex items-center gap-3">
+            <MetaMark className="h-8 w-8" />
+            <p className="text-[13px] text-muted-foreground">
+              You log in on Facebook (Facebook Login for Business) and choose which business portfolios, ad accounts, Pages and catalogs to share. You can
+              disconnect at any time.
+            </p>
+          </div>
+          {canManage ? (
+            <a href={connectUrl(workspaceId)} className={cn(BRAND_BTN, "bg-[#1877F2] hover:bg-[#166fe0] dark:bg-[#1877F2] dark:hover:bg-[#166fe0]")}>
+              Connect with Facebook
+            </a>
+          ) : (
+            <span className="text-xs text-muted-foreground">Only the workspace owner or an admin can connect Meta.</span>
           )}
         </div>
-        {canManage ? (
-          <a href={connectUrl(workspaceId)} className={cn(BRAND_BTN, "bg-[#1877F2] hover:bg-[#166fe0] dark:bg-[#1877F2] dark:hover:bg-[#166fe0]")}>
-            Connect with Facebook
+        <p className="text-[11px] text-muted-foreground">
+          <a href="https://autommerce.com/meta-privacy/" target="_blank" rel="noreferrer" className="underline">
+            Privacy Policy for Meta
+          </a>{" "}
+          ·{" "}
+          <a href="https://autommerce.com/meta-terms/" target="_blank" rel="noreferrer" className="underline">
+            Terms
+          </a>{" "}
+          ·{" "}
+          <a href="https://autommerce.com/data-deletion/" target="_blank" rel="noreferrer" className="underline">
+            Delete your data
           </a>
-        ) : (
-          <span className="text-xs text-muted-foreground">Only the workspace owner or an admin can connect Meta.</span>
-        )}
+        </p>
       </div>
     </div>
   );
@@ -476,6 +530,32 @@ type PanelData = {
   campaigns: Section<{ rows: Array<Record<string, unknown>>; raw?: string }>;
   posts: Section<Array<{ id: string; message: string | null; createdTime: string; permalink: string | null; picture: string | null }>>;
   products: Section<{ rows: Array<Record<string, unknown>>; total: number | null }>;
+  catalogs?: Section<Array<{ id: string; name: string; products: number | null; business: string | null }>>;
+};
+const RANGES = [
+  { id: "last_30d", label: "Last 30 days" },
+  { id: "last_90d", label: "Last 90 days" },
+  { id: "maximum", label: "All time" },
+] as const;
+type RangeId = (typeof RANGES)[number]["id"];
+/** Column titles in plain words (Meta's field names otherwise). */
+const COLUMN_LABELS: Record<string, string> = {
+  amount_spent: "Spend",
+  spend: "Spend",
+  impressions: "Impressions",
+  reach: "Reach",
+  clicks: "Clicks",
+  results: "Results",
+  conversions: "Conversions",
+  actions: "Conversions",
+  ctr: "CTR",
+  cpc: "CPC",
+  cpm: "CPM",
+  effective_status: "Delivery",
+  status: "Status",
+  name: "Campaign",
+  objective: "Objective",
+  cost_per_result: "Cost per result",
 };
 
 /** A value from Meta: money comes as { value, unit } or { amount, currency }. */
@@ -485,22 +565,29 @@ const cell = (v: unknown): string => {
     const o = v as Record<string, unknown>;
     const amount = o.value ?? o.amount;
     const unit = o.unit ?? o.currency;
-    if (amount !== undefined) return `${amount}${unit ? ` ${unit}` : ""}`;
+      if (amount !== undefined) return `${amount}${unit ? ` ${unit}` : ""}`;
   }
+  // Conversions can come as a list of actions: show their total.
+  if (Array.isArray(v) && v.every((x) => x && typeof x === "object" && "value" in (x as object))) {
+    const total = v.reduce((sum, x) => sum + (Number((x as Record<string, unknown>).value) || 0), 0);
+    return total.toLocaleString();
+  }
+  if (typeof v === "number") return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
   return typeof v === "object" ? JSON.stringify(v).slice(0, 60) : String(v);
 };
 /** Columns worth showing first, when Meta's answer has them. */
-const CAMPAIGN_COLUMNS = ["name", "status", "effective_status", "objective", "amount_spent", "spend", "impressions", "reach", "clicks", "ctr", "cpc", "cpm", "results", "cost_per_result"];
+const CAMPAIGN_COLUMNS = ["name", "effective_status", "impressions", "reach", "clicks", "amount_spent", "spend", "results", "conversions", "actions", "ctr", "cpc", "cpm", "cost_per_result", "objective", "status"];
 
 function LivePanel({ workspaceId, connection }: { workspaceId: string; connection: LiveConnection }) {
   const [data, setData] = useState<PanelData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [range, setRange] = useState<RangeId>("last_30d");
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/meta-ads/panel?workspaceId=${encodeURIComponent(workspaceId)}`, { cache: "no-store" });
+      const res = await fetch(`/api/meta-ads/panel?workspaceId=${encodeURIComponent(workspaceId)}&range=${range}`, { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) setError(json.error ?? "network");
       else setData(json);
@@ -509,16 +596,33 @@ function LivePanel({ workspaceId, connection }: { workspaceId: string; connectio
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [workspaceId, range]);
   useEffect(() => {
     void load();
   }, [load, connection.adAccount?.id, connection.page?.id, connection.catalog?.id]);
+  // A change Vera applied after approval: read Meta again so the panel shows it.
+  useEffect(() => onAccountChanged(() => void load()), [load]);
 
   const refresh = (
-    <button type="button" onClick={() => void load()} disabled={loading} className={GHOST_BTN}>
-      <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh
-    </button>
+    <div className="flex items-center gap-2">
+      <select
+        value={range}
+        onChange={(e) => setRange(e.target.value as RangeId)}
+        aria-label="Period"
+        className="h-9 rounded-lg border border-border/70 bg-background px-2 text-xs font-semibold outline-none"
+      >
+        {RANGES.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.label}
+          </option>
+        ))}
+      </select>
+      <button type="button" onClick={() => void load()} disabled={loading} className={GHOST_BTN}>
+        <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh
+      </button>
+    </div>
   );
+  const rangeLabel = RANGES.find((r) => r.id === range)?.label ?? "";
   if (error) return <Notice>{errorText(error)}</Notice>;
   if (!data)
     return (
@@ -529,12 +633,21 @@ function LivePanel({ workspaceId, connection }: { workspaceId: string; connectio
 
   return (
     <>
-      <Card title="Campaigns · last 30 days" hint={`${connection.adAccount?.name ?? ""} · read live from Meta`} action={refresh}>
+      <Card title={`Campaigns · ${rangeLabel.toLowerCase()}`} hint={`${connection.adAccount?.name ?? ""} · read live from Meta`} action={refresh}>
         <SectionBody section={data.campaigns}>
           {(d) => {
             if (!d.rows.length) return <Empty>{d.raw ? "Meta's answer had no campaign list." : "No campaigns in this ad account yet."}</Empty>;
-            const keys = Object.keys(d.rows[0]);
-            const cols = [...CAMPAIGN_COLUMNS.filter((c) => keys.includes(c)), ...keys.filter((k) => !CAMPAIGN_COLUMNS.includes(k) && /id$/.test(k) === false)].slice(0, 8);
+            // Every key any row has (Meta leaves a metric out of a row that has none).
+            const keys = [...new Set(d.rows.flatMap((r) => Object.keys(r)))];
+            const seenLabels = new Set<string>();
+            const cols = [...CAMPAIGN_COLUMNS.filter((c) => keys.includes(c)), ...keys.filter((k) => !CAMPAIGN_COLUMNS.includes(k) && !/id$/.test(k))]
+              .filter((c) => {
+                const label = COLUMN_LABELS[c] ?? c;
+                if (seenLabels.has(label)) return false;
+                seenLabels.add(label);
+                return true;
+              })
+              .slice(0, 10);
             return (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-[12px]">
@@ -542,7 +655,7 @@ function LivePanel({ workspaceId, connection }: { workspaceId: string; connectio
                     <tr className="border-b text-muted-foreground">
                       {cols.map((c) => (
                         <th key={c} className="whitespace-nowrap px-2 py-1.5 font-semibold">
-                          {c.replace(/_/g, " ")}
+                          {COLUMN_LABELS[c] ?? c.replace(/_/g, " ")}
                         </th>
                       ))}
                     </tr>
@@ -617,6 +730,31 @@ function LivePanel({ workspaceId, connection }: { workspaceId: string; connectio
           </SectionBody>
         </Card>
       </div>
+
+      {data.catalogs && (
+        <Card title="Product catalogs" hint="Every catalog you shared · Vera creates, renames and deletes catalogs only after your approval">
+          <SectionBody section={data.catalogs}>
+            {(list) =>
+              list.length ? (
+                <ul className="divide-y divide-border/40 text-[12px]">
+                  {list.map((c) => (
+                    <li key={c.id} className="flex items-center justify-between gap-3 py-1.5">
+                      <span className="min-w-0 truncate font-medium">{c.name}</span>
+                      <span className="shrink-0 text-muted-foreground">
+                        {c.business ? `${c.business} · ` : ""}
+                        {c.products !== null ? `${c.products.toLocaleString()} products · ` : ""}
+                        {c.id}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <Empty>No catalogs shared yet.</Empty>
+              )
+            }
+          </SectionBody>
+        </Card>
+      )}
     </>
   );
 }

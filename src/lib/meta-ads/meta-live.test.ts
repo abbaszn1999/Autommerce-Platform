@@ -134,3 +134,27 @@ describe("Meta conversation id", () => {
     expect(card.items[0].changes.map((c) => c.field)).toEqual(["id"]);
   });
 });
+
+describe("Meta panel metrics and local tools", () => {
+  it("maps wanted metrics to Meta's canonical names supported at campaign level", async () => {
+    const { campaignFields } = await import("./mcp-tools");
+    const answer = {
+      fields: [
+        { canonical_name: "impressions", levels: ["ad_account", "campaign", "adset", "ad"] },
+        { canonical_name: "amount_spent", aliases: ["spend"], levels: ["campaign"] },
+        { canonical_name: "reach", levels: ["campaign"] },
+        { canonical_name: "results", levels: ["adset", "ad"] },
+        { name: "clicks", levels: ["campaign"] },
+      ],
+    };
+    expect(campaignFields(answer)).toEqual(["impressions", "reach", "clicks", "amount_spent"]);
+    expect(campaignFields("nothing")).toEqual([]);
+  });
+
+  it("offers catalog delete as a permanent write that needs approval", async () => {
+    const { LOCAL_TOOLS, changeCard, findAgentTool } = await import("./mcp-tools");
+    const tool = findAgentTool(LOCAL_TOOLS, "graph_catalog_delete")!;
+    expect(tool).toMatchObject({ kind: "write", destructive: true });
+    expect(changeCard(tool, { catalog_id: "123" }).warnings.join(" ")).toMatch(/permanent/);
+  });
+});

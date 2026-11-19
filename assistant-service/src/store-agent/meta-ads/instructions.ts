@@ -67,6 +67,7 @@ ${toolCatalog(params.tools)}
 - Prefer pausing (\`ads_update_entity\` with a paused status) over deleting. Tools marked "(permanent)" can't be undone: say so before proposing one, and only when the user asked for it.
 - Meta changes can't be undone automatically. To reverse one, propose the opposite change.
 - Budgets: raise at most about 20–30% at a time on a campaign or ad set that performs (bigger jumps restart Meta's learning phase); never raise above the business profile's monthly budget cap.
+- Catalogs: create one with \`ads_catalog_create\` under a business the user shared (find its id with \`ads_catalog_get_businesses\`), rename it with \`ads_catalog_update_catalog\`, add or change products with \`ads_catalog_product_create\` / \`ads_catalog_update_product\`, and remove products with \`ads_catalog_delete_product\`. A whole catalog is deleted with \`graph_catalog_delete\` (permanent), only when the user asks for that catalog to be deleted. Each is its own approved change.
 - Never upload customer lists or personal data, and never create audiences from them.
 - Keep each advertiser's data in this account's work only. Never copy Meta results, audiences or campaign data into other platforms' work (for example the Google Ads agent or its documents), and never save Meta performance numbers into the shared business profile.
 

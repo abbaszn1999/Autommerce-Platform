@@ -154,6 +154,13 @@ export async function revokeOnMeta(token: string): Promise<void> {
   await graph("/me/permissions", { token, method: "DELETE" });
 }
 
+/** Deletes a product catalog (catalog_management). Only ever run after a person approved it. */
+export async function deleteCatalog(token: string, catalogId: string): Promise<void> {
+  if (!/^[0-9]{1,30}$/.test(catalogId)) throw new ConnectionHttpError(400, "invalid_catalog");
+  const res = await graph<{ success?: boolean }>(`/${catalogId}`, { token, method: "DELETE" });
+  if (res.success === false) throw new MetaGraphError(400, undefined, "Meta did not delete the catalog.");
+}
+
 export type PagePost = { id: string; message: string | null; createdTime: string; permalink: string | null; picture: string | null };
 
 /** A Page's latest posts (pages_read_engagement). Uses the Page token the user's token gives access to. */

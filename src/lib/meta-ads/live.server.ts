@@ -3,7 +3,7 @@
 // doesn't cover). Server only.
 
 import { pagePosts, type MetaConnectionRow, type PagePost } from "./connection.server";
-import { conversationId, pickAssets, type Asset } from "./mcp-tools";
+import { PANEL_METRICS, campaignFields, conversationId, pickAssets, type Asset } from "./mcp-tools";
 import { callTool, parseJson } from "./mcp.server";
 
 export type AssetLists = {
@@ -59,9 +59,10 @@ export async function listAssets(token: string, workspaceId: string): Promise<As
 type Section<T> = { ok: true; data: T } | { ok: false; error: string };
 
 export type PanelData = {
-  campaigns: Section<{ rows: Array<Record<string, unknown>>; raw?: string }>;
+  campaigns: Section<{ rows: Array<Record<string, unknown>>; raw?: string; range: PanelRange }>;
   posts: Section<PagePost[]>;
   products: Section<{ rows: Array<Record<string, unknown>>; total: number | null }>;
+  catalogs: Section<Array<{ id: string; name: string; products: number | null; business: string | null }>>;
 };
 
 const section = async <T,>(run: () => Promise<T>): Promise<Section<T>> => {
@@ -95,21 +96,47 @@ async function readRows(token: string, tool: string, args: Record<string, unknow
   return { json, rows: rowsOf(json), text: out.text };
 }
 
+/** Periods the panel offers (Meta's date presets). */
+export const PANEL_RANGES = { last_30d: "Last 30 days", last_90d: "Last 90 days", maximum: "All time" } as const;
+export type PanelRange = keyof typeof PANEL_RANGES;
+export const isPanelRange = (v: unknown): v is PanelRange => typeof v === "string" && v in PANEL_RANGES;
+
+/** Canonical metric names per token, looked up once an hour (Meta asks to use ads_get_field_context for fields). */
+const fieldCache = new Map<string, { fields: string[]; at: number }>();
+const FIELDS_TTL_MS = 60 * 60 * 1000;
+
+async function metricFields(token: string, workspaceId: string): Promise<string[]> {
+  const key = token.slice(-24);
+  const cached = fieldCache.get(key);
+  if (cached && Date.now() - cached.at < FIELDS_TTL_MS) return cached.fields;
+  let fields: string[] = [];
+  try {
+    const out = await callTool(token, "ads_get_field_context", panelArgs(workspaceId, { field_names: [...PANEL_METRICS] }));
+    if (!out.isError) fields = campaignFields(parseJson(out.text));
+  } catch {
+    // Not fatal: the table falls back to Meta's default columns.
+  }
+  fieldCache.set(key, { fields, at: Date.now() });
+  return fields;
+}
+
 /**
- * The stage A panel: recent campaigns with their numbers (ads_read), the Page's
- * latest posts (pages_read_engagement) and the catalog's products
+ * The stage A panel: campaigns with their numbers (ads_read), the Page's latest
+ * posts (pages_read_engagement), the catalogs and the selected catalog's products
  * (catalog_management). Each section fails on its own.
  */
-export async function panelData(row: MetaConnectionRow, token: string): Promise<PanelData> {
-  const [campaigns, posts, products] = await Promise.all([
+export async function panelData(row: MetaConnectionRow, token: string, range: PanelRange = "last_30d"): Promise<PanelData> {
+  const [campaigns, posts, products, catalogs] = await Promise.all([
     section(async () => {
       if (!row.ad_account_id) throw new Error("Pick an ad account first.");
-      const { rows, text } = await readRows(
-        token,
-        "ads_get_ad_entities",
-        panelArgs(row.workspace_id, { ad_account_id: row.ad_account_id, level: "campaign", date_preset: "last_30d", reporting_purpose: ["key_performance"], limit: 50 })
-      );
-      return { rows: rows.slice(0, 50), raw: rows.length ? undefined : text.slice(0, 1000) };
+      const metrics = await metricFields(token, row.workspace_id);
+      const base = { ad_account_id: row.ad_account_id, level: "campaign", date_preset: range, reporting_purpose: ["key_performance"], limit: 50 };
+      const read = (args: Record<string, unknown>) => readRows(token, "ads_get_ad_entities", panelArgs(row.workspace_id, args));
+      // With Meta's own metric names; if Meta refuses them, Meta's default columns.
+      const result = metrics.length
+        ? await read({ ...base, fields: ["id", "name", "status", "effective_status", ...metrics] }).catch(() => read(base))
+        : await read(base);
+      return { rows: result.rows.slice(0, 50), raw: result.rows.length ? undefined : result.text.slice(0, 1000), range };
     }),
     section(async () => {
       if (!row.page_id) throw new Error("Pick a Page first.");
@@ -122,6 +149,16 @@ export async function panelData(row: MetaConnectionRow, token: string): Promise<
       const total = Number(info?.total_count ?? (json as Record<string, unknown> | null)?.total_count);
       return { rows: rows.slice(0, 10), total: Number.isFinite(total) ? total : null };
     }),
+    section(async () => {
+      // Every catalog the person shared, so one Vera creates, renames or deletes shows up here whatever business owns it.
+      const { rows } = await readRows(token, "ads_catalog_list_catalogs", panelArgs(row.workspace_id, { limit: 50 }));
+      return rows.slice(0, 50).map((c) => ({
+        id: String(c.catalog_id ?? c.id ?? ""),
+        name: String(c.name ?? c.catalog_id ?? ""),
+        products: typeof c.product_count === "number" ? c.product_count : null,
+        business: c.business && typeof c.business === "object" ? String((c.business as Record<string, unknown>).name ?? "") || null : null,
+      }));
+    }),
   ]);
-  return { campaigns, posts, products };
+  return { campaigns, posts, products, catalogs };
 }

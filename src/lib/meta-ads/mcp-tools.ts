@@ -92,6 +92,62 @@ export function toAgentTools(tools: McpTool[]): AgentTool[] {
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Tools that are not in Meta's MCP server but that the app needs, run by the
+ * site with a direct Graph API call. Same rules: a write waits for approval.
+ * - graph_catalog_delete: the MCP server can create and update catalogs and
+ *   delete products, but has no "delete catalog" (catalog_management covers it).
+ */
+export const LOCAL_TOOLS: AgentTool[] = [
+  {
+    name: "graph_catalog_delete",
+    description:
+      "Delete a whole product catalog by its id (Meta Graph API, catalog_management). Permanent: the catalog with its products, sets and feeds is removed. " +
+      "Use it only when the user asks to delete that catalog, for example a test catalog they created.",
+    inputSchema: {
+      type: "object",
+      properties: { catalog_id: { type: "string", description: "The catalog's numeric id (catalog_id from ads_catalog_list_catalogs)." } },
+      required: ["catalog_id"],
+    },
+    kind: "write",
+    destructive: true,
+  },
+];
+
+/** The metrics the panel shows when Meta has them (Meta's App Review asks for impressions, reach, clicks, spend and conversions). */
+export const PANEL_METRICS = ["impressions", "reach", "clicks", "amount_spent", "spend", "results", "conversions", "actions", "ctr", "cpc", "cpm"] as const;
+
+/**
+ * Canonical field names from ads_get_field_context that work at campaign level.
+ * Meta's answer is read by shape: objects with a name (canonical_name or name)
+ * and a `levels` list; aliases (`aliases` or `alias`) map our wanted names to them.
+ */
+export function campaignFields(json: unknown, wanted: readonly string[] = PANEL_METRICS): string[] {
+  const found = new Map<string, string>();
+  const visit = (v: unknown, depth: number) => {
+    if (depth > 4 || !v || typeof v !== "object") return;
+    if (Array.isArray(v)) return v.forEach((x) => visit(x, depth + 1));
+    const o = v as Record<string, unknown>;
+    const canonical = typeof o.canonical_name === "string" ? o.canonical_name : typeof o.name === "string" ? o.name : null;
+    const levels = Array.isArray(o.levels) ? o.levels.map(String) : null;
+    if (canonical && levels) {
+      if (levels.includes("campaign")) {
+        const names = [canonical, ...(Array.isArray(o.aliases) ? o.aliases.map(String) : []), ...(typeof o.alias === "string" ? [o.alias] : [])];
+        for (const n of names) if (!found.has(n.toLowerCase())) found.set(n.toLowerCase(), canonical);
+      }
+      return;
+    }
+    Object.values(o).forEach((x) => visit(x, depth + 1));
+  };
+  visit(json, 0);
+  const out: string[] = [];
+  for (const w of wanted) {
+    const c = found.get(w.toLowerCase());
+    if (c && !out.includes(c)) out.push(c);
+  }
+  return out;
+}
+
 export function findAgentTool(tools: AgentTool[], name: unknown): AgentTool | undefined {
   return typeof name === "string" ? tools.find((t) => t.name === name) : undefined;
 }

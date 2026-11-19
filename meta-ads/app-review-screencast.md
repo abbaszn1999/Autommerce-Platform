@@ -36,6 +36,9 @@ Not specified by Meta: length, file size, format. MP4 is the safe choice; keep i
 
 ## 3. App changes needed before recording
 
+Status November 19, 2026: fixes A and B and the website wording (part of C) are built; the reviewer login (C) is yours. Reviewer access to the preview: give the preview password in the reviewer instructions. In the video, set the campaigns period to **All time** so the metrics show real numbers.
+
+
 - **Fix A: metrics in the panel.** The campaign table shows only status and amount spent today. Meta asks for Impressions, Conversions, Spend, Clicks and Reach on screen. Request those fields in `ads_get_ad_entities` (their exact names come from Meta's `ads_get_field_context`) and show them as columns.
 - **Fix B: catalog create / update / delete.** Meta's MCP server has create catalog, update catalog, and delete product / product set (no "delete catalog" tool). The video shows Vera, after approval: creating a test catalog, renaming it (update), adding one test product and then deleting that product. If "delete catalog" itself is required, it is one direct Graph API call (`DELETE /{catalog-id}`) to add as an approved action.
 - **Fix C: reviewer access.**
