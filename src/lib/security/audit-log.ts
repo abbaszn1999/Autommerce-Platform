@@ -12,7 +12,8 @@ export type SecurityAuditAction =
   | "analytics.connect"
   | "analytics.disconnect"
   | "workspace.delete"
-  | "user.delete";
+  | "user.delete"
+  | "subscription.extra_workspaces";
 
 export async function writeSecurityAuditLog(
   admin: SupabaseClient,

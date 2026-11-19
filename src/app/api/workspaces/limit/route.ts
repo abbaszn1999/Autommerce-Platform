@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getUserSubscription, isSubscriptionActive } from "@/lib/stripe";
+import { extraWorkspacesOf } from "@/lib/billing/workspace-allowance";
 
 export async function GET() {
   try {
@@ -27,7 +28,10 @@ export async function GET() {
       userSub.subscription.status,
       userSub.subscription.trial_end
     );
-    const maxWorkspaces = hasActiveSubscription ? userSub?.plan?.max_workspaces ?? 1 : 1;
+    // The plan's limit plus any extra workspaces the platform admin granted this customer.
+    const maxWorkspaces = hasActiveSubscription
+      ? (userSub?.plan?.max_workspaces ?? 1) + extraWorkspacesOf(userSub?.subscription)
+      : 1;
     const canCreate = currentCount < maxWorkspaces;
 
     return NextResponse.json({

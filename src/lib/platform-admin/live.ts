@@ -3,6 +3,7 @@ import { adminCreditBalance, unwrapRelation } from "./credit-balance";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { loadWorkspaceUsageMap, sumUsage, usageOf } from "./usage";
 import type { AdminMemberRole, AdminSubscriptionStatus } from "./types";
+import { extraWorkspacesOf } from "@/lib/billing/workspace-allowance";
 import type {
   LiveMember,
   LiveUserDetail,
@@ -284,7 +285,7 @@ export async function loadLiveUserDetail(id: string): Promise<LiveUserDetail | n
   if (memberError) throw new Error(memberError.message);
   const { data: sub, error: subError } = await admin
     .from("user_subscriptions")
-    .select("stripe_customer_id, stripe_subscription_id, credits_used, bonus_credits, billing_cycle, current_period_end, trial_end, cancel_at_period_end, status, subscription_plans(monthly_ai_credits)")
+    .select("stripe_customer_id, stripe_subscription_id, credits_used, bonus_credits, billing_cycle, current_period_end, trial_end, cancel_at_period_end, status, extra_workspaces, subscription_plans(monthly_ai_credits, max_workspaces)")
     .eq("user_id", id)
     .maybeSingle();
   if (subError) throw new Error(subError.message);
@@ -301,7 +302,10 @@ export async function loadLiveUserDetail(id: string): Promise<LiveUserDetail | n
   }));
 
   const plan = unwrapRelation(
-    sub?.subscription_plans as { monthly_ai_credits?: number } | { monthly_ai_credits?: number }[] | null
+    sub?.subscription_plans as
+      | { monthly_ai_credits?: number; max_workspaces?: number | null }
+      | { monthly_ai_credits?: number; max_workspaces?: number | null }[]
+      | null
   );
   const balance = sub
     ? adminCreditBalance({
@@ -327,6 +331,9 @@ export async function loadLiveUserDetail(id: string): Promise<LiveUserDetail | n
     billingCycle: (sub?.billing_cycle as string | null) ?? null,
     currentPeriodEnd: (sub?.current_period_end as string | null) ?? null,
     cancelAtPeriodEnd: Boolean(sub?.cancel_at_period_end),
+    planMaxWorkspaces: plan?.max_workspaces ?? null,
+    extraWorkspaces: extraWorkspacesOf(sub),
+    hasSubscription: !!sub,
   };
 }
 

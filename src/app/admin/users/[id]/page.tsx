@@ -13,11 +13,84 @@ import { Panel, DetailGrid } from "@/components/platform-admin/panel";
 import { SignInAsButton } from "@/components/platform-admin/sign-in-as-button";
 import { PlanBadge, SubscriptionStatusBadge, UserStatusBadge } from "@/components/platform-admin/status-badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { adminJson } from "@/lib/platform-admin/client-api";
 import { formatCredits, formatDate, formatRelative, formatBytes } from "@/lib/platform-admin/format";
 import { ROLE_LABELS } from "@/lib/platform-admin/labels";
 import type { LiveUserDetail } from "@/lib/platform-admin/live-types";
 import { adminRoutes } from "@/lib/platform-admin/paths";
+
+/**
+ * The customer's workspace limit: their plan's, plus extra workspaces granted here.
+ * Only this customer changes; the plan and its other customers stay as they are.
+ */
+function WorkspaceLimitPanel({ user, onSaved }: { user: LiveUserDetail; onSaved: (user: LiveUserDetail) => void }) {
+  const [value, setValue] = useState(String(user.extraWorkspaces));
+  const [saving, setSaving] = useState(false);
+  const extra = Number(value);
+  const valid = value.trim() !== "" && Number.isInteger(extra) && extra >= 0 && extra <= 100;
+  const changed = valid && extra !== user.extraWorkspaces;
+  const total = (n: number) => (user.planMaxWorkspaces == null ? "Unlimited" : String(user.planMaxWorkspaces + n));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const data = await adminJson<{ user: LiveUserDetail }>(`/api/platform-admin/users/${user.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ extraWorkspaces: extra }),
+      });
+      onSaved(data.user);
+      setValue(String(data.user.extraWorkspaces));
+      toast.success(`${user.email} can now own ${total(data.user.extraWorkspaces)} workspaces`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Panel title="Workspace limit">
+      {!user.hasSubscription ? (
+        <p className="px-1 text-sm text-muted-foreground">This user has no subscription yet. Extra workspaces can be granted once they subscribe.</p>
+      ) : (
+        <div className="space-y-3 px-1">
+          <DetailGrid
+            nested
+            items={[
+              { label: "Plan limit", value: user.planMaxWorkspaces == null ? "Unlimited" : String(user.planMaxWorkspaces) },
+              { label: "Extra (granted here)", value: String(user.extraWorkspaces) },
+              { label: "Total allowed", value: `${total(user.extraWorkspaces)} · owns ${user.ownedWorkspaces.length}` },
+            ]}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="extra-workspaces" className="text-sm text-muted-foreground">
+              Extra workspaces
+            </label>
+            <Input
+              id="extra-workspaces"
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className="h-8 w-24"
+            />
+            <Button type="button" size="sm" disabled={!changed || saving} onClick={save}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+            {valid && changed && <span className="text-xs text-muted-foreground">Total becomes {total(extra)}</span>}
+            {!valid && <span className="text-xs text-destructive">A whole number from 0 to 100</span>}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Only this customer changes. The plan and its other customers keep their limit. Set 0 to remove the grant (workspaces they already own are kept). Every change is recorded in the audit log.
+          </p>
+        </div>
+      )}
+    </Panel>
+  );
+}
 
 export default function AdminUserDetailPage() {
   const params = useParams();
@@ -128,6 +201,8 @@ export default function AdminUserDetailPage() {
           />
         </Panel>
       ) : null}
+
+      <WorkspaceLimitPanel user={user} onSaved={setUser} />
 
       <Panel title="Owned workspaces">
         <AdminTable

@@ -71,6 +71,12 @@ export type LiveUserDetail = LiveUserListRow & {
   billingCycle: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  /** The plan's workspace limit (null: unlimited or no subscription). */
+  planMaxWorkspaces: number | null;
+  /** Extra workspaces the platform admin granted on top of the plan. */
+  extraWorkspaces: number;
+  /** Whether the user has a subscription row the grant can be saved on. */
+  hasSubscription: boolean;
 };
 
 export type LiveWorkspaceDetail = LiveWorkspaceListRow & {
