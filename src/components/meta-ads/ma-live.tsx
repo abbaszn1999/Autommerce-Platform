@@ -1,52 +1,24 @@
 "use client";
 
-// Stage A of the real Meta connection (meta-ads/connect-plan.md): Connect Meta
+// The real Meta connection (meta-ads/connect-plan.md, stage A): Connect Meta
 // with Facebook Login for Business, pick the assets, Vera's live chat on the
-// left (Meta's official Ads MCP tools, every change approved on a card) and a
-// small live panel on the right that shows each permission in use.
+// left (Meta's official Ads MCP tools, every change approved on a card) and
+// the account on the right with live data only (ma-live-account.tsx).
 
-import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, ExternalLink, Infinity as InfinityIcon, Loader2, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { motion } from "motion/react";
+import { AlertTriangle, BarChart3, Bot, Building2, Check, Infinity as InfinityIcon, KeyRound, Loader2, Lock, LogOut, Newspaper, RefreshCw, ShieldCheck, ShoppingBag, ThumbsUp } from "lucide-react";
 import { useWorkspaceContext } from "@/app/(dashboard)/w/[workspaceSlug]/workspace-context";
 import { StoreAgentWorkspace } from "@/components/store-agent/store-agent-workspace";
-import { onAccountChanged } from "@/lib/store-agent/change-signal";
 import { cn } from "@/lib/utils";
 import { MetaMark } from "./ma-connect";
+import { LiveAccountArea } from "./ma-live-account";
+import { BRAND_BTN, GHOST_BTN, Notice, connectUrl, errorText, fmtDate, type LiveConnection } from "./ma-live-common";
+
+export { connectUrl, type LiveConnection } from "./ma-live-common";
 
 type Pair = { id: string; name: string };
-export type LiveConnection = {
-  metaUserName: string | null;
-  connectedAt: string;
-  expiresAt: string | null;
-  expired: boolean;
-  expiresSoon: boolean;
-  scopes: string[];
-  adAccount: (Pair & { currency: string | null }) | null;
-  business: Pair | null;
-  page: Pair | null;
-  catalog: Pair | null;
-};
 type LiveState = { loading: boolean; configured: boolean; canManage: boolean; connection: LiveConnection | null; error: string | null };
-
-const BRAND_BTN =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#400095] px-5 text-sm font-bold text-white transition-colors hover:bg-[#340079] disabled:opacity-60 dark:bg-[#F76D01] dark:hover:bg-[#d85f00]";
-const GHOST_BTN = "inline-flex h-9 items-center gap-1.5 rounded-lg border border-border/70 px-3 text-xs font-semibold transition-colors hover:bg-muted/60 disabled:opacity-60";
-
-const ERRORS: Record<string, string> = {
-  cancelled: "You cancelled the Facebook login. Nothing was connected.",
-  missing_permissions: "Some permissions were not allowed, so nothing was connected. Connect again and allow everything asked.",
-  invalid_state: "The login link expired or was opened by another account. Start again.",
-  login_failed: "Facebook did not complete the login. Try again.",
-  token_expired: "The Meta connection expired or was removed. Reconnect Meta.",
-  meta_permission_missing: "Meta refused: a permission is missing. Reconnect Meta and allow everything asked.",
-  not_configured: "Meta is not set up on this server yet.",
-  network: "Meta could not be reached. Try again in a moment.",
-  meta_request_failed: "Meta did not answer. Try again in a moment.",
-  forbidden: "Only the workspace owner or an admin can do this.",
-};
-const errorText = (code: string | null | undefined) => (code ? ERRORS[code] ?? `Something went wrong (${code}).` : null);
-
-export const connectUrl = (workspaceId: string) => `/api/meta-ads/oauth/start?workspaceId=${encodeURIComponent(workspaceId)}`;
 
 /** The workspace's real Meta connection (null until connected, or when Meta isn't configured). */
 export function useMetaLive(workspaceId: string | undefined) {
@@ -86,84 +58,136 @@ export function useLoginResult(): string | null {
   return error;
 }
 
+// ── Connect ─────────────────────────────────────────────────────────────────
+
+const CAN = [
+  { icon: BarChart3, title: "Read your ads results", body: "Campaigns, spend, impressions, reach, clicks and results." },
+  { icon: Newspaper, title: "Read your Pages", body: "The Facebook Pages you manage and their posts." },
+  { icon: ShoppingBag, title: "Manage your catalogs", body: "List, create, rename and delete product catalogs." },
+  { icon: ThumbsUp, title: "Change ads only with your approval", body: "Vera prepares each change; it runs only after you click Apply." },
+];
+const NEVER = ["See your Facebook password", "Change billing or payment methods", "Post on your Page", "Change anything without your approval"];
+
 /**
  * The connect screen when Meta is set up on the server: only the real Facebook
- * Login for Business (no simulated demo button a person or a reviewer could
- * mistake for it), what Autommerce does and never does, and the policies.
+ * Login for Business (no simulated login a person or a reviewer could mistake
+ * for it), what Autommerce does and never does, and the policies.
  */
 export function MetaRealConnect({ workspaceId, canManage, loginError }: { workspaceId: string; canManage: boolean; loginError: string | null }) {
-  const can = [
-    "Read your ad accounts, campaigns and results",
-    "Read your business portfolios, Facebook Pages and Page posts",
-    "Read and manage your product catalogs",
-    "Prepare changes to your ads; each one runs only after you approve it",
-  ];
-  const never = ["See your Facebook password", "Change billing or payment methods", "Post on your Page", "Change anything without your approval"];
   return (
-    <div className="autommerce-dashboard flex-1 overflow-auto bg-background px-6 py-12 [font-family:var(--brand-font)]">
-      <div className="mx-auto max-w-2xl space-y-6">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#400095] text-white dark:bg-[#F76D01]">
-            <InfinityIcon className="h-5 w-5" />
-          </span>
-          <div>
-            <h1 className="text-2xl font-black tracking-[-0.03em]">Connect your Meta ad account</h1>
-            <p className="text-sm text-muted-foreground">Vera, Autommerce&apos;s ads agent, works on the Facebook and Instagram ad accounts you choose.</p>
-          </div>
-        </div>
-        {loginError && <Notice>{errorText(loginError)}</Notice>}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-border/70 p-4">
-            <h2 className="mb-2 text-sm font-black">With your permission, Autommerce can</h2>
-            <ul className="space-y-1.5 text-[13px]">
-              {can.map((t) => (
-                <li key={t} className="flex gap-2">
-                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> {t}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="rounded-2xl border border-border/70 p-4">
-            <h2 className="mb-2 text-sm font-black">Autommerce never</h2>
-            <ul className="space-y-1.5 text-[13px]">
-              {never.map((t) => (
-                <li key={t} className="flex gap-2">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" /> {t}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-        <div className="flex flex-col items-start gap-3 rounded-2xl bg-[#1877F2]/[0.06] p-5">
-          <div className="flex items-center gap-3">
-            <MetaMark className="h-8 w-8" />
-            <p className="text-[13px] text-muted-foreground">
-              You log in on Facebook (Facebook Login for Business) and choose which business portfolios, ad accounts, Pages and catalogs to share. You can
-              disconnect at any time.
+    <div className="autommerce-dashboard flex-1 overflow-auto bg-background [font-family:var(--brand-font)]">
+      <section className="relative overflow-hidden border-b border-border/60 bg-gradient-to-br from-[#400095]/[0.08] via-background to-[#F76D01]/[0.08]">
+        <div className="absolute -left-24 -top-28 h-72 w-72 rounded-full bg-[#400095]/10 blur-3xl" />
+        <div className="absolute -bottom-28 -right-16 h-72 w-72 rounded-full bg-[#F76D01]/10 blur-3xl" />
+        <div className="relative mx-auto grid max-w-6xl gap-10 px-6 py-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
+            <div className="mb-4 flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#400095] text-white shadow-[0_8px_25px_rgba(64,0,149,.22)] dark:bg-[#F76D01]">
+                <InfinityIcon className="h-4 w-4" />
+              </span>
+              <span className="text-[9px] font-black uppercase tracking-[0.24em] text-[#400095] dark:text-[#F76D01]">Agents · Meta Ads</span>
+            </div>
+            <h1 className="text-3xl font-black tracking-[-0.035em] sm:text-5xl">
+              Your Meta Ads,
+              <span className="block bg-gradient-to-r from-[#F76D01] via-[#C40000] to-[#400095] bg-clip-text pb-1 text-transparent">run with Vera.</span>
+            </h1>
+            <p className="mt-4 max-w-lg text-sm leading-relaxed text-muted-foreground">
+              Connect your Meta ad account and see your campaigns, Page posts and catalogs in one place. Ask Vera, Autommerce&apos;s ads agent, to analyse or change
+              them. She prepares the change, you approve it.
             </p>
-          </div>
-          {canManage ? (
-            <a href={connectUrl(workspaceId)} className={cn(BRAND_BTN, "bg-[#1877F2] hover:bg-[#166fe0] dark:bg-[#1877F2] dark:hover:bg-[#166fe0]")}>
-              Connect with Facebook
-            </a>
-          ) : (
-            <span className="text-xs text-muted-foreground">Only the workspace owner or an admin can connect Meta.</span>
-          )}
+            {loginError && (
+              <div className="mt-5 max-w-lg">
+                <Notice>{errorText(loginError)}</Notice>
+              </div>
+            )}
+            <div className="mt-6 flex max-w-lg flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-background/80 p-3 pr-4 shadow-sm">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                <InfinityIcon className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">Meta ad account</p>
+                <p className="text-xs text-muted-foreground">Facebook and Instagram ads, Pages and catalogs.</p>
+              </div>
+              {canManage ? (
+                <a
+                  href={connectUrl(workspaceId)}
+                  className="inline-flex h-11 items-center gap-2.5 rounded-xl bg-[#1877F2] px-5 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#166fe0] hover:shadow-md"
+                >
+                  <MetaMark className="h-5 w-5 [&_circle]:fill-white [&_text]:fill-[#1877F2]" />
+                  Connect with Facebook
+                </a>
+              ) : (
+                <span className="text-xs text-muted-foreground">Only the workspace owner or an admin can connect Meta.</span>
+              )}
+            </div>
+            <span className="mt-4 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <Lock className="h-3.5 w-3.5" /> Secure Facebook Login for Business. Autommerce never sees your Facebook password.
+            </span>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="rounded-3xl border border-border/60 bg-card/80 p-5 shadow-xl shadow-black/[0.04] backdrop-blur"
+          >
+            <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">With your permission, Autommerce can</p>
+            <div className="space-y-3">
+              {CAN.map((c) => (
+                <div key={c.title} className="flex gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#400095]/10 text-[#400095] dark:bg-violet-500/15 dark:text-violet-300">
+                    <c.icon className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold">{c.title}</p>
+                    <p className="text-xs text-muted-foreground">{c.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 rounded-2xl bg-muted/50 p-3">
+              <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Autommerce never</p>
+              {NEVER.map((c) => (
+                <p key={c} className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> {c}
+                </p>
+              ))}
+            </div>
+          </motion.div>
         </div>
-        <p className="text-[11px] text-muted-foreground">
-          <a href="https://autommerce.com/meta-privacy/" target="_blank" rel="noreferrer" className="underline">
-            Privacy Policy for Meta
-          </a>{" "}
-          ·{" "}
-          <a href="https://autommerce.com/meta-terms/" target="_blank" rel="noreferrer" className="underline">
-            Terms
-          </a>{" "}
-          ·{" "}
-          <a href="https://autommerce.com/data-deletion/" target="_blank" rel="noreferrer" className="underline">
-            Delete your data
-          </a>
-        </p>
+      </section>
+
+      <div className="mx-auto grid max-w-6xl gap-4 px-6 py-8 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { n: "1", icon: KeyRound, title: "Connect with Facebook", body: "Log in on Facebook and allow the permissions Autommerce asks for." },
+          { n: "2", icon: Building2, title: "Choose your assets", body: "Pick the ad account, business portfolio, Page and catalog Vera works on." },
+          { n: "3", icon: Bot, title: "Work with Vera", body: "Ask in chat. She reads your account through Meta's official tools." },
+          { n: "4", icon: Check, title: "Approve each change", body: "Nothing changes on Meta until you click Apply. Disconnect any time." },
+        ].map((s) => (
+          <div key={s.n} className="rounded-2xl border border-border/60 bg-card p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-[11px] font-bold text-background">{s.n}</span>
+              <s.icon className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-semibold">{s.title}</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{s.body}</p>
+          </div>
+        ))}
       </div>
+
+      <p className="mx-auto max-w-6xl px-6 pb-10 text-[11px] text-muted-foreground">
+        <a href="https://autommerce.com/meta-privacy/" target="_blank" rel="noreferrer" className="underline">
+          Privacy Policy for Meta
+        </a>{" "}
+        ·{" "}
+        <a href="https://autommerce.com/meta-terms/" target="_blank" rel="noreferrer" className="underline">
+          Terms
+        </a>{" "}
+        ·{" "}
+        <a href="https://autommerce.com/data-deletion/" target="_blank" rel="noreferrer" className="underline">
+          Delete your data
+        </a>
+      </p>
     </div>
   );
 }
@@ -207,38 +231,24 @@ export function MetaLiveWorkspace({ live, loginError }: { live: ReturnType<typeo
           variant="panel"
         />
       </aside>
-      <main className="min-w-0 flex-1 overflow-y-auto bg-[#F6F4FA] dark:bg-background">
-        <div className="mx-auto max-w-5xl space-y-4 px-5 py-5">
-          <ConnectionCard
-            workspaceId={workspace.id}
-            connection={connection}
-            canManage={canManage}
-            onChange={() => setChoosing(true)}
-            onDisconnected={() => live.setConnection(null)}
-          />
-          <LivePanel workspaceId={workspace.id} connection={connection} />
-        </div>
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col bg-[#F6F4FA] dark:bg-background">
+        <LiveAccountArea
+          workspaceId={workspace.id}
+          connection={connection}
+          connectionCard={
+            <ConnectionCard
+              workspaceId={workspace.id}
+              connection={connection}
+              canManage={canManage}
+              onChange={() => setChoosing(true)}
+              onDisconnected={() => live.setConnection(null)}
+            />
+          }
+        />
+      </div>
     </div>
   );
 }
-
-function Card({ title, hint, children, action }: { title: string; hint?: string; children: React.ReactNode; action?: React.ReactNode }) {
-  return (
-    <section className="rounded-2xl border border-border/70 bg-background p-4 shadow-sm">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-black">{title}</h2>
-          {hint && <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>}
-        </div>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—");
 
 function ConnectionCard({
   workspaceId,
@@ -254,11 +264,16 @@ function ConnectionCard({
   onDisconnected: () => void;
 }) {
   return (
-    <Card
-      title="Connected Meta account"
-      hint="Read and changed only through Meta's official tools, with the permissions you allowed."
-      action={
-        canManage ? (
+    <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <MetaMark className="h-9 w-9" />
+          <div>
+            <h2 className="text-sm font-black">Connected Meta account</h2>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">Read and changed only through Meta&apos;s official tools, with the permissions you allowed.</p>
+          </div>
+        </div>
+        {canManage && (
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={onChange} className={GHOST_BTN}>
               Change assets
@@ -268,15 +283,14 @@ function ConnectionCard({
             </a>
             <DisconnectButton workspaceId={workspaceId} onDone={onDisconnected} />
           </div>
-        ) : null
-      }
-    >
+        )}
+      </div>
       {connection.expiresSoon && (
         <div className="mb-3 flex items-center gap-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-400">
           <AlertTriangle className="h-4 w-4 shrink-0" /> The connection ends on {fmtDate(connection.expiresAt)}. Reconnect before then so Vera keeps working.
         </div>
       )}
-      <dl className="grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2">
+      <dl className="grid gap-x-6 gap-y-2.5 text-[13px] sm:grid-cols-2">
         <Row label="Facebook user" value={connection.metaUserName ?? "—"} />
         <Row label="Ad account" value={connection.adAccount ? `${connection.adAccount.name} (${connection.adAccount.id})${connection.adAccount.currency ? ` · ${connection.adAccount.currency}` : ""}` : "—"} />
         <Row label="Business portfolio" value={connection.business?.name ?? "—"} />
@@ -284,14 +298,15 @@ function ConnectionCard({
         <Row label="Catalog" value={connection.catalog?.name ?? "—"} />
         <Row label="Connection valid until" value={fmtDate(connection.expiresAt)} />
       </dl>
-      <div className="mt-3 flex flex-wrap gap-1.5">
+      <p className="mb-1.5 mt-4 text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">Permissions you allowed</p>
+      <div className="flex flex-wrap gap-1.5">
         {connection.scopes.map((s) => (
           <span key={s} className="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
             {s}
           </span>
         ))}
       </div>
-    </Card>
+    </section>
   );
 }
 
@@ -299,7 +314,9 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-w-0 gap-2">
       <dt className="w-40 shrink-0 text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 truncate font-medium">{value}</dd>
+      <dd className="min-w-0 truncate font-medium" dir="auto">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -397,12 +414,12 @@ function AssetPicker({
         if (!alive) return;
         if (!res.ok) return setLoadError(json.error ?? "network");
         setLists(json);
-        // One choice only: pick it.
+        // Pre-select the first of each list: the user changes what they want.
         setPick((p) => ({
-          adAccount: p.adAccount || (json.adAccounts?.length === 1 ? json.adAccounts[0].id : ""),
-          business: p.business || (json.businesses?.length === 1 ? json.businesses[0].id : ""),
-          page: p.page || (json.pages?.length === 1 ? json.pages[0].id : ""),
-          catalog: p.catalog || (json.catalogs?.length === 1 ? json.catalogs[0].id : ""),
+          adAccount: p.adAccount || (json.adAccounts?.[0]?.id ?? ""),
+          business: p.business || (json.businesses?.[0]?.id ?? ""),
+          page: p.page || (json.pages?.[0]?.id ?? ""),
+          catalog: p.catalog || (json.catalogs?.[0]?.id ?? ""),
         }));
       })
       .catch(() => alive && setLoadError("network"));
@@ -438,40 +455,63 @@ function AssetPicker({
   };
 
   return (
-    <div className="autommerce-dashboard flex-1 overflow-auto bg-background p-6 [font-family:var(--brand-font)]">
-      <div className="mx-auto max-w-2xl space-y-5">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#400095] text-white dark:bg-[#F76D01]">
-            <InfinityIcon className="h-5 w-5" />
+    <div className="autommerce-dashboard flex flex-1 items-start justify-center overflow-auto bg-background px-4 py-12 [font-family:var(--brand-font)]">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-xl">
+        <div className="mb-6 text-center">
+          <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10">
+            <Check className="h-6 w-6 text-emerald-600" />
           </span>
-          <div>
-            <h1 className="text-xl font-black">Choose what Vera works on</h1>
-            <p className="text-sm text-muted-foreground">
-              Connected as {connection.metaUserName ?? "your Facebook account"}. Only the assets you shared in the Facebook popup are listed.
-            </p>
-          </div>
+          <h1 className="text-2xl font-black tracking-tight">Choose what Vera works on</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Connected as <span className="font-medium text-foreground">{connection.metaUserName ?? "your Facebook account"}</span>. Only the assets you shared on Facebook are
+            listed.
+          </p>
         </div>
-        {loginError && <Notice>{errorText(loginError)}</Notice>}
-        {loadError && <Notice>{errorText(loadError)}</Notice>}
+        <div className="space-y-3">
+          {loginError && <Notice>{errorText(loginError)}</Notice>}
+          {loadError && <Notice>{errorText(loadError)}</Notice>}
+        </div>
         {!lists && !loadError && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Reading your Meta accounts…
           </div>
         )}
         {lists && (
-          <div className="space-y-4 rounded-2xl border border-border/70 p-5">
+          <div className="space-y-4 rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
             <Picker
-              label="Ad account (required)"
+              label="Ad account"
+              hint="Required. The account whose campaigns Vera reads and changes."
               value={pick.adAccount}
               onChange={(v) => setPick((p) => ({ ...p, adAccount: v }))}
               options={lists.adAccounts.map((a) => ({ id: a.id, label: `${a.name} (${a.id})${a.currency ? ` · ${a.currency}` : ""}${a.mcpEnabled === false ? " · not available to AI agents" : ""}` }))}
               error={lists.errors.adAccounts}
             />
-            <Picker label="Business portfolio" value={pick.business} onChange={(v) => setPick((p) => ({ ...p, business: v }))} options={lists.businesses.map((b) => ({ id: b.id, label: b.name }))} error={lists.errors.businesses} />
-            <Picker label="Facebook Page" value={pick.page} onChange={(v) => setPick((p) => ({ ...p, page: v }))} options={lists.pages.map((b) => ({ id: b.id, label: b.name }))} error={lists.errors.pages} />
-            <Picker label="Product catalog" value={pick.catalog} onChange={(v) => setPick((p) => ({ ...p, catalog: v }))} options={lists.catalogs.map((b) => ({ id: b.id, label: b.name }))} error={lists.errors.catalogs} />
+            <Picker
+              label="Business portfolio"
+              hint="The business that owns your ad accounts, Pages and catalogs."
+              value={pick.business}
+              onChange={(v) => setPick((p) => ({ ...p, business: v }))}
+              options={lists.businesses.map((b) => ({ id: b.id, label: b.name }))}
+              error={lists.errors.businesses}
+            />
+            <Picker
+              label="Facebook Page"
+              hint="The Page whose posts are shown."
+              value={pick.page}
+              onChange={(v) => setPick((p) => ({ ...p, page: v }))}
+              options={lists.pages.map((b) => ({ id: b.id, label: b.name }))}
+              error={lists.errors.pages}
+            />
+            <Picker
+              label="Product catalog"
+              hint="The catalog whose products are shown."
+              value={pick.catalog}
+              onChange={(v) => setPick((p) => ({ ...p, catalog: v }))}
+              options={lists.catalogs.map((b) => ({ id: b.id, label: b.name }))}
+              error={lists.errors.catalogs}
+            />
             {saveError && <Notice>{saveError}</Notice>}
-            <div className="flex items-center justify-between gap-3 pt-1">
+            <div className="flex items-center justify-between gap-3 pt-2">
               <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <ShieldCheck className="h-3.5 w-3.5" /> Every change Vera proposes waits for your approval.
               </p>
@@ -489,18 +529,33 @@ function AssetPicker({
             {!canManage && <p className="text-xs text-muted-foreground">Only the workspace owner or an admin can choose the assets.</p>}
           </div>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }
 
-function Picker({ label, value, onChange, options, error }: { label: string; value: string; onChange: (v: string) => void; options: Array<{ id: string; label: string }>; error?: string }) {
+function Picker({
+  label,
+  hint,
+  value,
+  onChange,
+  options,
+  error,
+}: {
+  label: string;
+  hint: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: Array<{ id: string; label: string }>;
+  error?: string;
+}) {
   return (
     <label className="block space-y-1.5">
-      <span className="text-xs font-bold">{label}</span>
+      <span className="text-xs font-semibold">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        dir="auto"
         className="h-10 w-full rounded-xl border border-border/70 bg-background px-3 text-sm outline-none focus:border-[#6B358D]"
       >
         <option value="">{options.length ? "— None —" : "Nothing shared"}</option>
@@ -510,260 +565,8 @@ function Picker({ label, value, onChange, options, error }: { label: string; val
           </option>
         ))}
       </select>
+      <span className="block text-[11px] text-muted-foreground">{hint}</span>
       {error && <span className="block text-[11px] text-red-600">Meta could not list these: {error}</span>}
     </label>
   );
-}
-
-function Notice({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-start gap-2 rounded-xl bg-red-500/10 px-3 py-2 text-xs font-medium text-red-700 dark:text-red-400">
-      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> <span>{children}</span>
-    </div>
-  );
-}
-
-// ── Live panel ──────────────────────────────────────────────────────────────
-
-type Section<T> = { ok: true; data: T } | { ok: false; error: string };
-type PanelData = {
-  campaigns: Section<{ rows: Array<Record<string, unknown>>; raw?: string }>;
-  posts: Section<Array<{ id: string; message: string | null; createdTime: string; permalink: string | null; picture: string | null }>>;
-  products: Section<{ rows: Array<Record<string, unknown>>; total: number | null }>;
-  catalogs?: Section<Array<{ id: string; name: string; products: number | null; business: string | null }>>;
-};
-const RANGES = [
-  { id: "last_30d", label: "Last 30 days" },
-  { id: "last_90d", label: "Last 90 days" },
-  { id: "maximum", label: "All time" },
-] as const;
-type RangeId = (typeof RANGES)[number]["id"];
-/** Column titles in plain words (Meta's field names otherwise). */
-const COLUMN_LABELS: Record<string, string> = {
-  amount_spent: "Spend",
-  spend: "Spend",
-  impressions: "Impressions",
-  reach: "Reach",
-  clicks: "Clicks",
-  results: "Results",
-  conversions: "Conversions",
-  actions: "Conversions",
-  ctr: "CTR",
-  cpc: "CPC",
-  cpm: "CPM",
-  effective_status: "Delivery",
-  status: "Status",
-  name: "Campaign",
-  objective: "Objective",
-  cost_per_result: "Cost per result",
-};
-
-/** A value from Meta: money comes as { value, unit } or { amount, currency }. */
-const cell = (v: unknown): string => {
-  if (v === null || v === undefined || v === "") return "—";
-  if (typeof v === "object" && !Array.isArray(v)) {
-    const o = v as Record<string, unknown>;
-    const amount = o.value ?? o.amount;
-    const unit = o.unit ?? o.currency;
-      if (amount !== undefined) return `${amount}${unit ? ` ${unit}` : ""}`;
-  }
-  // Conversions can come as a list of actions: show their total.
-  if (Array.isArray(v) && v.every((x) => x && typeof x === "object" && "value" in (x as object))) {
-    const total = v.reduce((sum, x) => sum + (Number((x as Record<string, unknown>).value) || 0), 0);
-    return total.toLocaleString();
-  }
-  if (typeof v === "number") return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return typeof v === "object" ? JSON.stringify(v).slice(0, 60) : String(v);
-};
-/** Columns worth showing first, when Meta's answer has them. */
-const CAMPAIGN_COLUMNS = ["name", "effective_status", "impressions", "reach", "clicks", "amount_spent", "spend", "results", "conversions", "actions", "ctr", "cpc", "cpm", "cost_per_result", "objective", "status"];
-
-function LivePanel({ workspaceId, connection }: { workspaceId: string; connection: LiveConnection }) {
-  const [data, setData] = useState<PanelData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [range, setRange] = useState<RangeId>("last_30d");
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/meta-ads/panel?workspaceId=${encodeURIComponent(workspaceId)}&range=${range}`, { cache: "no-store" });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) setError(json.error ?? "network");
-      else setData(json);
-    } catch {
-      setError("network");
-    } finally {
-      setLoading(false);
-    }
-  }, [workspaceId, range]);
-  useEffect(() => {
-    void load();
-  }, [load, connection.adAccount?.id, connection.page?.id, connection.catalog?.id]);
-  // A change Vera applied after approval: read Meta again so the panel shows it.
-  useEffect(() => onAccountChanged(() => void load()), [load]);
-
-  const refresh = (
-    <div className="flex items-center gap-2">
-      <select
-        value={range}
-        onChange={(e) => setRange(e.target.value as RangeId)}
-        aria-label="Period"
-        className="h-9 rounded-lg border border-border/70 bg-background px-2 text-xs font-semibold outline-none"
-      >
-        {RANGES.map((r) => (
-          <option key={r.id} value={r.id}>
-            {r.label}
-          </option>
-        ))}
-      </select>
-      <button type="button" onClick={() => void load()} disabled={loading} className={GHOST_BTN}>
-        <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh
-      </button>
-    </div>
-  );
-  const rangeLabel = RANGES.find((r) => r.id === range)?.label ?? "";
-  if (error) return <Notice>{errorText(error)}</Notice>;
-  if (!data)
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Reading live data from Meta…
-      </div>
-    );
-
-  return (
-    <>
-      <Card title={`Campaigns · ${rangeLabel.toLowerCase()}`} hint={`${connection.adAccount?.name ?? ""} · read live from Meta`} action={refresh}>
-        <SectionBody section={data.campaigns}>
-          {(d) => {
-            if (!d.rows.length) return <Empty>{d.raw ? "Meta's answer had no campaign list." : "No campaigns in this ad account yet."}</Empty>;
-            // Every key any row has (Meta leaves a metric out of a row that has none).
-            const keys = [...new Set(d.rows.flatMap((r) => Object.keys(r)))];
-            const seenLabels = new Set<string>();
-            const cols = [...CAMPAIGN_COLUMNS.filter((c) => keys.includes(c)), ...keys.filter((k) => !CAMPAIGN_COLUMNS.includes(k) && !/id$/.test(k))]
-              .filter((c) => {
-                const label = COLUMN_LABELS[c] ?? c;
-                if (seenLabels.has(label)) return false;
-                seenLabels.add(label);
-                return true;
-              })
-              .slice(0, 10);
-            return (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-[12px]">
-                  <thead>
-                    <tr className="border-b text-muted-foreground">
-                      {cols.map((c) => (
-                        <th key={c} className="whitespace-nowrap px-2 py-1.5 font-semibold">
-                          {COLUMN_LABELS[c] ?? c.replace(/_/g, " ")}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {d.rows.map((r, i) => (
-                      <tr key={i} className="border-b border-border/40 last:border-0">
-                        {cols.map((c) => (
-                          <td key={c} className="max-w-[220px] truncate whitespace-nowrap px-2 py-1.5">
-                            {cell(r[c])}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          }}
-        </SectionBody>
-      </Card>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Latest Page posts" hint={connection.page?.name ?? "No Page selected"}>
-          <SectionBody section={data.posts}>
-            {(posts) =>
-              posts.length ? (
-                <ul className="space-y-2.5">
-                  {posts.map((p) => (
-                    <li key={p.id} className="flex gap-3">
-                      {p.picture ? <img src={p.picture} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" /> : <div className="h-12 w-12 shrink-0 rounded-lg bg-muted" />}
-                      <div className="min-w-0">
-                        <p className="line-clamp-2 text-[12px]">{p.message ?? "(no text)"}</p>
-                        <div className="mt-0.5 flex items-center gap-2 text-[10.5px] text-muted-foreground">
-                          {fmtDate(p.createdTime)}
-                          {p.permalink && (
-                            <a href={p.permalink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 hover:text-foreground">
-                              Open <ExternalLink className="h-3 w-3" />
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <Empty>This Page has no posts yet.</Empty>
-              )
-            }
-          </SectionBody>
-        </Card>
-
-        <Card title="Catalog products" hint={connection.catalog?.name ?? "No catalog selected"}>
-          <SectionBody section={data.products}>
-            {(d) =>
-              d.rows.length ? (
-                <>
-                  {d.total !== null && <p className="mb-2 text-[11px] text-muted-foreground">{d.total.toLocaleString()} products in total</p>}
-                  <ul className="divide-y divide-border/40 text-[12px]">
-                    {d.rows.map((r, i) => (
-                      <li key={i} className="flex justify-between gap-3 py-1.5">
-                        <span className="truncate">{cell(r.name ?? r.title ?? r.retailer_id ?? r.id)}</span>
-                        <span className="shrink-0 text-muted-foreground">{cell(r.price ?? r.availability ?? "")}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              ) : (
-                <Empty>This catalog has no products yet.</Empty>
-              )
-            }
-          </SectionBody>
-        </Card>
-      </div>
-
-      {data.catalogs && (
-        <Card title="Product catalogs" hint="Every catalog you shared · Vera creates, renames and deletes catalogs only after your approval">
-          <SectionBody section={data.catalogs}>
-            {(list) =>
-              list.length ? (
-                <ul className="divide-y divide-border/40 text-[12px]">
-                  {list.map((c) => (
-                    <li key={c.id} className="flex items-center justify-between gap-3 py-1.5">
-                      <span className="min-w-0 truncate font-medium">{c.name}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {c.business ? `${c.business} · ` : ""}
-                        {c.products !== null ? `${c.products.toLocaleString()} products · ` : ""}
-                        {c.id}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <Empty>No catalogs shared yet.</Empty>
-              )
-            }
-          </SectionBody>
-        </Card>
-      )}
-    </>
-  );
-}
-
-function SectionBody<T>({ section, children }: { section: Section<T>; children: (data: T) => React.ReactNode }) {
-  if (!section.ok) return <p className="text-[12px] text-muted-foreground">{section.error}</p>;
-  return <>{children(section.data)}</>;
-}
-
-function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-[12px] text-muted-foreground">{children}</p>;
 }
