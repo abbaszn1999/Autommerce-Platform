@@ -69,6 +69,11 @@ const CAMPAIGN_COLUMNS = ["name", "effective_status", "impressions", "reach", "c
 /** A value from Meta: money comes as { value, unit } or { amount, currency }. */
 const cell = (v: unknown): string => {
   if (v === null || v === undefined || v === "") return "—";
+  // JSON text (results from Meta's MCP server): shown as its number, never as code.
+  if (typeof v === "string" && parseJsonText(v) !== undefined) {
+    const n = num(v);
+    return n === null ? "—" : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
   if (typeof v === "object" && !Array.isArray(v)) {
     const o = v as Record<string, unknown>;
     const amount = o.value ?? o.amount;
@@ -87,7 +92,12 @@ const cell = (v: unknown): string => {
 /** The number in a value from Meta, or null when there is none ("Not available"). */
 const num = (v: unknown): number | null => {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  if (typeof v === "string") return v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null;
+  if (typeof v === "string") {
+    // Meta's MCP server can send results as JSON text: '{"indicator":"actions:…","values":[{"value":"12"}]}'.
+    const parsed = parseJsonText(v);
+    if (parsed !== undefined) return num(parsed);
+    return v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null;
+  }
   if (Array.isArray(v)) {
     // An item is { value } (actions) or { indicator, values: [{ value }] } (results).
     const parts = v
@@ -95,9 +105,23 @@ const num = (v: unknown): number | null => {
       .filter((n): n is number => n !== null);
     return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
   }
-  if (v && typeof v === "object") return num((v as Record<string, unknown>).value ?? (v as Record<string, unknown>).amount);
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return num(o.value ?? o.amount ?? o.values);
+  }
   return null;
 };
+
+/** JSON written as text ("{…}" or "[…]"), parsed; undefined when it isn't. */
+function parseJsonText(s: string): unknown {
+  const t = s.trim();
+  if (!/^[[{]/.test(t)) return undefined;
+  try {
+    return JSON.parse(t);
+  } catch {
+    return undefined;
+  }
+}
 
 const firstKey = (row: Record<string, unknown>, keys: string[]) => keys.find((k) => k in row);
 

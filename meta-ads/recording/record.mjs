@@ -54,7 +54,8 @@ const CAPTION_SCRIPT = () => {
       if (!document.getElementById("__review_style") && document.head) {
         const st = document.createElement("style");
         st.id = "__review_style";
-        st.textContent = "[data-assistant-widget]{display:none!important}";
+        // And the Featurebase support messenger in the corner.
+        st.textContent = "[data-assistant-widget],#fb-messenger-root,.featurebase-messenger-root{display:none!important}";
         document.head.appendChild(st);
       }
       const c = await window.__reviewCaption?.();
@@ -129,16 +130,41 @@ async function ask(page, text) {
 
 /** Waits for Vera: either an approval card (Apply) or the end of her reply. Returns "card" | "done". */
 async function waitForVera(page, { timeoutMs = 6 * 60 * 1000 } = {}) {
-  const stop = page.getByRole("button", { name: "Stop" });
-  await stop.waitFor({ state: "visible", timeout: 30_000 }).catch(() => {});
-  const apply = page.getByRole("button", { name: /^Apply$/ }).last();
+  // Several Stop buttons can exist (one per chat): count the visible ones instead of a strict match.
+  const stop = page.getByRole("button", { name: "Stop" }).filter({ visible: true });
+  const apply = page.getByRole("button", { name: /^Apply$/ }).filter({ visible: true });
+  const working = async () => (await stop.count().catch(() => 0)) > 0;
+  const hasCard = async () => (await apply.count().catch(() => 0)) > 0;
   const start = Date.now();
+  while (Date.now() - start < 30_000 && !(await working())) await pause(500);
+  let idleSince = 0;
   while (Date.now() - start < timeoutMs) {
-    if (await apply.isVisible().catch(() => false)) return "card";
-    if (!(await stop.isVisible().catch(() => false))) return "done";
+    await scrollChat(page);
+    if (await hasCard()) return "card";
+    // Done only when Stop has been gone for 3 s (it can blink between steps).
+    if (await working()) idleSince = 0;
+    else if (!idleSince) idleSince = Date.now();
+    else if (Date.now() - idleSince > 3000) {
+      await scrollChat(page);
+      return (await hasCard()) ? "card" : "done";
+    }
     await pause(800);
   }
   return "timeout";
+}
+
+/** Keeps the newest message (and any approval card) in view in Vera's chat. */
+async function scrollChat(page) {
+  await page
+    .evaluate(() => {
+      const aside = document.querySelector('aside[aria-label="Meta Ads agent"]');
+      if (!aside) return;
+      for (const el of aside.querySelectorAll("*")) {
+        const s = getComputedStyle(el);
+        if (/(auto|scroll)/.test(s.overflowY) && el.scrollHeight > el.clientHeight + 4) el.scrollTop = el.scrollHeight;
+      }
+    })
+    .catch(() => {});
 }
 
 /** Asks Vera for one change, shows the card, approves it, waits for the result. */
