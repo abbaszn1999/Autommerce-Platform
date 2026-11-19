@@ -39,7 +39,7 @@ npm run record
 - `REVIEW_EMAIL`, `REVIEW_PASSWORD`: the Autommerce account to log in with (the reviewer account is best). Empty = you type them in the window.
 - `PREVIEW_PASSWORD`: the Ads pages' preview password. Empty = you type it.
 - `CAMPAIGN_TO_PAUSE`: a campaign safe to pause (an old or finished one). Empty = that step is skipped.
-- `CAMPAIGN_TO_RENAME`: no active campaign? The exact name of a paused or old campaign. Vera renames it with " (reviewed)" (approved), then puts the old name back (approved). Used only when `CAMPAIGN_TO_PAUSE` is empty.
+- `CAMPAIGN_TO_RENAME`: no active campaign? The ID (digits, safest) or exact name of a paused or old campaign. Vera renames it with " (reviewed)" (approved), then puts the old name back (approved). Used only when `CAMPAIGN_TO_PAUSE` is empty.
 - Optional ids to pick in the asset picker.
 
 Before recording: disconnect Meta on the platform (the video must show the connect flow). You don't need to log out of anything in your own Chrome: the recorder's browser is always fresh and logged out of Autommerce and Facebook.

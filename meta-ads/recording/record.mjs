@@ -354,9 +354,11 @@ try {
       // A paused or finished campaign: renamed, then the name put back. Nothing is spent.
       const name = env.CAMPAIGN_TO_RENAME.trim();
       const renamed = `${name} (reviewed)`;
+      // A campaign ID (digits) is safer than a long or non-English name.
+      const byId = /^\d+$/.test(name);
       const ok = await approvedChange(
         page,
-        `Rename the campaign "${name}" to "${renamed}".`,
+        byId ? `Rename the campaign with ID ${name}: add " (reviewed)" to the end of its current name.` : `Rename the campaign "${name}" to "${renamed}".`,
         { title: "Managing ads (ads_management, ads_mcp_management)", text: "The user asks the agent to rename a campaign." },
         { title: "Approval required", text: "The change is shown on a card and runs only after the user clicks Apply." }
       );
@@ -366,7 +368,7 @@ try {
         await highlight(page, campaigns, 3000);
         await approvedChange(
           page,
-          `Rename the campaign "${renamed}" back to "${name}".`,
+          byId ? `Rename the campaign with ID ${name} back: remove " (reviewed)" from the end of its name.` : `Rename the campaign "${renamed}" back to "${name}".`,
           { title: "Undo the change (ads_management)", text: "The user asks the agent to put the old name back." },
           { title: "Approval required", text: "Again, it runs only after the user clicks Apply." }
         );
