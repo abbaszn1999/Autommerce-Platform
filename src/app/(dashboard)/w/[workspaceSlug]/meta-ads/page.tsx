@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { MetaAdsLock } from "@/components/meta-ads/ma-lock";
 import { MetaAdsShell } from "@/components/meta-ads/ma-shell";
 import { PREVIEW_COOKIE, hasPreviewAccess } from "@/lib/google-ads/preview-access";
+import { metaConfig } from "@/lib/meta-ads/connection.server";
 
 export const dynamic = "force-dynamic";
 
@@ -13,5 +14,6 @@ export const dynamic = "force-dynamic";
  */
 export default async function MetaAdsPage() {
   const unlocked = hasPreviewAccess((await cookies()).get(PREVIEW_COOKIE)?.value);
-  return unlocked ? <MetaAdsShell /> : <MetaAdsLock />;
+  // Meta set up on this server: only the real connection is shown, never the demo.
+  return unlocked ? <MetaAdsShell live={!!metaConfig()} /> : <MetaAdsLock />;
 }

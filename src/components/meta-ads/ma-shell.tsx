@@ -91,7 +91,7 @@ const chatMax = () => Math.max(CHAT_MIN, Math.round(window.innerWidth * 0.6));
  * Meta Ads agent workspace: agent chat on the left, a full Ads Manager-style
  * account manager on the right. Front-end prototype on demo data.
  */
-export function MetaAdsShell() {
+export function MetaAdsShell({ live: realMeta = false }: { live?: boolean }) {
   const workspaceId = useWorkspaceContext().workspace?.id;
   const live = useMetaLive(workspaceId);
   const loginError = useLoginResult();
@@ -99,7 +99,9 @@ export function MetaAdsShell() {
   const entered = useMetaAds((s) => s.entered);
 
   // A real Meta connection: the live workspace (stage A). Otherwise the demo, with the real Connect on top.
-  if (live.loading) {
+  // Meta is set up on this server: the real connection only. Until the workspace and its
+  // connection are known, a spinner (never a glimpse of the demo).
+  if (live.loading || (realMeta && !workspaceId)) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -108,7 +110,7 @@ export function MetaAdsShell() {
   }
   if (live.configured && live.connection) return <MetaLiveWorkspace live={live} loginError={loginError} />;
   // Meta is set up on this server: only the real connect, never the simulated demo login.
-  if (live.configured && workspaceId) return <MetaRealConnect workspaceId={workspaceId} canManage={live.canManage} loginError={loginError} />;
+  if ((live.configured || realMeta) && workspaceId) return <MetaRealConnect workspaceId={workspaceId} canManage={live.canManage} loginError={loginError ?? live.error} />;
 
   // Connecting Meta alone stays on the connect screen until "Go to agent".
   const inWorkspace = status === "connected" && entered;

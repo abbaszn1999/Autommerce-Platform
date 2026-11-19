@@ -18,12 +18,12 @@ import { BRAND_BTN, GHOST_BTN, Notice, connectUrl, errorText, fmtDate, type Live
 export { connectUrl, type LiveConnection } from "./ma-live-common";
 
 type Pair = { id: string; name: string };
-type LiveState = { loading: boolean; configured: boolean; canManage: boolean; connection: LiveConnection | null; error: string | null };
+type LiveState = { configured: boolean; canManage: boolean; connection: LiveConnection | null; error: string | null };
 
 /** The workspace's real Meta connection (null until connected, or when Meta isn't configured). */
 export function useMetaLive(workspaceId: string | undefined) {
-  // Nothing to check without a workspace (e.g. a demo render): the demo shows at once.
-  const [state, setState] = useState<LiveState>({ loading: !!workspaceId, configured: false, canManage: false, connection: null, error: null });
+  // The answer is kept with the workspace it is for: until it arrives for this one, it is still loading.
+  const [state, setState] = useState<LiveState & { for: string | null }>({ for: null, configured: false, canManage: false, connection: null, error: null });
   useEffect(() => {
     if (!workspaceId) return;
     let alive = true;
@@ -31,15 +31,17 @@ export function useMetaLive(workspaceId: string | undefined) {
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
         if (!alive) return;
-        if (!res.ok) setState({ loading: false, configured: false, canManage: false, connection: null, error: json.error ?? "network" });
-        else setState({ loading: false, configured: !!json.configured, canManage: !!json.canManage, connection: json.connection ?? null, error: null });
+        if (!res.ok) setState({ for: workspaceId, configured: false, canManage: false, connection: null, error: json.error ?? "network" });
+        else setState({ for: workspaceId, configured: !!json.configured, canManage: !!json.canManage, connection: json.connection ?? null, error: null });
       })
-      .catch(() => alive && setState((s) => ({ ...s, loading: false, error: "network" })));
+      .catch(() => alive && setState((s) => ({ ...s, for: workspaceId, error: "network" })));
     return () => {
       alive = false;
     };
   }, [workspaceId]);
-  return { ...state, setConnection: (connection: LiveConnection | null) => setState((s) => ({ ...s, connection })) };
+  // Nothing to check without a workspace (e.g. a demo render): not loading.
+  const loading = !!workspaceId && state.for !== workspaceId;
+  return { ...state, loading, setConnection: (connection: LiveConnection | null) => setState((s) => ({ ...s, connection })) };
 }
 
 /** ?meta=connected / ?meta_error=… from the login callback: read once, then removed from the address. */
