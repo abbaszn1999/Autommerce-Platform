@@ -79,6 +79,11 @@ const cell = (v: unknown): string => {
     const amount = o.value ?? o.amount;
     const unit = o.unit ?? o.currency;
     if (amount !== undefined) return `${typeof amount === "number" ? amount.toLocaleString(undefined, { maximumFractionDigits: 2 }) : amount}${unit ? ` ${unit}` : ""}`;
+    // A result: { indicator, values: [{ value }] } → its number ("—" when Meta has none).
+    if ("values" in o || "indicator" in o) {
+      const n = num(o);
+      return n === null ? "—" : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    }
   }
   // Conversions and results come as lists (actions, or { indicator, values: [{ value }] }): show their total.
   if (Array.isArray(v)) {
