@@ -75,10 +75,10 @@ const cell = (v: unknown): string => {
     const unit = o.unit ?? o.currency;
     if (amount !== undefined) return `${typeof amount === "number" ? amount.toLocaleString(undefined, { maximumFractionDigits: 2 }) : amount}${unit ? ` ${unit}` : ""}`;
   }
-  // Conversions can come as a list of actions: show their total.
-  if (Array.isArray(v) && v.every((x) => x && typeof x === "object" && "value" in (x as object))) {
-    const total = v.reduce((sum, x) => sum + (Number((x as Record<string, unknown>).value) || 0), 0);
-    return total.toLocaleString();
+  // Conversions and results come as lists (actions, or { indicator, values: [{ value }] }): show their total.
+  if (Array.isArray(v)) {
+    const n = num(v);
+    return n === null ? "—" : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
   if (typeof v === "number") return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
   return typeof v === "object" ? JSON.stringify(v).slice(0, 60) : String(v);
@@ -89,7 +89,10 @@ const num = (v: unknown): number | null => {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
   if (typeof v === "string") return v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null;
   if (Array.isArray(v)) {
-    const parts = v.map((x) => num(x && typeof x === "object" ? (x as Record<string, unknown>).value : x)).filter((n): n is number => n !== null);
+    // An item is { value } (actions) or { indicator, values: [{ value }] } (results).
+    const parts = v
+      .map((x) => num(x && typeof x === "object" ? ((x as Record<string, unknown>).value ?? (x as Record<string, unknown>).values) : x))
+      .filter((n): n is number => n !== null);
     return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
   }
   if (v && typeof v === "object") return num((v as Record<string, unknown>).value ?? (v as Record<string, unknown>).amount);

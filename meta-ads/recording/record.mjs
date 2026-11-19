@@ -46,8 +46,17 @@ const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 let caption = { title: "", text: "" };
 
 const CAPTION_SCRIPT = () => {
+  // Main page only: embedded frames (widgets) would draw a clipped copy in their corner.
+  if (window !== window.top) return;
   const draw = async () => {
     try {
+      // The floating agent button sits under the caption: hidden in the video (Vera is on the left).
+      if (!document.getElementById("__review_style") && document.head) {
+        const st = document.createElement("style");
+        st.id = "__review_style";
+        st.textContent = "[data-assistant-widget]{display:none!important}";
+        document.head.appendChild(st);
+      }
       const c = await window.__reviewCaption?.();
       let bar = document.getElementById("__review_caption");
       if (!c || !c.title) {
@@ -341,8 +350,29 @@ try {
       );
       await say("Change applied", "Meta applied the change; the campaign table refreshes from Meta.", 4000);
       await highlight(page, campaigns, 3000);
+    } else if (env.CAMPAIGN_TO_RENAME) {
+      // A paused or finished campaign: renamed, then the name put back. Nothing is spent.
+      const name = env.CAMPAIGN_TO_RENAME.trim();
+      const renamed = `${name} (reviewed)`;
+      const ok = await approvedChange(
+        page,
+        `Rename the campaign "${name}" to "${renamed}".`,
+        { title: "Managing ads (ads_management, ads_mcp_management)", text: "The user asks the agent to rename a campaign." },
+        { title: "Approval required", text: "The change is shown on a card and runs only after the user clicks Apply." }
+      );
+      if (ok) {
+        await page.getByRole("button", { name: /^Refresh/ }).first().click().catch(() => {});
+        await say("Change applied", "Meta applied the change; the campaign table is read again from Meta.", 4000);
+        await highlight(page, campaigns, 3000);
+        await approvedChange(
+          page,
+          `Rename the campaign "${renamed}" back to "${name}".`,
+          { title: "Undo the change (ads_management)", text: "The user asks the agent to put the old name back." },
+          { title: "Approval required", text: "Again, it runs only after the user clicks Apply." }
+        );
+      }
     } else {
-      log("  (CAMPAIGN_TO_PAUSE not set: skipping the pause step)");
+      log("  (CAMPAIGN_TO_PAUSE / CAMPAIGN_TO_RENAME not set: skipping the campaign change)");
     }
 
     // 8. Catalog: create, update, delete (catalog_management)
