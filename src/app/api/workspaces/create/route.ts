@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getUserSubscription, isSubscriptionActive } from "@/lib/stripe";
+import { extraWorkspacesOf, workspaceAllowance } from "@/lib/billing/workspace-allowance";
 import { DEFAULT_CMS_TYPE, isSupportedCmsType } from "@/lib/cms-types";
 import { ensureOwnerTrial } from "@/lib/trial-server";
 
@@ -47,7 +48,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Active subscription required to create additional workspaces" }, { status: 403 });
       }
 
-      const maxWorkspaces = userSub.plan?.max_workspaces;
+      // The plan's limit plus any extra workspaces the platform admin granted this customer.
+      const maxWorkspaces = userSub.plan?.max_workspaces
+        ? workspaceAllowance(userSub.plan.max_workspaces, extraWorkspacesOf(userSub.subscription))
+        : null;
       if (maxWorkspaces && currentCount >= maxWorkspaces) {
         return NextResponse.json({
           error: `Your plan allows a maximum of ${maxWorkspaces} workspace(s). Upgrade to create more.`,
