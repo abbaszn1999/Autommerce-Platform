@@ -1,5 +1,6 @@
 import { Kind, parse, type OperationDefinitionNode } from "graphql";
 import type { StoreAgentEventInput, TodoItem, ToolKind, ToolLink } from "../../../src/lib/store-agent/protocol";
+import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS, type ImageModelId } from "../../../src/lib/store-agent/image-models";
 
 type Args = Record<string, unknown>;
 type Described = { kind: ToolKind; title: string; detail?: string };
@@ -135,6 +136,10 @@ export function describeTool(name: string, args: Args): Described {
       return { kind: "web", title: "Reading a web page", detail: clip(str(args.url), 120) || undefined };
     case "generateImage":
       return { kind: "image", title: "Generating an image", detail: clip(str(args.description), 120) || undefined };
+    case "generate_image": {
+      const model = IMAGE_MODELS[str(args.model) as ImageModelId] ?? IMAGE_MODELS[DEFAULT_IMAGE_MODEL];
+      return { kind: "image", title: `Generating an image · ${model.label}`, detail: clip(str(args.prompt), 120) || undefined };
+    }
     case "updateTodos":
     case "readTodos":
       return { kind: "plan", title: "Updating the to-dos" };

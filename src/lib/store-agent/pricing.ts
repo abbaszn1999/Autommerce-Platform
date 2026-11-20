@@ -11,13 +11,8 @@
 
 export type ModelParam = { id: string; value: string };
 
-/**
- * One image from the agent's image tool. Cursor bills it outside the token
- * counts and does not report the figure to this account, so we charge
- * Cursor's published image price (Gemini 3 Pro Image: about $0.134 per
- * 1K/2K image, cursor.com/docs/models).
- */
-export const IMAGE_GENERATION_USD = 0.134;
+// Images are not priced here: Vera makes them with her own tool and charges what
+// Google or OpenAI billed for each one (image-models.ts).
 
 
 export type TokenUsage = {

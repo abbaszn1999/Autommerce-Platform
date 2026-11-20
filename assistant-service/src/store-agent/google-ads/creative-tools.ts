@@ -227,7 +227,7 @@ export function createCreativeTools(ctx: ToolContext): Record<string, SDKCustomT
   return {
     host_image: {
       description:
-        "Give an image from this chat's folder (one you made with generateImage, or a product image you saved) a public https link an ad can use. " +
+        "Give an image from this chat's folder (one you made with generate_image, or a product image you saved) a public https link an ad can use. " +
         "The image must be a JPG, PNG or GIF under 5 MB; you get its size and which ad shape it fits (landscape 1.91:1, square 1:1, portrait 4:5). " +
         `The link works for ${HOSTED_IMAGE_SECONDS / 3600} hours, enough for the owner to approve the change that uses it. A WebP or larger image must be re-made as PNG or JPG first (run_script can convert it).`,
       inputSchema: {

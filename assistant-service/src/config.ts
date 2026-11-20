@@ -24,6 +24,8 @@ export interface ServiceConfig {
   storeAgent: { supabaseUrl: string; serviceRoleKey: string; workDir: string } | null;
   /** The platform site, which the Google Ads agent's tools call (signed with `secret`). */
   platformUrl: string;
+  /** Vera's own image tool: Google (Nano Banana) and OpenAI (GPT Image) keys; a missing key turns that model off. */
+  imageKeys: { gemini?: string; openai?: string };
 }
 
 export type TokenRates = { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -93,5 +95,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServiceConfig 
     },
     storeAgent,
     platformUrl: (env.PLATFORM_URL || "http://127.0.0.1:4000").replace(/\/+$/, ""),
+    imageKeys: { gemini: env.GEMINI_API_KEY || undefined, openai: env.OPENAI_API_KEY || undefined },
   };
 }

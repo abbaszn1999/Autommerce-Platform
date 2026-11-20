@@ -10,7 +10,8 @@ import { WriteBehindAgentStore } from "./agent-store/write-behind-store";
 import { chargeRun } from "./billing/charge";
 import { finishHold, settledCost, startHold, updateHold } from "./billing/settle";
 import { readBilledCents, waitForBilledCents } from "../usage";
-import { IMAGE_GENERATION_USD, contextWindowFor, estimateUsd, usdToCredits, type TokenUsage } from "../../../src/lib/store-agent/pricing";
+import { contextWindowFor, estimateUsd, usdToCredits, type TokenUsage } from "../../../src/lib/store-agent/pricing";
+import { createImageTool } from "./image-tool";
 import { describeTool, mapTodos, mergeTodos, scrub, summarizeResult, unwrapToolCall, webCallsInMessages } from "./events";
 import { oncePerToolCall } from "./call-once";
 import { guidanceText, withGuidance } from "./guidance";
@@ -50,7 +51,9 @@ import { createMetaAdsTools, loadMetaTools } from "./meta-ads/tools";
  * so their cost could not be billed.
  */
 const WEB_SCAN_EVERY_MS = 1500;
-const BUILTIN_TOOLS: ToolName[] = ["mcp", "webSearch", "webFetch", "generateImage", "updateTodos", "readTodos"];
+// No `generateImage`: Cursor picks its image model itself and reports no price, so
+// images come from our own generate_image tool (image-tool.ts) instead.
+const BUILTIN_TOOLS: ToolName[] = ["mcp", "webSearch", "webFetch", "updateTodos", "readTodos"];
 /** A run that makes this many tool calls is stopped (runaway loops, surprise bills). */
 const MAX_TOOL_CALLS = 200;
 const PROGRESS_EVERY_MS = 1_500;
@@ -72,6 +75,8 @@ export type StoreAgentDeps = {
   /** Google Ads chats: the site their tools call, signed with the service secret. */
   secret?: string;
   platformUrl?: string;
+  /** Keys for Vera's own image tool (generate_image). */
+  imageKeys?: { gemini?: string; openai?: string };
 };
 
 /** Marks a run stopped by a deploy or shutdown rather than by the user. */
@@ -751,6 +756,20 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
         files.markShown(relative);
         if (folder) files.setFolderHint(relative, folder);
       }),
+      // Images from our own models, each charged at what the provider billed for it.
+      ...createImageTool({
+        cwd,
+        geminiApiKey: deps.imageKeys?.gemini,
+        openaiApiKey: deps.imageKeys?.openai,
+        onCost: (usd, label) => addCost(usd, label),
+        onImage: (relative) => {
+          imagesGenerated += 1;
+          written.add(relative);
+          files.markShown(relative);
+          files.setFolderHint(relative, "images");
+        },
+        log,
+      }),
     }, run));
     const emitProgress = (force = false) => {
       const now = Date.now();
@@ -940,11 +959,6 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
             if (call.name === "createPlan" && typeof call.args.plan === "string" && call.args.plan.trim()) {
               const markdown = call.args.plan;
               enqueue(() => savePlan(db, run, markdown).catch((e) => log("saving the plan failed", e)));
-            }
-            if (call.name === "generateImage" && outcome.ok) {
-              imagesGenerated += 1;
-              addCost(IMAGE_GENERATION_USD, "generated image");
-              enqueue(() => adoptGeneratedImage(files, run, call.result));
             }
             run.emit({ type: "tool_end", callId, ok: outcome.ok, summary: outcome.summary });
             if (written.size) {
@@ -1245,30 +1259,4 @@ export async function executeStoreRun(deps: StoreAgentDeps, run: StoreAgentRun):
     // ignore
   }
   deps.registry.finish(run.id);
-}
-
-/**
- * `generateImage` saves outside the chat folder. Copy the image in, under
- * images/, and show it to the user.
- */
-async function adoptGeneratedImage(files: ChatFiles, run: StoreAgentRun, result: unknown): Promise<void> {
-  const value = (result as { value?: { filePath?: string; imageData?: string } } | undefined)?.value;
-  if (!value?.filePath && !value?.imageData) return;
-  let bytes: Buffer;
-  if (value.imageData) bytes = Buffer.from(value.imageData, "base64");
-  else bytes = await fs.readFile(value.filePath!);
-  const name = path.basename(value.filePath ?? `image-${Date.now()}.png`).replace(/[^\w.\-]+/g, "_");
-  let relative = `images/${name}`;
-  const target = () => path.join(files.cwd, ...relative.split("/"));
-  for (let n = 2; ; n++) {
-    try {
-      await fs.access(target());
-      relative = `images/${path.parse(name).name}-${n}${path.extname(name)}`;
-    } catch {
-      break;
-    }
-  }
-  await fs.mkdir(path.dirname(target()), { recursive: true });
-  await fs.writeFile(target(), bytes);
-  await files.sync(run, new Set([relative]));
 }
