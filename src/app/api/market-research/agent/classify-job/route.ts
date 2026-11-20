@@ -76,4 +76,4 @@ async function handlePost(request: NextRequest) {
   return NextResponse.json({ jobId: job.id }, { headers: auth.headers });
 }
 
-export const POST = withAiWalletBilling("market-research", "mr_classify_job", handlePost);
+export const POST = withAiWalletBilling("mr_classify_job", handlePost);

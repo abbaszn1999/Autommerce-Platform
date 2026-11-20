@@ -554,6 +554,3 @@ export async function processScrapingRow(params: {
     balanceExhausted: settlement?.balanceExhausted === true,
   };
 }
-
-/** @deprecated Use processScrapingRow */
-export const processGoogleRow = processScrapingRow;

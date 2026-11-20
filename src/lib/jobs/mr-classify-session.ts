@@ -21,7 +21,7 @@ import {
 
 export async function runMrClassifySession(runId: string): Promise<void> {
   await runJobWithFailureGuard(runId, () =>
-    runWithAiBilling({ wallet: "market-research", operation: "mr_classify" }, () =>
+    runWithAiBilling({ operation: "mr_classify" }, () =>
       runMrClassifySessionInner(runId)
     )
   );

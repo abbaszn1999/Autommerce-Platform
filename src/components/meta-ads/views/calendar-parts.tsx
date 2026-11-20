@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
-import { Bot, ChevronDown, Clock, ExternalLink, FlaskConical, Megaphone, Pause, Plus, Rocket, ShoppingBag, SlidersHorizontal, TriangleAlert, X } from "lucide-react";
+import { Bot, ChevronDown, Clock, ExternalLink, FlaskConical, Megaphone, Pause, Plus, Rocket, ShoppingBag, SlidersHorizontal, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Pill } from "@/components/google-ads/ga-ui";
@@ -25,7 +25,6 @@ import { ScheduleGrid } from "./settings";
 export type ContentKind = "ADS" | "EXPERIMENTS" | PostFormat;
 export type Selection = { type: "flight" | "post"; id: string } | null;
 
-export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export const AD_STATES: FlightState[] = ["ACTIVE", "SCHEDULED", "DRAFT", "PAUSED", "ENDED"];
 export const POST_STATUSES: PostStatus[] = ["PUBLISHED", "SCHEDULED", "DRAFT", "FAILED"];
 export const ALL_PLATFORMS: PostPlatform[] = ["FACEBOOK", "INSTAGRAM"];
@@ -38,15 +37,6 @@ export const STATE: Record<FlightState, { label: string; badge: string; tone: "g
   DRAFT: { label: "Needs approval", badge: "bg-amber-500/15 text-amber-700 dark:text-amber-300", tone: "warn" },
   PAUSED: { label: "Paused", badge: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300", tone: "neutral" },
   ENDED: { label: "Ended", badge: "bg-zinc-500/10 text-zinc-500 dark:text-zinc-400", tone: "neutral" },
-};
-
-/** The ad band: soft pills tinted by state. Drafts keep a dashed edge, like everything the agent has not applied yet. */
-export const PILL: Record<FlightState, string> = {
-  ACTIVE: "border-[#400095]/15 bg-[#400095]/[0.06] dark:border-violet-400/20 dark:bg-violet-500/10",
-  SCHEDULED: "border-[#400095]/25 bg-card dark:border-violet-400/30",
-  DRAFT: "border-dashed border-[#F76D01]/70 bg-[#F76D01]/[0.06]",
-  PAUSED: "border-border/70 bg-muted/60 text-muted-foreground",
-  ENDED: "border-border/50 bg-muted/40 text-muted-foreground/80",
 };
 
 /** Post cards are tinted by where they are in their life: out already, waiting, draft, or failed. */
@@ -82,9 +72,6 @@ export const toggle = <T,>(set: Set<T>, v: T) => {
   else next.add(v);
   return next;
 };
-
-export type SelProps = { selection: Selection; onSelect: (s: Selection) => void };
-export const isSel = (s: Selection, type: "flight" | "post", id: string) => s?.type === type && s.id === id;
 
 export const summary = (on: number, all: number, single?: string) => (on === all ? "All" : on === 0 ? "None" : single ?? `${on} selected`);
 
@@ -182,11 +169,6 @@ export function ExperimentTile({ className }: { className?: string }) {
   );
 }
 
-
-export function StatusIcon({ post }: { post: OrganicPost }) {
-  const Icon = post.status === "SCHEDULED" ? Clock : post.status === "FAILED" ? TriangleAlert : post.status === "DRAFT" ? Bot : POST_FORMATS[post.format].icon;
-  return <Icon className="h-3.5 w-3.5 shrink-0" />;
-}
 
 /** Media art with platform badges in the corner, a duration for video and a counter for carousels. */
 export function PostMedia({ post, className, big }: { post: OrganicPost; className?: string; big?: boolean }) {
@@ -760,4 +742,3 @@ export function PostDetail({ post, onClose }: { post: OrganicPost; onClose: () =
     </>
   );
 }
-

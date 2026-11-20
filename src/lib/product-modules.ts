@@ -22,13 +22,6 @@ export const STORE_ASSISTANT = {
   creditEntityType: "store_assistant",
 } as const;
 
-export const WALLET_MODULE = {
-  marketResearch: "market-research",
-  growthSync: "growth-sync",
-  topup: "topup",
-  billing: "Billing",
-} as const;
-
 export function catalogIntelligencePath(
   slug: string,
   sessionId?: string,
@@ -39,8 +32,4 @@ export function catalogIntelligencePath(
   if (!sessionId) return base;
   if (step === "rules" || step === "review") return `${base}/${sessionId}/${step}`;
   return `${base}/${sessionId}`;
-}
-
-export function storeAssistantPath(slug: string): string {
-  return `/w/${slug}/${STORE_ASSISTANT.routeSegment}`;
 }

@@ -902,7 +902,6 @@ export async function applyShopifyCollectionUpdates(params: {
 
     // Log what we're about to send so the failure mode is debuggable when
     // descriptions/images keep "succeeding" but not landing in the admin.
-    // eslint-disable-next-line no-console
     console.log("[collectionUpdate] →", {
       handle,
       changedColumns,
@@ -933,7 +932,6 @@ export async function applyShopifyCollectionUpdates(params: {
         options: { estimatedCost: 10, tag: "collectionUpdate" },
       });
 
-      // eslint-disable-next-line no-console
       console.log("[collectionUpdate] ←", {
         handle,
         topLevelErrors: res.errors.length,

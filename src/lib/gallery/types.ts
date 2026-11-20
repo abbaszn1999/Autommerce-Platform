@@ -296,16 +296,6 @@ export const DEFAULT_SCRAPING_SETTINGS: GalleryScrapingSettings = {
   matchStrictness: "strict",
 };
 
-/** @deprecated Use DEFAULT_SCRAPING_SETTINGS */
-export const DEFAULT_GOOGLE_SETTINGS: GalleryGoogleSettings = {
-  ...DEFAULT_SCRAPING_SETTINGS,
-  candidates: 25,
-  country: "us",
-  language: "en",
-  autocorrect: true,
-  timeRange: "",
-};
-
 export const DEFAULT_AI_SETTINGS: GalleryAiSettings = {
   main: {
     imagesPerRow: 1,

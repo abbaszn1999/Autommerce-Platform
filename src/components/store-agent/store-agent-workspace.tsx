@@ -24,7 +24,6 @@ import {
   Paperclip,
   Pencil,
   RotateCcw,
-  Settings,
   Sparkles,
   Store,
   Tags,
@@ -532,34 +531,26 @@ export function StoreAgentWorkspace({
 
   if (state.availability === "checking") return variant === "panel" ? <ChatSkeleton withChrome /> : <PageLoader />;
   if (state.availability !== "ready") {
-    const noStore = state.availability === "no_store";
+    // Only an ads agent can be "not connected" (no ad account yet): the Store Assistant opens without a store.
+    const notConnected = state.availability === "not_connected";
     return (
       <div className="autommerce-dashboard flex flex-1 items-center justify-center p-8 [font-family:var(--brand-font)]">
         <div className="max-w-md space-y-5 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#400095]/10 to-[#F76D01]/10">
-            {noStore ? <Unplug className="h-7 w-7 text-[#6B358D] dark:text-[#F76D01]" /> : <AlertTriangle className="h-7 w-7 text-amber-500" />}
+            {notConnected ? <Unplug className="h-7 w-7 text-[#6B358D] dark:text-[#F76D01]" /> : <AlertTriangle className="h-7 w-7 text-amber-500" />}
           </div>
           <div className="space-y-2">
             <h2 className="text-xl font-black">
-              {noStore ? (isAds ? `Connect ${adsName}` : "Connect your store") : state.availability === "off" ? (isAds ? "Vera is not available here yet" : "Store Agent is not available yet") : "Could not reach the agent"}
+              {notConnected ? `Connect ${adsName}` : state.availability === "off" ? (isAds ? "Vera is not available here yet" : "Store Agent is not available yet") : "Could not reach the agent"}
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              {noStore
-                ? isAds
-                  ? `Vera works on the connected ${adsName} account. Connect it and pick the ad account first.`
-                  : "The Store Agent works on a connected Shopify or WooCommerce store. Connect it in Settings to start."
+              {notConnected
+                ? `Vera works on the connected ${adsName} account. Connect it and pick the ad account first.`
                 : state.availability === "off"
                   ? "This feature is not turned on for this workspace."
                   : "The agent service did not answer. Try again in a moment."}
             </p>
           </div>
-          {noStore && !isAds && (
-            <Button asChild className="gap-2 rounded-xl bg-[#400095] text-white hover:bg-[#6B358D] dark:bg-[#F76D01]">
-              <Link href={`${basePath}/settings`}>
-                <Settings className="h-4 w-4" /> Go to Settings
-              </Link>
-            </Button>
-          )}
         </div>
       </div>
     );

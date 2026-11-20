@@ -22,12 +22,6 @@
 // We use the $50 tier rate: $0.001 per image search query
 export const SERPER_COST_PER_QUERY = 0.001; // $0.001 per search query
 
-// ─── SerpApi Pricing ─────────────────────────────────────────────────
-// Source: https://serpapi.com/pricing (subscription, billed per successful search)
-// Starter $25 / 1,000 searches = $0.025 per search (conservative billable rate).
-// Volume plans drop toward ~$0.009–$0.015; we keep Starter so preflight never underquotes.
-export const SERPAPI_COST_PER_SEARCH = 0.025;
-
 // ─── SearchApi.io Pricing (Google AI Mode — Image Finder "Exact Match") ─
 // Source: https://www.searchapi.io/pricing (subscription, billed per successful
 // search; failed requests are free). Developer plan $4 / 1,000 searches is the
@@ -629,34 +623,6 @@ export function createSerperCost(queryCount: number = 1): AiCallCost {
   };
 }
 
-/**
- * Create an AiCallCost entry for a SerpApi search (Google Images or Google Lens).
- */
-export function createSerpApiCost(searchCount: number = 1): AiCallCost {
-  const cost = Math.max(0, searchCount) * SERPAPI_COST_PER_SEARCH;
-  return {
-    model: "serpapi-search",
-    usage: {
-      promptTokens: 0,
-      candidatesTokens: 0,
-      thoughtsTokens: 0,
-      cachedTokens: 0,
-      cacheWriteTokens: 0,
-      totalTokens: 0,
-    },
-    usedGoogleSearch: false,
-    inputCost: 0,
-    cachedInputCost: 0,
-    cacheWriteCost: 0,
-    outputCost: 0,
-    searchCost: 0,
-    serperCost: 0,
-    serpApiCost: cost,
-    searchApiCost: 0,
-    totalCost: cost,
-  };
-}
-
 export const SEARCHAPI_GOOGLE_AI_MODE_MODEL = "searchapi-google-ai-mode";
 export const SEARCHAPI_GOOGLE_LENS_MODEL = "searchapi-google-lens";
 export type SearchApiCostModel = typeof SEARCHAPI_GOOGLE_AI_MODE_MODEL | typeof SEARCHAPI_GOOGLE_LENS_MODEL;
@@ -705,10 +671,6 @@ export function costToCredits(dollarCost: number): number {
   // up to the nearest 0.001 credit, so exact amounts are never bumped a step.
   const milliCredits = Math.round(dollarCost * 10 * 1000 * 1e6) / 1e6;
   return Math.ceil(milliCredits) / 1000;
-}
-
-export function creditsToDollars(credits: number): number {
-  return credits / 10;
 }
 
 /**

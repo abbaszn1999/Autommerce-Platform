@@ -5,12 +5,6 @@
 import { type ReactNode } from "react";
 import { ArrowDownRight, ArrowUpRight, ChevronDown, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { AD_STRENGTH } from "@/lib/google-ads/constants";
 import type { AdPolicyStatus, AdStrength, EntityStatus } from "@/lib/google-ads/types";
 
@@ -35,39 +29,6 @@ export function StatusDot({ status, className }: { status: EntityStatus; classNa
       )}
       aria-label={STATUS_META[status].label}
     />
-  );
-}
-
-/** Status dot that opens Enable / Pause / Remove, like Google Ads tables. */
-export function StatusMenu({
-  status,
-  onChange,
-  disabled,
-}: {
-  status: EntityStatus;
-  onChange: (status: EntityStatus) => void;
-  disabled?: boolean;
-}) {
-  if (disabled || status === "REMOVED") return <StatusDot status={status} />;
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-muted"
-        onClick={(e) => e.stopPropagation()}
-        aria-label={`Status: ${STATUS_META[status].label}`}
-      >
-        <StatusDot status={status} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-36" onClick={(e) => e.stopPropagation()}>
-        {(["ENABLED", "PAUSED", "REMOVED"] as EntityStatus[]).map((s) => (
-          <DropdownMenuItem key={s} onSelect={() => s !== status && onChange(s)} className="gap-2 text-xs">
-            <StatusDot status={s} />
-            {s === "ENABLED" ? "Enable" : s === "PAUSED" ? "Pause" : "Remove"}
-            {s === status && <span className="ml-auto text-[10px] text-muted-foreground">current</span>}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

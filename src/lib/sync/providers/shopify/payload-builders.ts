@@ -12,35 +12,6 @@ import { parseGalleryImages } from "@/lib/sync/core/gallery-images";
 
 // ─── Column → ProductSetInput field map ──────────────────────────────────────
 
-/** Columns we can pass directly to ProductSetInput (non-variant, non-metafield). */
-export const SHOPIFY_PRODUCT_FIELDS: Record<string, string> = {
-  title: "title",
-  handle: "handle",
-  status: "status",
-  vendor: "vendor",
-  product_type: "productType",
-  tags: "tags",
-  body_html: "descriptionHtml",
-  description: "descriptionHtml",
-};
-
-/** Columns handled specially (not direct field copies). */
-export const SPECIAL_PRODUCT_COLUMNS = new Set([
-  "seo_title",
-  "seo_description",
-  "featured_image",
-  "featured_image_alt_text",
-  "gallery_images",
-  "price",
-  "compare_at_price",
-  "primary_sku",
-  "barcode",
-  "inventory_policy",
-  "inventory_total",
-  "collections",
-  "collections_ids",
-]);
-
 function toText(value: unknown): string {
   return String(value ?? "").trim();
 }

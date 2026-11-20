@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { CATALOG_INTELLIGENCE, STORE_ASSISTANT } from "@/lib/product-modules";
+import { STORE_ASSISTANT } from "@/lib/product-modules";
 
 export type SecurityAuditAction =
   | "member.role_change"
@@ -9,8 +9,6 @@ export type SecurityAuditAction =
   | "invite.revoke"
   | "integration.credentials_save"
   | "integration.disconnect"
-  | "analytics.connect"
-  | "analytics.disconnect"
   | "workspace.delete"
   | "user.delete"
   | "subscription.extra_workspaces";
@@ -53,10 +51,7 @@ export async function writeSecurityAuditLog(
 
 function actionModule(action: SecurityAuditAction): string {
   if (action.startsWith("integration.")) return STORE_ASSISTANT.id;
-  if (action.startsWith("analytics.")) return "analytics";
   if (action.startsWith("workspace.")) return "workspace";
   if (action.startsWith("user.")) return "account";
   return "team";
 }
-
-export const AUDIT_CATALOG_MODULE = CATALOG_INTELLIGENCE.id;

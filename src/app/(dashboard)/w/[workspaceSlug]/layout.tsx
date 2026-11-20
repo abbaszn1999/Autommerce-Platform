@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
-  Package,
   FolderTree,
   Upload,
   CreditCard,
@@ -14,14 +13,10 @@ import {
   ChevronDown,
   ChevronRight,
   LogOut,
-  User,
   PanelLeftClose,
-  FileSpreadsheet,
   Sun,
   Moon,
   Building2,
-  Plus,
-  Check,
   Coins,
   Crown,
   Image as ImageIcon,
@@ -34,8 +29,6 @@ import {
   RefreshCw,
   Wallet,
   Bot,
-  Apple,
-  BarChart3,
   Library,
   Megaphone,
   Infinity as InfinityIcon,
@@ -53,28 +46,18 @@ import { formatCredits } from "@/lib/format-credits";
 import { formatMoney } from "@/lib/wallet/format";
 import { trialDaysRemaining } from "@/lib/trial";
 import { useWallet } from "@/hooks/use-wallet";
-import { useFaWallet } from "@/hooks/use-fa-wallet";
-import type { Workspace } from "@/lib/supabase";
-import type { Role } from "@/lib/permissions";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { SubscriptionGate, SubscriptionBanner } from "@/components/subscription-gate";
 import { AutommerceLogo } from "@/components/brand/autommerce-logo";
 import { PageLoader } from "@/components/brand/page-loader";
 import { WorkspaceContext } from "./workspace-context";
 import { JobInbox } from "@/components/job-inbox";
-import { AssistantWidget } from "@/components/assistant/assistant-widget";
 import { WelcomeGiftTicker } from "@/components/billing/welcome-gift-ticker";
 import { FeaturebaseMessenger } from "@/components/featurebase-messenger";
 import { isStoreAgentPlatform } from "@/lib/store-agent/platforms";
 import { ToolLockDetails } from "@/components/integrations/tool-lock";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { storeToolLocks, type StoreToolId } from "@/lib/integrations/shopify-access";
-
-/**
- * The floating agent is hidden for now, whatever NEXT_PUBLIC_ASSISTANT_ENABLED
- * says. Set back to true to show it again.
- */
-const SHOW_ASSISTANT_WIDGET = false;
 
 export default function WorkspaceLayout({
   children,
@@ -94,16 +77,9 @@ export default function WorkspaceLayout({
   const hasStoreAgentStore = isStoreAgentPlatform(storeProvider);
   const permissions = useRole(role);
 
-  const isFreeAssessmentPage = pathname.includes("/free-assessment");
-  const isFreeAssessmentWalletPage = pathname.includes("/free-assessment/wallet");
   const credits = useCredits(workspace?.id ?? null);
-  const { wallet } = useWallet(
-    isFreeAssessmentPage ? null : workspace?.id ?? null
-  );
-  const { wallet: faWallet } = useFaWallet(
-    isFreeAssessmentPage ? workspace?.id ?? null : null
-  );
-  const walletBalance = (isFreeAssessmentPage ? faWallet : wallet)?.balance ?? null;
+  const { wallet } = useWallet(workspace?.id ?? null);
+  const walletBalance = wallet?.balance ?? null;
   const { subscription, isActive, isLoading: subLoading, plan: currentPlan, welcomeGift } = useSubscription(workspace?.id ?? null);
   const isTrialing = currentPlan?.name === "trial" && subscription?.status === "trialing" && isActive;
   const trialDaysLeft = isTrialing ? trialDaysRemaining(subscription?.trialEnd) : 0;
@@ -111,7 +87,6 @@ export default function WorkspaceLayout({
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [growthEngineOpen, setGrowthEngineOpen] = useState(false);
-  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -126,9 +101,6 @@ export default function WorkspaceLayout({
   }, [workspace, role, setStoreWorkspace, setStoreRole]);
 
   const basePath = `/w/${slug}`;
-  const walletHref = isFreeAssessmentPage
-    ? `${basePath}/free-assessment/wallet`
-    : `${basePath}/wallet`;
 
   // Hide workspace nav sidebar on enrichment workbench tool (it has its own left panel).
   // Keep the top app header visible so credits / workspace / user stay accessible.
@@ -163,7 +135,6 @@ export default function WorkspaceLayout({
     isEnrichPage ||
     isSyncPage ||
     isMarketResearchPage ||
-    (isFreeAssessmentPage && !isFreeAssessmentWalletPage) ||
     isGoogleAdsPage ||
     isMetaAdsPage;
   // Subscription page should be accessible without an active subscription
@@ -172,9 +143,7 @@ export default function WorkspaceLayout({
     pathname.startsWith(`${basePath}/subscription/`);
   const isTeamPage = pathname.includes("/team");
   const isSettingsPage = pathname.includes("/settings");
-  const isAnalyticsPage =
-    pathname === `${basePath}/analytics` || pathname.startsWith(`${basePath}/analytics/`);
-  const requiresAdminAccess = isTeamPage || isSettingsPage || isAnalyticsPage;
+  const requiresAdminAccess = isTeamPage || isSettingsPage;
   const canAccessAdminPages = role === "owner" || role === "admin";
 
   const mediaChildren = [
@@ -208,44 +177,15 @@ export default function WorkspaceLayout({
     { href: `${basePath}/wallet`, label: "Wallet", icon: Wallet },
   ];
 
-  const analyticsChildren = [
-    { href: `${basePath}/analytics/overview`, label: "Overview", icon: BarChart3 },
-    { href: `${basePath}/analytics/plp`, label: "PLP Pages", icon: FolderTree },
-    { href: `${basePath}/analytics/products`, label: "Products Pages", icon: Package },
-    {
-      href: `${basePath}/analytics/low-hanging-fruits`,
-      label: "Low Hanging Fruits",
-      icon: Apple,
-      // Not built yet — keep it visible in the nav (so it's on the roadmap
-      // for users) but unclickable with a "Soon" badge instead of a real
-      // link. Flip `disabled` off once the page ships.
-      disabled: true,
-      badge: "Soon",
-    },
-  ];
-
-  const assessmentGrowthChildren = [
-    {
-      href: `${basePath}/free-assessment`,
-      label: "Market research",
-      icon: Search,
-    },
-    { href: `${basePath}/free-assessment/wallet`, label: "Wallet", icon: Wallet },
-  ];
-
   const isMediaActive = mediaChildren.some(
     (child) => pathname === child.href || pathname.startsWith(child.href + "/")
   );
 
-  const isGrowthEngineActive = isFreeAssessmentPage || growthEngineChildren.some(
+  const isGrowthEngineActive = growthEngineChildren.some(
     (child) =>
       !!child.href &&
       (pathname === child.href || pathname.startsWith(child.href + "/"))
   );
-
-  const isAnalyticsActive = analyticsChildren.some(
-    (child) => pathname === child.href || pathname.startsWith(child.href + "/")
-  ) || pathname === `${basePath}/analytics` || pathname.startsWith(`${basePath}/analytics/`);
 
   useEffect(() => {
     if (isMediaActive) setMediaOpen(true);
@@ -254,10 +194,6 @@ export default function WorkspaceLayout({
   useEffect(() => {
     if (isGrowthEngineActive) setGrowthEngineOpen(true);
   }, [isGrowthEngineActive]);
-
-  useEffect(() => {
-    if (isAnalyticsActive) setAnalyticsOpen(true);
-  }, [isAnalyticsActive]);
 
   const sidebarLinksBeforeMedia = [
     { href: `${basePath}`, label: "Dashboard", icon: LayoutDashboard },
@@ -296,9 +232,6 @@ export default function WorkspaceLayout({
     if (!href) return false;
     if (href === basePath) return pathname === basePath;
     if (pathname === href) return true;
-    // Wallet is nested under /free-assessment — don't keep Market research
-    // highlighted on the wallet page.
-    if (href.endsWith("/free-assessment")) return false;
     return pathname.startsWith(href + "/");
   };
 
@@ -351,7 +284,7 @@ export default function WorkspaceLayout({
             </button>
           </PopoverTrigger>
           <PopoverContent side="right" align="start">
-            <ToolLockDetails tool={link.tool} lock={lock} canAdmin={permissions.canAdmin} settingsHref={`${basePath}/settings`} />
+            <ToolLockDetails tool={link.tool} lock={lock} canAdmin={permissions.canAdmin} workspaceSlug={slug} />
           </PopoverContent>
         </Popover>
       );
@@ -551,7 +484,7 @@ export default function WorkspaceLayout({
     : "??";
 
   return (
-    <WorkspaceContext.Provider value={{ workspace, role, wsLoading, hasIntegration: !!hasIntegration, hasStoreAgentStore, toolLocks }}>
+    <WorkspaceContext.Provider value={{ workspace, role, wsLoading, hasIntegration: !!hasIntegration, hasStoreAgentStore, toolLocks, storeAccess: { provider: storeProvider, scopes: storeScopes } }}>
       <FeaturebaseMessenger userId={user?.id} />
       <div className="h-screen flex flex-col bg-background overflow-hidden">
         {/* Top Header — hidden in immersive mode */}
@@ -603,12 +536,8 @@ export default function WorkspaceLayout({
               </div>
               {walletBalance !== null && (
                 <Link
-                  href={walletHref}
-                  title={
-                    isFreeAssessmentPage
-                      ? "Free Assessment wallet"
-                      : "Wallet balance"
-                  }
+                  href={`${basePath}/wallet`}
+                  title="Wallet balance"
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium tabular-nums transition-colors ${
                     walletBalance < 25
                       ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20"
@@ -746,20 +675,6 @@ export default function WorkspaceLayout({
             className="relative border-r border-border/70 bg-sidebar text-sidebar-foreground shrink-0 flex flex-col shadow-[1px_0_0_0_rgba(0,0,0,0.02)]"
           >
             <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden custom-scrollbar">
-              {isFreeAssessmentPage ? (
-                <>
-                  <SectionLabel>Growth engine</SectionLabel>
-                  {renderNavGroup({
-                    label: "Growth engine",
-                    icon: Rocket,
-                    isOpen: true,
-                    setOpen: setGrowthEngineOpen,
-                    isActive: true,
-                    children: assessmentGrowthChildren,
-                  })}
-                </>
-              ) : (
-                <>
               <SectionLabel>Overview</SectionLabel>
               {sidebarLinksBeforeMedia.map((link) => renderNavLink(link))}
 
@@ -783,20 +698,6 @@ export default function WorkspaceLayout({
                 children: growthEngineChildren,
               })}
 
-              {permissions.canAdmin ? (
-                <>
-                  <SectionLabel>Analytics</SectionLabel>
-                  {renderNavGroup({
-                    label: "Analytics",
-                    icon: BarChart3,
-                    isOpen: analyticsOpen,
-                    setOpen: setAnalyticsOpen,
-                    isActive: isAnalyticsActive,
-                    children: analyticsChildren,
-                  })}
-                </>
-              ) : null}
-
               <SectionLabel>Agents</SectionLabel>
               {agentLinks.map((link) => renderNavLink(link))}
 
@@ -804,8 +705,6 @@ export default function WorkspaceLayout({
                 <>
                   <SectionLabel>Account</SectionLabel>
                   {accountLinks.map((link) => renderNavLink(link))}
-                </>
-              )}
                 </>
               )}
             </nav>
@@ -870,9 +769,6 @@ export default function WorkspaceLayout({
             )}
           </main>
         </div>
-        {SHOW_ASSISTANT_WIDGET && process.env.NEXT_PUBLIC_ASSISTANT_ENABLED === "true" && workspace?.id && (
-          <AssistantWidget workspaceId={workspace.id} workspaceSlug={slug} />
-        )}
       </div>
     </WorkspaceContext.Provider>
   );

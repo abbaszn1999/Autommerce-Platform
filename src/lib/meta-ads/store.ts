@@ -546,6 +546,3 @@ export function useAccountState(): AccountState | null {
   return useMetaAds((s) => (s.accountId ? s.accounts[s.accountId] ?? null : null));
 }
 
-export function useAccountData(): MetaAccountData | null {
-  return useAccountState()?.data ?? null;
-}

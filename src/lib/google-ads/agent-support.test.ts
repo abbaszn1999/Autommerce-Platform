@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { signServiceRequest } from "@/lib/assistant/service-client";
+import { signServiceRequest } from "@/lib/store-agent/signing";
 import { verifyAgentRequest } from "./agent-auth.server";
 import { GAQL_MAX_ROWS, GaqlGuardError, describeLiveChange, guardGaql } from "./agent-support";
 import type { BeforeState } from "./live-mutate";

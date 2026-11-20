@@ -46,17 +46,3 @@ export function getAllWritableColumns(): string[] {
   }
   return Array.from(set);
 }
-
-/**
- * Union of every registered provider's column-profile keys (UI tabs). Used to
- * build the tool catalog's `columnProfile` enum so a profile valid on ANY
- * provider validates — the per-provider system prompt steers the model to the
- * right subset. Adding a new provider automatically widens this set.
- */
-export function getAllColumnProfileKeys(): string[] {
-  const set = new Set<string>();
-  for (const provider of Object.values(PROVIDERS)) {
-    for (const key of Object.keys(provider.schema.columnProfiles)) set.add(key);
-  }
-  return Array.from(set);
-}

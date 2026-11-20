@@ -46,7 +46,8 @@ import {
 import { cmsTypeLabel, parseSupportedCmsType, DEFAULT_CMS_TYPE } from "@/lib/cms-types";
 import { CmsTypeSelect } from "@/components/cms-type-select";
 import { changeWorkspacePlatform, fetchCategoryPlatform } from "@/lib/categories/platform-client";
-import { ShopifyAccessGuide } from "@/components/settings/shopify-access-guide";
+import { StoreAccessPanel } from "@/components/settings/store-access-panel";
+import { STORE_ACCESS_ANCHOR, STORE_CONNECTION_ANCHOR } from "@/lib/integrations/access-links";
 
 type ConfigField = {
   key: string;
@@ -96,6 +97,7 @@ export default function SettingsPage() {
   const [deleting, setDeleting] = useState(false);
   const [integration, setIntegration] = useState<WorkspaceIntegration | null>(null);
   const [integrationLoading, setIntegrationLoading] = useState(false);
+  const [integrationLoaded, setIntegrationLoaded] = useState(false);
   const [integrationDialogOpen, setIntegrationDialogOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<"shopify" | "woocommerce" | "wordpress" | null>(null);
   const [integrationStep, setIntegrationStep] = useState<"select" | "configure">("select");
@@ -170,6 +172,7 @@ export default function SettingsPage() {
       } finally {
         if (!cancelled) {
           setIntegrationLoading(false);
+          setIntegrationLoaded(true);
         }
       }
     }
@@ -180,6 +183,17 @@ export default function SettingsPage() {
       cancelled = true;
     };
   }, [workspace, permissions.canAdmin]);
+
+  // A link to the store's connection or its access (a lock, a card in a chat) lands on that part of the page,
+  // which is only there once the integration has loaded.
+  const integrationProvider = integration?.provider;
+  useEffect(() => {
+    if (!integrationLoaded) return;
+    const target = window.location.hash.slice(1);
+    if (target !== STORE_ACCESS_ANCHOR && target !== STORE_CONNECTION_ANCHOR) return;
+    // No store connected: the access panel is not shown, the place to connect one is.
+    (document.getElementById(target) ?? document.getElementById(STORE_CONNECTION_ANCHOR))?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [integrationLoaded, integrationProvider]);
 
   const handleSave = async () => {
     if (!workspace) return;
@@ -517,7 +531,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+        <section id={STORE_CONNECTION_ANCHOR} className="scroll-mt-4 overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
           <div className="border-b bg-muted/20 px-5 py-4">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#400095]/10 text-[#6B358D] dark:bg-[#F76D01]/10 dark:text-[#F76D01]">
@@ -574,14 +588,14 @@ export default function SettingsPage() {
                     Disconnect
                   </Button>
                 </div>
-                {integration.provider === "shopify" && (
-                  <ShopifyAccessGuide
-                    className="mt-4"
-                    grantedScopes={grantedScopes}
-                    loading={checkingScopes}
-                    onRecheck={() => void checkScopes()}
-                  />
-                )}
+                <StoreAccessPanel
+                  id={STORE_ACCESS_ANCHOR}
+                  className="mt-4"
+                  provider={integration.provider}
+                  grantedScopes={grantedScopes}
+                  loading={checkingScopes}
+                  onRecheck={() => void checkScopes()}
+                />
               </div>
             ) : (
               <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-dashed bg-muted/10 p-5 sm:flex-row sm:items-center">
@@ -845,7 +859,8 @@ export default function SettingsPage() {
               )}
 
               {selectedProvider === "shopify" && (
-                <ShopifyAccessGuide
+                <StoreAccessPanel
+                  provider="shopify"
                   grantedScopes={
                     testedConnection
                       ? Array.isArray(testedConnection.metadata?.grantedScopes)

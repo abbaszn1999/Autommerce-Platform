@@ -61,7 +61,8 @@ type State = {
   blocked: Blocked;
   notice: string | null;
   /** Whether the agent can be used here: off (feature flag), no connected store, or ready. */
-  availability: "checking" | "ready" | "off" | "no_store" | "error";
+  /** "not_connected": an ads agent whose ad account is not connected yet (the Store Assistant opens without a store). */
+  availability: "checking" | "ready" | "off" | "not_connected" | "error";
   /** Concrete gaps found in the store, for the new-chat screen. */
   insights: Insight[];
   /** Which agent's chats are loaded: the Store Assistant's or the Google Ads page's. */
@@ -150,7 +151,7 @@ export async function initStoreAgent(workspaceId: string, opts: { onRunFinished?
     catalog = await storeAgentApi.models(workspaceId);
   } catch (error) {
     const status = error instanceof ApiError ? error.status : 0;
-    set({ availability: status === 404 ? "off" : status === 409 ? "no_store" : "error", chatsLoaded: true });
+    set({ availability: status === 404 ? "off" : status === 409 ? "not_connected" : "error", chatsLoaded: true });
     return;
   }
   const chats = await storeAgentApi.listChats(workspaceId).catch(() => ({ chats: [] as ChatSummary[] }));
@@ -753,5 +754,3 @@ export async function undoChange(chatId: string, approvalId: string): Promise<st
   if (result.skipped.length) parts.push(`${result.skipped.length} with fields undo cannot restore (such as images)`);
   return parts.join(" · ");
 }
-
-export const isDraftChat = isDraft;

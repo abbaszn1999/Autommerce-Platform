@@ -88,11 +88,6 @@ export function useRevealedText(
  */
 const revealedMessages = new Set<string>();
 
-/** Forget reveal history — call when the chat is cleared. */
-export function resetRevealedMessages(): void {
-  revealedMessages.clear();
-}
-
 /**
  * Markdown block that types itself in the first time a given message is shown.
  * `onReveal` fires once per animation frame so the caller can keep the scroll

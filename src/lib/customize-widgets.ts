@@ -175,12 +175,6 @@ export const SAMPLE_FAQS = [
   },
 ] as const;
 
-export const SAMPLE_COLLECTIONS = [
-  { handle: "polarized-sunglasses", name: "Polarized Sunglasses" },
-  { handle: "aviator-sunglasses", name: "Aviator Sunglasses" },
-  { handle: "educational-toys", name: "Educational Toys" },
-] as const;
-
 export type PersistedWidgetSettings = {
   links: WidgetStyle;
   faq: WidgetStyle;

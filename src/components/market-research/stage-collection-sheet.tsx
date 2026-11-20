@@ -11,13 +11,11 @@ import {
   FileText,
   Layers,
   Loader2,
-  Lock,
   Package,
   Search,
   ShieldCheck,
   Sparkles,
   Store,
-  Tag,
   Trash2,
   Wallet,
 } from "lucide-react";

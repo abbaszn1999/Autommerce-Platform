@@ -1,18 +1,8 @@
-// Shared Gemini utilities for the sync agent: model selection, retry, JSON parse.
-
-import { aiJsonParse } from "ai-json-safe-parse";
-import { calculateCallCost, costToCredits } from "@/lib/ai-pricing";
-
-export type SyncMode = "fast" | "pro";
+// Shared Gemini utilities for the sync agent: thinking level and API key.
 
 /** Gemini 3 thinkingLevel — controls reasoning depth vs latency/cost.
  *  Maps to @google/genai ThinkingLevel enum values via resolveThinkingLevel(). */
 export type SyncThinkingLevel = "low" | "medium" | "high";
-
-export const MODELS: Record<SyncMode, string> = {
-  fast: "gemini-3.6-flash",
-  pro: "gemini-3.1-pro-preview",
-};
 
 /** Resolve our string thinkingLevel to the @google/genai enum value the SDK
  *  accepts in `thinkingConfig.thinkingLevel`. Lazy-imports the SDK so this
@@ -29,67 +19,6 @@ export async function resolveThinkingLevel(
     case "high":
       return ThinkingLevel.HIGH;
   }
-}
-
-export type SyncBillingTracker = {
-  totalCredits: number;
-  totalCost: number;
-  totalTokens: number;
-};
-
-export function trackAiUsage(
-  tracker: SyncBillingTracker | undefined,
-  model: string,
-  usageMetadata: unknown,
-  usedGoogleSearch = false
-): void {
-  if (!tracker || !usageMetadata) return;
-  const cost = calculateCallCost(model, usageMetadata, usedGoogleSearch);
-  tracker.totalCost += cost.totalCost;
-  tracker.totalTokens += cost.usage.totalTokens;
-  tracker.totalCredits += costToCredits(cost.totalCost);
-
-  // Cache-hit visibility: Gemini's implicit cache only kicks in when the
-  // request repeats an identical prefix, and a hit is billed at the discounted
-  // cached rate. `cachedHitRatio` near 0 across a multi-turn run means the
-  // prefix is being invalidated and each turn is paying full input price.
-  const { promptTokens, cachedTokens, thoughtsTokens, candidatesTokens } = cost.usage;
-  console.log("[Sync Billing] ai usage", {
-    model,
-    promptTokens,
-    cachedTokens,
-    cachedHitRatio: promptTokens > 0 ? +(cachedTokens / promptTokens).toFixed(3) : 0,
-    candidatesTokens,
-    thoughtsTokens,
-    totalTokens: cost.usage.totalTokens,
-    credits: +costToCredits(cost.totalCost).toFixed(4),
-  });
-}
-
-export async function withAiRetry<T>(
-  fn: () => Promise<T>,
-  opts: { maxRetries?: number; baseDelay?: number; jitter?: number } = {}
-): Promise<T> {
-  const maxRetries = opts.maxRetries ?? 3;
-  const baseDelay = opts.baseDelay ?? 1500;
-  const jitter = opts.jitter ?? 500;
-  let lastError: unknown = null;
-  for (let attempt = 0; attempt < maxRetries; attempt += 1) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastError = err;
-      const delay = baseDelay * Math.pow(2, attempt) + Math.random() * jitter;
-      await new Promise((r) => setTimeout(r, delay));
-    }
-  }
-  throw lastError;
-}
-
-export function safeParseAiJson<T>(text: string): T {
-  const parsed = aiJsonParse<T>(text);
-  if (parsed.success) return parsed.data;
-  throw new Error(`Failed to parse AI JSON output: ${parsed.error ?? "unknown"}`);
 }
 
 export function requireGeminiApiKey(): string {

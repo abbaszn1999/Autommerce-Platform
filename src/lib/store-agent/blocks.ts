@@ -2,7 +2,7 @@
 // stream. The service uses it to save the reply; the page uses the same
 // reducer to render it live, so a reloaded chat looks exactly like it did.
 
-import type { ApprovalPreview, QuestionItem, StoreAgentEvent, TodoItem, ToolKind, ToolLink } from "./protocol";
+import type { AccessReason, ApprovalPreview, QuestionItem, StoreAgentEvent, TodoItem, ToolKind, ToolLink } from "./protocol";
 
 export type MessageBlock =
   | { type: "text"; text: string }
@@ -41,6 +41,8 @@ export type MessageBlock =
   | { type: "doc"; docId: string; kind: "plan" | "report"; title: string; version: number; steps?: number }
   /** `shown` false: one of the agent's working files, not listed under the reply. */
   | { type: "file"; fileId: string; name: string; kind: string; mime: string; shown?: boolean }
+  /** Store access the agent asked for: one card per reason in a reply, holding every permission asked for. */
+  | { type: "access"; reason: AccessReason; scopes: string[]; note?: string }
   | { type: "summary"; status: "started" | "completed" }
   | { type: "error"; message: string };
 
@@ -180,6 +182,17 @@ export function reduceReply(state: ReplyState, event: StoreAgentEvent): ReplySta
       if (i < 0) blocks.push({ type: "file", fileId: event.fileId, name: event.name, kind: event.kind, mime: event.mime, ...shown });
       // A working file the agent then opens for the user becomes a result.
       else if (event.shown) blocks[i] = { ...(blocks[i] as Extract<MessageBlock, { type: "file" }>), shown: true };
+      break;
+    }
+    case "access": {
+      // One card per reason in a reply: a second request adds its permissions to the first card.
+      const i = blocks.findIndex((b) => b.type === "access" && b.reason === event.reason);
+      if (i < 0) blocks.push({ type: "access", reason: event.reason, scopes: [...event.scopes], ...(event.note ? { note: event.note } : {}) });
+      else {
+        const b = blocks[i] as Extract<MessageBlock, { type: "access" }>;
+        const note = b.note ?? event.note;
+        blocks[i] = { ...b, scopes: [...new Set([...b.scopes, ...event.scopes])], ...(note ? { note } : {}) };
+      }
       break;
     }
     case "summary":

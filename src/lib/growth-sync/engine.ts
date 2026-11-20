@@ -443,4 +443,3 @@ export async function runRule(params: {
   }
 }
 
-export const ENGINE_TUNING = { MAX_PRODUCTS_PER_RUN } as const;

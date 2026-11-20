@@ -3,7 +3,7 @@
 // call the Google Ads agent endpoints, for the user its run belongs to.
 
 import { timingSafeEqual } from "node:crypto";
-import { signServiceRequest } from "@/lib/assistant/service-client";
+import { signServiceRequest } from "@/lib/store-agent/signing";
 
 /** Requests older (or newer) than this are refused, which bounds replays. */
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;

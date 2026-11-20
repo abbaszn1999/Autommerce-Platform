@@ -20,12 +20,8 @@ function chargeFake(_admin: unknown, input: { amountUsd: number; idempotencyKey:
 }
 
 vi.mock("@/lib/market-research/wallet-ops", () => ({ chargeMrWallet: chargeFake }));
-vi.mock("@/lib/free-assessment/wallet-ops", () => ({ chargeAssessmentWallet: chargeFake }));
 vi.mock("@/lib/wallet/server", () => ({
   readWorkspaceWallet: async () => ({ balance: wallet.balance }),
-}));
-vi.mock("@/lib/free-assessment/wallet-server", () => ({
-  readFaWallet: async () => ({ balance: wallet.balance }),
 }));
 
 import {
@@ -48,7 +44,7 @@ beforeEach(() => {
 
 describe("AI wallet billing scope", () => {
   it("charges the total spend once when the scope ends", async () => {
-    await runWithAiBilling({ wallet: "market-research", operation: "mr_seeds", binding }, async () => {
+    await runWithAiBilling({ operation: "mr_seeds", binding }, async () => {
       await ensureAiBudget();
       recordAiSpend(0.012);
       await ensureAiBudget();
@@ -62,7 +58,7 @@ describe("AI wallet billing scope", () => {
   it("settles as it goes and stops once the wallet cannot pay", async () => {
     wallet.balance = 0.3;
     await expect(
-      runWithAiBilling({ wallet: "free-assessment", operation: "fa_classify", binding }, async () => {
+      runWithAiBilling({ operation: "mr_classify", binding }, async () => {
         for (let i = 0; i < 10; i += 1) {
           await ensureAiBudget();
           recordAiSpend(AI_SETTLE_THRESHOLD_USD);
@@ -76,7 +72,7 @@ describe("AI wallet billing scope", () => {
 
   it("refuses up front when the wallet is already empty", async () => {
     wallet.balance = 0;
-    await runWithAiBilling({ wallet: "market-research", operation: "mr_chat" }, async () => {
+    await runWithAiBilling({ operation: "mr_chat" }, async () => {
       expect(await bindAiBilling(binding)).toMatch(/wallet balance is empty/i);
       expect(() => assertAiBudget()).toThrow(WalletExhaustedError);
     });
@@ -107,7 +103,7 @@ describe("withAiWalletBilling", () => {
 
   it("answers 402 when the wallet runs dry and the error escapes", async () => {
     wallet.balance = 0.3;
-    const handler = withAiWalletBilling("market-research", "mr_seeds", async () => {
+    const handler = withAiWalletBilling("mr_seeds", async () => {
       await bindAiBilling(binding);
       for (let i = 0; i < 10; i += 1) {
         await ensureAiBudget();
@@ -122,7 +118,7 @@ describe("withAiWalletBilling", () => {
 
   it("turns a generic 500 into 402 once the wallet ran dry", async () => {
     wallet.balance = 0.3;
-    const handler = withAiWalletBilling("free-assessment", "fa_seeds", () =>
+    const handler = withAiWalletBilling("mr_seeds", () =>
       drainThenRespond(() => Response.json({ error: "boom" }, { status: 500 }))
     );
     const res = await handler();
@@ -130,7 +126,7 @@ describe("withAiWalletBilling", () => {
   });
 
   it("keeps a real 500 when the wallet can still pay", async () => {
-    const handler = withAiWalletBilling("market-research", "mr_chat", async () =>
+    const handler = withAiWalletBilling("mr_chat", async () =>
       Response.json({ error: "boom" }, { status: 500 })
     );
     const res = await handler();

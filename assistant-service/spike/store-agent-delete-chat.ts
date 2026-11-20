@@ -2,10 +2,10 @@
 // Run: npx tsx --env-file=.env.local --env-file=../.env.local spike/store-agent-delete-chat.ts <chatId> [chatId...]
 import { createClient } from "@supabase/supabase-js";
 import { installDnsCache } from "../src/dns-cache";
-import { createResilientFetch } from "../src/store-agent/resilient-fetch";
-import { SupabaseAgentStoreBackend } from "../src/store-agent/agent-store/supabase-backend";
-import { WriteBehindAgentStore } from "../src/store-agent/agent-store/write-behind-store";
-import { deleteChatData } from "../src/store-agent/routes";
+import { createResilientFetch } from "../src/core/resilient-fetch";
+import { SupabaseAgentStoreBackend } from "../src/core/agent-store/supabase-backend";
+import { WriteBehindAgentStore } from "../src/core/agent-store/write-behind-store";
+import { deleteChatData } from "../src/core/routes";
 installDnsCache();
 
 const chatIds = process.argv.slice(2);

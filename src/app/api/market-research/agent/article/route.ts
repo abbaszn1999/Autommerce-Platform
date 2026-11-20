@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       const wallet = await readWorkspaceWallet(auth.admin, workspaceId);
       if (!(wallet.balance > 0)) {
         return NextResponse.json(
-          { error: new WalletExhaustedError("market-research").message, code: "WALLET_EMPTY" },
+          { error: new WalletExhaustedError().message, code: "WALLET_EMPTY" },
           { status: 402, headers: auth.headers }
         );
       }
@@ -135,7 +135,6 @@ export async function POST(request: NextRequest) {
       result = await finalizeArticleJob(auth.admin, workspaceId, projectId, job, async (cost) => {
         if (covered) return;
         await chargeAiCostOnce(
-          "market-research",
           { admin: auth.admin, workspaceId, userId: auth.user.id },
           { operation: "mr_article", amountUsd: cost, key: openaiResponseId }
         );

@@ -1,6 +1,6 @@
 // Client for Meta's official Ads MCP server (https://mcp.facebook.com/ads).
 // Server only: it sends the client's user access token as the Bearer header.
-// Transport checked live (meta-ads/connect-plan.md §9): JSON-RPC over HTTP POST,
+// Transport checked live: JSON-RPC over HTTP POST,
 // replies as JSON or as an SSE stream, and an Mcp-Session-Id to send back.
 
 import { createHash } from "node:crypto";

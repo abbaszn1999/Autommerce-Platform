@@ -19,6 +19,8 @@ export interface WorkspaceContextType {
   hasStoreAgentStore: boolean;
   /** Which store tools are locked, and why (null: open). */
   toolLocks: Record<StoreToolId, ToolLock>;
+  /** The connected platform, and on Shopify the scopes its token has (null: not known, or a platform without scopes). */
+  storeAccess: { provider: string | null; scopes: readonly string[] | null };
 }
 
 export const WorkspaceContext = createContext<WorkspaceContextType>({
@@ -28,6 +30,7 @@ export const WorkspaceContext = createContext<WorkspaceContextType>({
   hasIntegration: false,
   hasStoreAgentStore: false,
   toolLocks: storeToolLocks(null, null),
+  storeAccess: { provider: null, scopes: null },
 });
 
 export const useWorkspaceContext = () => useContext(WorkspaceContext);

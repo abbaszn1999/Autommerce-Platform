@@ -4,12 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Check,
-  ChevronRight,
   Copy,
   Download,
   Eye,
   ExternalLink,
-  FileText,
   HelpCircle,
   Link2,
   Loader2,
@@ -44,7 +42,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { formatUsd } from "@/lib/market-research/cost";
 import { sanitizeRichText, stripTags } from "@/lib/market-research/rich-text";
 import { OnPageShapePicker } from "@/components/customize/on-page-shape-picker";
 import { TableSelectHeader } from "@/components/table-select-header";
@@ -58,7 +55,6 @@ import {
 import { buildCollectionsSitemapXml } from "@/lib/market-research/sitemap";
 import { buildStoreLinks } from "@/lib/market-research/store-links";
 import {
-  USD_PER_COLLECTION,
   type CollectionContent,
   type CollectionLink,
   type OnPageInstructionField,
@@ -116,14 +112,12 @@ export function StageContentPanel({
   generating,
   contentGenProgress,
   ready,
-  pushed,
   syncingSeo = false,
   seoSynced = false,
   onStart,
   onPush,
   onSyncSeo,
   onNextStrategy,
-  pushCostUsd,
   storeUrl,
   storeProvider,
 }: {
@@ -144,14 +138,12 @@ export function StageContentPanel({
   /** Live progress across the Stage 6 on-page copywriting cursor job's pages. */
   contentGenProgress?: { processed: number; total: number } | null;
   ready: boolean;
-  pushed: boolean;
   syncingSeo?: boolean;
   seoSynced?: boolean;
   onStart: (ids: string[]) => void;
   onPush?: () => void;
   onSyncSeo?: () => void;
   onNextStrategy: () => void;
-  pushCostUsd?: number;
   /** Storefront origin, used to build each collection's live URL and the
    *  sitemap export. */
   storeUrl?: string;
@@ -183,7 +175,6 @@ export function StageContentPanel({
   const previewCol = collections.find((c) => c.id === previewId);
   const fieldMeta = FIELD_META.find((f) => f.id === openField);
   const locked = generating || ready;
-  const pushCost = pushCostUsd ?? collections.length * USD_PER_COLLECTION;
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
   const idsKey = collections.map((c) => c.id).join(",");
   const prevIdsKey = useRef(idsKey);

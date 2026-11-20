@@ -782,40 +782,6 @@ export async function runEmbedTermsLoop(
 
 // ─── Stage 4 classification over the full extract archive ────────────────
 
-export type ClassifyArchiveResponse = {
-  offset: number;
-  nextOffset: number;
-  done: boolean;
-  processed: number;
-  total: number;
-  categoryCount: number;
-  informationalCount: number;
-  excludedCount: number;
-  isAiGenerated: boolean;
-  /** Keywords in this page that fell back to the regex heuristic because Gemini's batch failed or omitted them. */
-  degradedCount: number;
-  classifications?: Array<{
-    keyword: string;
-    sheet: "category" | "informational" | "excluded";
-    reason?: string;
-    plpConcept?: string;
-    isAiGenerated?: boolean;
-  }>;
-};
-
-export async function classifyArchivePageApi(
-  workspaceId: string,
-  projectId: string,
-  offset: number
-): Promise<ClassifyArchiveResponse> {
-  const response = await fetch("/api/market-research/agent/intent", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workspaceId, projectId, mode: "archive", offset }),
-  });
-  return readJson<ClassifyArchiveResponse>(response);
-}
-
 /**
  * Runs a cursor-paginated agent job (classify, cluster, on-page, …) to
  * completion. `MAX_CALLS_PER_ROUND` exists only as a safety net against a
@@ -854,120 +820,7 @@ async function runCursorLoop<TState extends { done: boolean; nextOffset: number 
   );
 }
 
-export type SameIntentPageResponse = {
-  offset: number;
-  nextOffset: number;
-  done: boolean;
-  phase: "embed" | "cluster" | "judge" | "done";
-  processed: number;
-  total: number;
-  removedCount: number;
-};
-
-export async function sameIntentPageApi(
-  workspaceId: string,
-  projectId: string,
-  offset: number
-): Promise<SameIntentPageResponse> {
-  const response = await fetch("/api/market-research/agent/same-intent", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workspaceId, projectId, mode: "archive", offset }),
-  });
-  return readJson<SameIntentPageResponse>(response);
-}
-
-export async function runSameIntentLoop(
-  workspaceId: string,
-  projectId: string,
-  onProgress?: (state: SameIntentPageResponse) => void,
-  isCancelled?: () => boolean
-): Promise<SameIntentPageResponse | null> {
-  return runCursorLoop(
-    (offset) => sameIntentPageApi(workspaceId, projectId, offset),
-    onProgress,
-    isCancelled,
-    "Same-intent cleanup"
-  );
-}
-
-export async function runClassifyArchiveLoop(
-  workspaceId: string,
-  projectId: string,
-  onProgress?: (state: ClassifyArchiveResponse) => void,
-  isCancelled?: () => boolean
-): Promise<ClassifyArchiveResponse | null> {
-  return runCursorLoop(
-    (offset) => classifyArchivePageApi(workspaceId, projectId, offset),
-    onProgress,
-    isCancelled,
-    "Classification"
-  );
-}
-
 // ─── Stage 5 clustering as a cursor job ───────────────────────────────────
-
-export type ClusterPageResponse = {
-  offset: number;
-  nextOffset: number;
-  done: boolean;
-  processed: number;
-  total: number;
-  collections: ProposedCollection[];
-  summary: {
-    totalCollections: number;
-    newCount: number;
-    existingCount: number;
-    mergeCount: number;
-    totalVolume: number;
-  };
-  isAiGenerated: boolean;
-};
-
-export async function clusterCollectionsPageApi(
-  workspaceId: string,
-  projectId: string,
-  offset: number,
-  filters?: {
-    minVolume?: number;
-    maxKd?: number;
-    questionsOnly?: boolean;
-    query?: string;
-  }
-): Promise<ClusterPageResponse> {
-  const response = await fetch("/api/market-research/agent/cluster", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      workspaceId,
-      projectId,
-      mode: "archive",
-      offset,
-      filters,
-    }),
-  });
-  return readJson<ClusterPageResponse>(response);
-}
-
-export async function runClusterCollectionsLoop(
-  workspaceId: string,
-  projectId: string,
-  onProgress?: (state: ClusterPageResponse) => void,
-  isCancelled?: () => boolean,
-  filters?: {
-    minVolume?: number;
-    maxKd?: number;
-    questionsOnly?: boolean;
-    query?: string;
-  }
-): Promise<ClusterPageResponse | null> {
-  return runCursorLoop(
-    (offset) => clusterCollectionsPageApi(workspaceId, projectId, offset, filters),
-    onProgress,
-    isCancelled,
-    "Clustering"
-  );
-}
 
 // ─── Stage 5 Phase 3: duplicate-collection exclusion (runs once, after the
 // cursor loop above is fully done) ─────────────────────────────────────────
@@ -1033,18 +886,6 @@ export async function generateSeedsApi(
   });
   return readJson<AgentSeedsResponse>(response);
 }
-
-export type AgentClusterResponse = {
-  collections: ProposedCollection[];
-  summary: {
-    totalCollections: number;
-    newCount: number;
-    existingCount: number;
-    mergeCount: number;
-    totalVolume: number;
-  };
-  isAiGenerated: boolean;
-};
 
 // ─── Stage 6 on-page copywriting as a cursor job ──────────────────────────
 //

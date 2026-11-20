@@ -2,7 +2,7 @@
 // for a short while so opening the page again doesn't spend the daily API quota.
 
 import { addDays, rangeDays } from "./metrics";
-import { ConnectionHttpError, searchGaql, searchGaqlAll, type ConnectionRow } from "./connection.server";
+import { ConnectionHttpError, searchGaqlAll, type ConnectionRow } from "./connection.server";
 import { LIVE_QUERIES } from "./live-queries";
 import { buildLiveAccount, type GaqlRow, type LiveRows } from "./live-report";
 import { forgetSegments } from "./live-segments.server";

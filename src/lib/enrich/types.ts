@@ -2,9 +2,7 @@ import type {
   CategoryItem,
   EnrichmentColumn,
   EnrichmentModel,
-  ImageUrl,
   SessionKind,
-  SourceUrl,
 } from "@/types";
 import type { AiCallCost } from "@/lib/ai-pricing";
 import type { SourceUrlsPlan } from "./source-urls/plan";
@@ -139,6 +137,3 @@ export type OpenAiResponse = {
   usage?: unknown;
   error?: { message?: string; code?: string | null; type?: string };
 };
-
-export type ParsedEnrichImages = ImageUrl[];
-export type ParsedEnrichSources = SourceUrl[];

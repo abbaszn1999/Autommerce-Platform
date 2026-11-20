@@ -4,10 +4,6 @@
  * metadata (session name, status, storage_path, etc.).
  */
 import { createClient } from "@/lib/supabase-browser";
-import {
-  getGalleryWorksheetPath,
-} from "@/lib/gallery/storage-paths";
-import type { GalleryWorksheetJson } from "@/lib/gallery/types";
 import type { FaqItem, SessionKind } from "@/types";
 
 const BUCKET = "workspace-files";
@@ -59,14 +55,6 @@ export async function loadJsonFromStorage<T = unknown>(storagePath: string): Pro
   }
   const text = await data.text();
   return JSON.parse(text) as T;
-}
-
-export async function deleteJsonFromStorage(storagePath: string): Promise<void> {
-  const supabase = createClient();
-  const { error } = await supabase.storage
-    .from(BUCKET)
-    .remove([storagePath]);
-  if (error) throw error;
 }
 
 // ─── Project JSON (import session data) ──────────────────
@@ -230,25 +218,6 @@ export type {
   GalleryActiveRun,
 } from "@/lib/gallery/types";
 
-export async function saveGalleryWorksheet(
-  workspaceId: string,
-  sessionId: string,
-  data: GalleryWorksheetJson
-): Promise<string> {
-  const path = getGalleryWorksheetPath(workspaceId, sessionId);
-  await saveJsonToStorage(path, data);
-  return path;
-}
-
-export async function loadGalleryWorksheet(
-  workspaceId: string,
-  sessionId: string
-): Promise<GalleryWorksheetJson | null> {
-  return loadJsonFromStorage<GalleryWorksheetJson>(
-    getGalleryWorksheetPath(workspaceId, sessionId)
-  );
-}
-
 export async function uploadImageToStorage(storagePath: string, blob: Blob): Promise<void> {
   const supabase = createClient();
   await supabase.storage.from(BUCKET).remove([storagePath]);
@@ -270,43 +239,6 @@ export async function downloadStoredImage(storagePath: string): Promise<Blob | n
   const { data, error } = await supabase.storage.from(BUCKET).download(storagePath);
   if (error || !data) return null;
   return data;
-}
-
-// ─── Master Products JSON ────────────────────────────────
-
-export interface MasterProductJson {
-  sku: string;
-  data: Record<string, any>;
-  enrichedData?: Record<string, any>;
-  categoryId?: string;
-  status?: string;
-  createdAt?: string;
-}
-
-export function getProductsStoragePath(workspaceId: string): string {
-  return `${workspaceId}/master/products.json`;
-}
-
-export async function saveProductsJson(workspaceId: string, products: MasterProductJson[]): Promise<string> {
-  const res = await fetch("/api/products/catalog", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workspaceId, products }),
-  });
-  const data = (await res.json().catch(() => ({}))) as {
-    error?: string;
-    code?: string;
-  };
-  if (!res.ok) {
-    throw new Error(data.error || "Failed to save catalog");
-  }
-  return getProductsStoragePath(workspaceId);
-}
-
-export async function loadProductsJson(workspaceId: string): Promise<MasterProductJson[]> {
-  const path = getProductsStoragePath(workspaceId);
-  const data = await loadJsonFromStorage<MasterProductJson[]>(path);
-  return data ?? [];
 }
 
 // ─── Categories JSON ─────────────────────────────────────
@@ -345,35 +277,10 @@ export function getCategoriesStoragePath(workspaceId: string): string {
   return `${workspaceId}/categories.json`;
 }
 
-export async function saveCategoriesJson(workspaceId: string, categories: CategoryJson[]): Promise<string> {
-  const path = getCategoriesStoragePath(workspaceId);
-  await saveJsonToStorage(path, categories);
-  // Keep the count sidecar (read by the dashboard) accurate after a client-side write.
-  try {
-    await saveJsonToStorage(`${workspaceId}/categories.count.json`, { count: categories.length, ts: Date.now() });
-  } catch { /* non-fatal */ }
-  return path;
-}
-
-export async function loadCategoriesJson(workspaceId: string): Promise<CategoryJson[]> {
-  const path = getCategoriesStoragePath(workspaceId);
-  const data = await loadJsonFromStorage<CategoryJson[]>(path);
-  return data ?? [];
-}
-
 // ─── Categories Raw Sheet (original uploaded rows) ────────
 
 export function getCategoriesRawStoragePath(workspaceId: string): string {
   return `${workspaceId}/categories-raw.json`;
-}
-
-export async function saveCategoriesRawJson(workspaceId: string, rows: Record<string, string>[]): Promise<void> {
-  await saveJsonToStorage(getCategoriesRawStoragePath(workspaceId), rows);
-}
-
-export async function loadCategoriesRawJson(workspaceId: string): Promise<Record<string, string>[]> {
-  const data = await loadJsonFromStorage<Record<string, string>[]>(getCategoriesRawStoragePath(workspaceId));
-  return data ?? [];
 }
 
 // ─── Suppliers JSON ──────────────────────────────────────

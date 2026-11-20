@@ -33,7 +33,3 @@ export function parseSupportedCmsType(
 export function cmsTypeLabel(value: string): string {
   return CMS_TYPES.find((t) => t.value === value)?.label ?? value;
 }
-
-export function cmsTypeOptionLabel(option: CmsTypeOption): string {
-  return option.available ? option.label : `${option.label} — Coming soon`;
-}

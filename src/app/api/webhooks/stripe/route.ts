@@ -4,7 +4,6 @@ import { isSelfServePlanName } from "@/lib/billing/plans";
 import { stampFirstPaidAtIfNull } from "@/lib/billing/welcome-gift-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { creditWorkspaceWallet } from "@/lib/wallet/server";
-import { creditFaWallet } from "@/lib/free-assessment/wallet-server";
 import { clearWorkspaceContextCache } from "@/lib/workspace-context";
 import {
   invoiceSubscriptionId,
@@ -88,11 +87,6 @@ async function handleCheckout(session: Stripe.Checkout.Session, admin: SupabaseC
   // One-off payments are credited only once the money has cleared; delayed
   // methods complete later via checkout.session.async_payment_succeeded.
   if (session.mode === "payment" && session.payment_status !== "paid") return;
-
-  if (session.metadata?.faWalletTopup === "1") {
-    await handleFaWalletTopup(session, userId, admin);
-    return;
-  }
 
   if (session.metadata?.walletTopup === "1") {
     await handleWalletTopup(session, userId, admin);
@@ -189,40 +183,6 @@ async function handleWalletTopup(
   });
   if (!credited.ok) {
     throw new Error(`Wallet top-up credit failed for session ${session.id}: ${credited.message}`);
-  }
-}
-
-/** Credits the Free Assessment wallet only — never workspace_wallets. */
-async function handleFaWalletTopup(
-  session: Stripe.Checkout.Session,
-  userId: string,
-  admin: SupabaseClient
-) {
-  const workspaceId = session.metadata?.workspaceId;
-  if (!workspaceId) return;
-  const targetCents = session.metadata?.targetAmountCents
-    ? parseInt(session.metadata.targetAmountCents, 10)
-    : (session.amount_subtotal ?? session.amount_total ?? 0);
-  const amountUsd = targetCents > 0 ? targetCents / 100 : (session.amount_total ?? 0) / 100;
-  if (amountUsd <= 0) return;
-
-  const credited = await creditFaWallet(admin, {
-    workspaceId,
-    userId,
-    amountUsd,
-    kind: "topup",
-    description: "Free Assessment wallet top-up · card",
-    module: "Billing",
-    method: "Card",
-    idempotencyKey: `fa_stripe_checkout:${session.id}`,
-    details: {
-      stripeSessionId: session.id,
-      stripePaymentIntentId: (session.payment_intent as string) || null,
-      amountPaidUsd: (session.amount_total ?? 0) / 100,
-    },
-  });
-  if (!credited.ok) {
-    throw new Error(`Free Assessment wallet top-up failed for session ${session.id}: ${credited.message}`);
   }
 }
 

@@ -26,13 +26,6 @@ export const PLAN_FILTER_OPTIONS = [
   { value: "enterprise", label: "Enterprise" },
 ];
 
-export function inDateWindow(iso: string | null | undefined, window: DateWindow): boolean {
-  if (window === "all") return true;
-  if (!iso) return false;
-  const days = window === "7d" ? 7 : window === "30d" ? 30 : 90;
-  return Date.now() - new Date(iso).getTime() <= days * 86_400_000;
-}
-
 export function matchesLastSeen(
   iso: string | null | undefined,
   window: "all" | "7d" | "30d" | "stale" | "never"

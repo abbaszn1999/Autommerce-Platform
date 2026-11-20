@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decryptedIntegrationConfig } from "@/lib/integrations/load";
-import { storeToolLocks, type StoreToolId } from "@/lib/integrations/shopify-access";
+import { scopeLabel, storeToolLocks, type StoreToolId } from "@/lib/integrations/shopify-access";
 import { fetchShopifyGrantedScopes } from "@/lib/sync/providers/shopify/auth";
 
 /**
@@ -84,7 +84,11 @@ export async function storeToolBlock(admin: SupabaseClient, workspaceId: string,
   const lock = storeToolLocks(provider, scopes)[tool];
   if (lock?.reason !== "missing-scopes") return null;
   return NextResponse.json(
-    { error: `Your Shopify app is missing access this tool needs: ${lock.missing.join(", ")}. Enable it, then press Recheck in Settings.`, code: "MISSING_SCOPES", missing: lock.missing },
+    {
+      error: `Your Shopify store has not given this tool permission to ${lock.missing.map(scopeLabel).join(", ")}. Grant it under Autommerce access in Settings, then press Recheck there.`,
+      code: "MISSING_SCOPES",
+      missing: lock.missing,
+    },
     { status: 403 }
   );
 }

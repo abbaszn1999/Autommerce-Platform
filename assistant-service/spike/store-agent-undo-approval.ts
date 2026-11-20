@@ -3,10 +3,10 @@
 // npx tsx --env-file=.env.local --env-file=../.env --env-file=../.env.local spike/store-agent-undo-approval.ts <approvalId> <userId>
 import { createClient } from "@supabase/supabase-js";
 import { signRequest } from "../src/auth";
-import { createResilientFetch } from "../src/store-agent/resilient-fetch";
-import { FILES_BUCKET } from "../src/store-agent/files";
-import { loadShopifyConnection, shopifyGraphql } from "../src/store-agent/shopify/client";
-import type { Backup } from "../src/store-agent/shopify/snapshot";
+import { createResilientFetch } from "../src/core/resilient-fetch";
+import { FILES_BUCKET } from "../src/core/files";
+import { loadShopifyConnection, shopifyGraphql } from "../src/core/store-access/shopify/client";
+import type { Backup } from "../src/core/store-access/shopify/snapshot";
 
 const [approvalId, userId] = process.argv.slice(2);
 if (!approvalId || !userId) throw new Error("usage: store-agent-undo-approval.ts <approvalId> <userId>");

@@ -33,16 +33,3 @@ export const WOOCOMMERCE_CORE_PRODUCT_COLUMNS = [
   "date_created",
   "date_modified",
 ] as const;
-
-/** Direct mappings for `POST /products` updates (column → WooCommerce field). */
-export const WOO_PRODUCT_FIELD_MAP: Record<string, string> = {
-  title: "name",
-  handle: "slug",
-  status: "status",
-  type: "type",
-  body_html: "description",
-  short_description: "short_description",
-  description: "description",
-  seo_title: "meta_data:_yoast_wpseo_title",
-  seo_description: "meta_data:_yoast_wpseo_metadesc",
-};

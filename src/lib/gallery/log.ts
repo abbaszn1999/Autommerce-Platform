@@ -49,16 +49,6 @@ export function galleryLog(step: string, message: string, data?: unknown) {
   console.log(`${PREFIX} ${step} — ${message}\n${safeJson(data)}`);
 }
 
-export function galleryVerboseLog(step: string, message: string, data?: unknown) {
-  if (
-    process.env.NODE_ENV !== "development" &&
-    process.env.GALLERY_VERBOSE_LOGS !== "1"
-  ) {
-    return;
-  }
-  galleryLog(step, message, data);
-}
-
 export function galleryWarn(step: string, message: string, data?: unknown) {
   if (data === undefined) {
     console.warn(`${PREFIX} ${step} — ${message}`);

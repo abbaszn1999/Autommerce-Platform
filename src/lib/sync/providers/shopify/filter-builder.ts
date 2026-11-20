@@ -118,22 +118,6 @@ export function rowHasImage(row: SyncSheetRow): boolean {
   return effectiveImageCount(row) > 0;
 }
 
-/**
- * When a draft gains a featured_image URL, keep the `image_count` column in
- * sync so the Imagery tab and human-readable filters don't show 0.
- */
-export function bumpImageCountForFeaturedImage(row: SyncSheetRow): void {
-  if (!rowVal(row, "featured_image").trim()) return;
-  const raw = row.image_count;
-  const stored =
-    typeof raw === "number" && Number.isFinite(raw)
-      ? raw
-      : Number(raw);
-  if (!Number.isFinite(stored) || stored < 1) {
-    row.image_count = 1;
-  }
-}
-
 function matchesPredicate(row: SyncSheetRow, predicate: ClientPredicate): boolean {
   switch (predicate.kind) {
     case "missing_image":

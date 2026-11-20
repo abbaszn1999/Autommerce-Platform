@@ -8,8 +8,6 @@ export function navCtx(campaigns: Pick<MetaCampaign, "id" | "objective" | "advan
   return { objective: campaign?.objective, advantage: campaign?.advantageState, inCampaign: !!scope.campaignId, inAdSet: !!scope.adSetId, hasCatalog };
 }
 
-export const isAdvantagePlus = (c: NavCtx) => c.advantage === "ADVANTAGE_PLUS";
-
 export type TabDef = { view: MetaView; label: string; show?: (c: NavCtx) => boolean };
 
 /**

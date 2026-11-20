@@ -20,7 +20,7 @@ import {
   normalizeFinderOutputs,
   resolveEnrichmentModel,
 } from "@/types";
-import { saveSession, loadSession, clearSession, type PersistedSession } from "@/lib/persistence";
+import { loadSession, clearSession } from "@/lib/persistence";
 import { expandToGroupMemberIds, visibleCatalogRows } from "@/lib/catalog/product-groups";
 import { moveColumn, reorderKeysInPlace, toggleColumnHidden } from "@/lib/sheet/column-layout";
 

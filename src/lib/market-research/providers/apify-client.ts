@@ -112,10 +112,6 @@ export function actorSeedMetricsId(): string {
   return process.env.APIFY_ACTOR_SEED_METRICS?.trim() || "9FWL3X6mVI2izVfeJ";
 }
 
-export function actorKeywordIdeasId(): string {
-  return process.env.APIFY_ACTOR_KEYWORD_IDEAS?.trim() || "7LH0CgHLrGbpFh49M";
-}
-
 /** amassuo/semrush-keyword-expander — replaces the keyword-ideas actor above for extraction. */
 export function actorKeywordExpanderId(): string {
   return (

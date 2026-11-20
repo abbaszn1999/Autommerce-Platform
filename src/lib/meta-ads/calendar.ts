@@ -152,8 +152,6 @@ export function shiftMonth(month: string, delta: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export const monthLabel = (month: string) => new Date(`${firstOfMonth(month)}T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
-
 /** Monday of the week that holds the day. */
 export const weekStart = (iso: string) => addDays(iso, -((new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7));
 

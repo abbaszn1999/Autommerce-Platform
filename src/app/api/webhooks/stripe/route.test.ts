@@ -94,7 +94,6 @@ vi.mock("@/lib/wallet/server", () => ({
   creditWorkspaceWallet: async () =>
     db.walletOk ? { ok: true } : { ok: false, message: "database unavailable" },
 }));
-vi.mock("@/lib/free-assessment/wallet-server", () => ({ creditFaWallet: async () => ({ ok: true }) }));
 
 import { POST } from "./route";
 

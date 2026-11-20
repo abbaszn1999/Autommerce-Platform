@@ -34,7 +34,6 @@ import {
   getImageClassificationImagesPrefix,
   getImageClassificationImagePath,
 } from "@/lib/storage-helpers";
-import { usePageAgentHandlers } from "@/lib/assistant/driver/page-handlers";
 
 const ACCEPTED_TYPES = [
   "image/jpeg",
@@ -274,24 +273,7 @@ export default function NewImageClassifyPage() {
         ? 5
         : 0;
 
-  usePageAgentHandlers("classify", {
-    getState: () => ({
-      view: "new",
-      canCreate: permissions.canImport,
-      name,
-      instruction: instruction.slice(0, 200),
-      thinkingLevel,
-      images: images.length,
-      maxImages: MAX_IMAGES,
-      phase,
-      ...(phase === "uploading" ? { uploaded: progress.done, total: progress.total } : {}),
-      canSubmit,
-      error,
-    }),
-    estimate: () => ({ feature: "classify", rows: images.length }),
-  });
-
-  if (wsLoading) {
+if (wsLoading) {
     return <PageLoader />;
   }
 
@@ -341,7 +323,7 @@ export default function NewImageClassifyPage() {
               className="h-9 w-9 shrink-0 rounded-xl border border-border/60 bg-background/70"
               asChild
             >
-              <Link href={`/w/${slug}/image-classify`} aria-label="Back" data-agent-id="classify.back">
+              <Link href={`/w/${slug}/image-classify`} aria-label="Back">
                 <ArrowLeft className="h-4 w-4" />
               </Link>
             </Button>
@@ -381,7 +363,6 @@ export default function NewImageClassifyPage() {
                   </Label>
                   <Input
                     id="classify-session-name"
-                    data-agent-id="classify.new.name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. New supplier batch — May"
@@ -397,7 +378,6 @@ export default function NewImageClassifyPage() {
                   </Label>
                   <textarea
                     id="classify-instruction"
-                    data-agent-id="classify.new.instruction"
                     value={instruction}
                     onChange={(e) => setInstruction(e.target.value)}
                     placeholder="e.g. Follow the customer's notes: group by brand first, keep damaged packaging separate, or use specific group names."
@@ -413,7 +393,6 @@ export default function NewImageClassifyPage() {
                   </Label>
                   <select
                     id="classify-thinking"
-                    data-agent-id="classify.new.thinking"
                     value={thinkingLevel}
                     onChange={(e) =>
                       setThinkingLevel(e.target.value as typeof thinkingLevel)
@@ -461,7 +440,6 @@ export default function NewImageClassifyPage() {
                   type="file"
                   accept={ACCEPTED_TYPES.join(",")}
                   multiple
-                  data-agent-id="classify.new.file"
                   disabled={busy}
                   className="hidden"
                   onChange={(e) => {
@@ -494,7 +472,6 @@ export default function NewImageClassifyPage() {
                       variant="outline"
                       className="mt-5"
                       disabled={busy}
-                      data-agent-id="classify.new.dropzone"
                       onClick={() => fileInputRef.current?.click()}
                     >
                       Choose images
@@ -574,8 +551,6 @@ export default function NewImageClassifyPage() {
           </div>
           <Button
             size="sm"
-            data-agent-id="classify.new.submit"
-            data-agent-spend="classify"
             disabled={!canSubmit}
             onClick={handleSubmit}
             className="h-10 gap-1.5 self-stretch rounded-xl bg-[#400095] px-5 text-white shadow-[0_8px_24px_rgba(64,0,149,.2)] hover:bg-[#6B358D] dark:bg-[#F76D01] sm:self-auto"

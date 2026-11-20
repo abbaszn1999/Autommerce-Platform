@@ -45,19 +45,6 @@ export interface Category {
   created_at: string;
 }
 
-export interface MasterProduct {
-  id: string;
-  workspace_id: string;
-  sku: string;
-  category_id: string | null;
-  data: Record<string, any>;
-  enriched_data: Record<string, any>;
-  status: string;
-  source_file_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface ImportSession {
   id: string;
   workspace_id: string;
@@ -81,23 +68,6 @@ export interface ImportSession {
 }
 
 
-export interface ImportRow {
-  id: string;
-  session_id: string;
-  row_index: number;
-  match_type: "existing" | "new" | "ambiguous";
-  matched_product_id: string | null;
-  confidence: number;
-  supplier_data: Record<string, any>;
-  mapped_data: Record<string, any>;
-  diff_data: Record<string, any>;
-  enriched_data: Record<string, any>;
-  action: string;
-  status: string;
-  error_message: string | null;
-  created_at: string;
-}
-
 export interface WorkspaceIntegration {
   id: string;
   workspace_id: string;
@@ -119,17 +89,6 @@ export interface WorkspaceIntegrationTestResult {
 }
 
 // ─── Profiles ────────────────────────────────────────────
-
-export async function getProfile(userId: string) {
-  const supabase = getClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .single();
-  if (error) throw error;
-  return data;
-}
 
 export async function updateProfile(userId: string, updates: { full_name?: string; avatar_url?: string }) {
   const supabase = getClient();
@@ -157,35 +116,6 @@ export async function getWorkspaces(): Promise<WorkspaceWithRole[]> {
   return (data ?? [])
     .filter((m: any) => m.workspaces)
     .map((m: any) => ({ ...m.workspaces, memberRole: m.role }));
-}
-
-export async function getWorkspaceBySlug(slug: string): Promise<Workspace | null> {
-  const supabase = getClient();
-  const { data, error } = await supabase
-    .from("workspaces")
-    .select("*")
-    .eq("slug", slug)
-    .is("deleted_at", null)
-    .single();
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    throw error;
-  }
-  return data;
-}
-
-export async function getWorkspaceById(id: string): Promise<Workspace | null> {
-  const supabase = getClient();
-  const { data, error } = await supabase
-    .from("workspaces")
-    .select("*")
-    .eq("id", id)
-    .single();
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    throw error;
-  }
-  return data;
 }
 
 async function presetsRequest<T>(input: string, init?: RequestInit): Promise<T> {
@@ -311,40 +241,6 @@ export async function saveWorkspaceIntegration(input: {
   return data.integration;
 }
 
-export async function testShopifyIntegration(input: {
-  workspaceId: string;
-  integrationName: string;
-  storeUrl: string;
-  adminApiToken: string;
-}): Promise<WorkspaceIntegrationTestResult> {
-  return testWorkspaceIntegration({
-    workspaceId: input.workspaceId,
-    provider: "shopify",
-    integrationName: input.integrationName,
-    config: {
-      store_url: input.storeUrl,
-      admin_api_token: input.adminApiToken,
-    },
-  });
-}
-
-export async function saveShopifyIntegration(input: {
-  workspaceId: string;
-  integrationName: string;
-  storeUrl: string;
-  adminApiToken: string;
-}): Promise<WorkspaceIntegration> {
-  return saveWorkspaceIntegration({
-    workspaceId: input.workspaceId,
-    provider: "shopify",
-    integrationName: input.integrationName,
-    config: {
-      store_url: input.storeUrl,
-      admin_api_token: input.adminApiToken,
-    },
-  });
-}
-
 export async function disconnectWorkspaceIntegration(workspaceId: string): Promise<void> {
   const res = await fetch("/api/integrations", {
     method: "DELETE",
@@ -362,22 +258,6 @@ export async function getWorkspaceMembers(workspaceId: string): Promise<Workspac
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Failed to load members");
   return json.members ?? [];
-}
-
-export async function getCurrentMemberRole(workspaceId: string): Promise<Role | null> {
-  const supabase = getClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user;
-  if (!user) return null;
-
-  const { data, error } = await supabase
-    .from("workspace_members")
-    .select("role")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", user.id)
-    .single();
-  if (error) return null;
-  return data?.role as Role;
 }
 
 export async function updateMemberRole(memberId: string, role: Role) {
@@ -424,21 +304,6 @@ export async function getWorkspaceInvites(workspaceId: string) {
   return data ?? [];
 }
 
-export async function createInvite(workspaceId: string, email: string, role: Role) {
-  const supabase = getClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user;
-  if (!user) throw new Error("Not authenticated");
-
-  const { data, error } = await supabase
-    .from("workspace_invites")
-    .insert({ workspace_id: workspaceId, email, role, invited_by: user.id })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
-}
-
 export async function cancelInvite(inviteId: string, workspaceId: string) {
   const res = await fetch("/api/team/invite", {
     method: "DELETE",
@@ -447,37 +312,6 @@ export async function cancelInvite(inviteId: string, workspaceId: string) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Failed to cancel invite");
-}
-
-export async function acceptInvite(inviteId: string) {
-  const supabase = getClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user;
-  if (!user) throw new Error("Not authenticated");
-
-  const { data: invite, error: fetchError } = await supabase
-    .from("workspace_invites")
-    .select("*")
-    .eq("id", inviteId)
-    .single();
-  if (fetchError) throw fetchError;
-
-  // Add member
-  await supabase.from("workspace_members").insert({
-    workspace_id: invite.workspace_id,
-    user_id: user.id,
-    role: invite.role,
-  });
-
-  // Mark invite accepted (set accepted_at + status if columns exist, otherwise delete the invite)
-  const { error: updateErr } = await supabase
-    .from("workspace_invites")
-    .update({ accepted_at: new Date().toISOString(), status: "accepted" })
-    .eq("id", inviteId);
-  if (updateErr) {
-    // Fallback: delete the invite if accepted_at column doesn't exist
-    await supabase.from("workspace_invites").delete().eq("id", inviteId);
-  }
 }
 
 // ─── Categories, Products, Suppliers ─────────────────────
@@ -703,32 +537,3 @@ export async function deleteImportSession(workspaceId: string, id: string) {
 // NOTE: File metadata is no longer tracked in DB. Files go directly to Storage.
 
 // ─── Activity Log ────────────────────────────────────────
-
-export async function logActivity(workspaceId: string, action: string, details?: { entity_type?: string; entity_id?: string; details?: any }) {
-  const supabase = getClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user;
-  if (!user) return;
-
-  await supabase.from("activity_log").insert({
-    workspace_id: workspaceId,
-    user_id: user.id,
-    action,
-    entity_type: details?.entity_type,
-    entity_id: details?.entity_id,
-    details: details?.details ?? {},
-  });
-}
-
-export async function getActivityLog(workspaceId: string, limit = 20) {
-  const supabase = getClient();
-  const { data, error } = await supabase
-    .from("activity_log")
-    .select("*, profiles(full_name)")
-    .eq("workspace_id", workspaceId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return data ?? [];
-}
-

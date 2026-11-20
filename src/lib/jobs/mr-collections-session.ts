@@ -25,7 +25,7 @@ import {
 
 export async function runMrCollectionsSession(runId: string): Promise<void> {
   await runJobWithFailureGuard(runId, () =>
-    runWithAiBilling({ wallet: "market-research", operation: "mr_collections" }, () =>
+    runWithAiBilling({ operation: "mr_collections" }, () =>
       runMrCollectionsSessionInner(runId)
     )
   );

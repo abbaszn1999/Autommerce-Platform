@@ -49,7 +49,6 @@ export const JOB_KIND_LABELS: Record<AdminJobKind, string> = {
   gallery: "Products Gallery",
   visualizer: "Products Visualizer",
   mr_extract: "Market Research",
-  fa_extract: "Free Assessment",
 };
 
 export const JOB_STATUS_LABELS: Record<AdminJobStatus, string> = {

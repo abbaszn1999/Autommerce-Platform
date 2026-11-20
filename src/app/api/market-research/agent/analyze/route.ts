@@ -170,7 +170,7 @@ async function handlePost(request: NextRequest) {
   }
 }
 
-export const POST = withAiWalletBilling("market-research", "mr_analyze", handlePost);
+export const POST = withAiWalletBilling("mr_analyze", handlePost);
 
 /** Stop: the job ends as cancelled at its next step, before the next AI call. */
 export async function DELETE(request: NextRequest) {

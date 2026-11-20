@@ -26,7 +26,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { useWorkspaceContext } from "../workspace-context";
 import { PageLoader } from "@/components/brand/page-loader";
 import { useRole } from "@/hooks/use-role";
@@ -51,11 +50,10 @@ import { FileSpreadsheet, CheckCircle2, ArrowRight, GripVertical } from "lucide-
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   buildAncestorSets,
-  buildCountedTree,
+  buildTree,
   collectExpandableIds,
   flattenExpanded,
   isDescendantOf,
-  rollupProductCounts,
   type CategoryRef,
 } from "@/lib/categories/tree";
 import {
@@ -66,8 +64,6 @@ import {
 
 interface TreeNode extends Category {
   children: TreeNode[];
-  productCount: number;
-  directCount: number;
 }
 
 function slugify(name: string): string {
@@ -173,7 +169,6 @@ export default function CategoriesPage() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [saving, setSaving] = useState(false);
   const [taxonomyRevision, setTaxonomyRevision] = useState(0);
-  const [productCounts, setProductCounts] = useState<Record<string, number>>({});
   const treeScrollRef = useRef<HTMLDivElement>(null);
 
   // Drag & Drop state
@@ -201,16 +196,12 @@ export default function CategoriesPage() {
     autoCreated: number;
   } | null>(null);
 
-  // Helper to convert CategoryJson to Category (with parent_id alias)
-  const toCategory = (c: CategoryJson): Category => ({ ...c, parent_id: c.parentId });
-
   useEffect(() => {
     if (!workspace) return;
-    Promise.all([
-      fetch(`/api/categories?workspaceId=${workspace.id}`).then((r) => r.json()).catch(() => ({})),
-      fetch(`/api/categories/counts?workspaceId=${workspace.id}`).then((r) => r.json()).catch(() => ({})),
-    ])
-      .then(([catsRes, counts]) => {
+    fetch(`/api/categories?workspaceId=${workspace.id}`)
+      .then((r) => r.json())
+      .catch(() => ({}))
+      .then((catsRes) => {
         const rawList = Array.isArray(catsRes?.categories) ? catsRes.categories : [];
         setCategories(
           rawList.map((c: any) => ({
@@ -226,9 +217,6 @@ export default function CategoriesPage() {
           }))
         );
         if (typeof catsRes?.revision === "number") setTaxonomyRevision(catsRes.revision);
-        if (counts?.counts && typeof counts.counts === "object") {
-          setProductCounts(counts.counts as Record<string, number>);
-        }
       })
       .finally(() => setLoading(false));
   }, [workspace]);
@@ -318,16 +306,12 @@ export default function CategoriesPage() {
     [categories]
   );
   const ancestorSets = useMemo(() => buildAncestorSets(categoryRefs), [categoryRefs]);
-  const counted = useMemo(
-    () => rollupProductCounts(categoryRefs, productCounts),
-    [categoryRefs, productCounts]
-  );
   const tree = useMemo(
-    () => buildCountedTree(categories.map((c) => ({
+    () => buildTree(categories.map((c) => ({
       ...c,
       parentId: c.parent_id ?? null,
-    })), counted) as TreeNode[],
-    [categories, counted]
+    }))) as TreeNode[],
+    [categories]
   );
   const maxDepth = useMemo(() => {
     const walk = (nodes: TreeNode[], depth: number): number => {
@@ -640,9 +624,6 @@ export default function CategoriesPage() {
             <span className={`flex-1 text-left truncate ${highlight ? "bg-yellow-100 dark:bg-yellow-900/30 px-1 rounded" : ""}`}>
               {node.name}
             </span>
-            <Badge variant="secondary" className="text-[8px] px-1 py-0">
-              {node.productCount}
-            </Badge>
           </button>
         </div>
         {isExpanded && hasChildren ? (
@@ -1249,12 +1230,6 @@ export default function CategoriesPage() {
                       <div className="flex justify-between gap-3">
                         <span className="text-muted-foreground">Slug</span>
                         <span className="truncate font-mono">{selectedCat.slug}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Products</span>
-                        <span className="font-bold">
-                          {counted.get(selectedCat.id)?.rollup ?? 0}
-                        </span>
                       </div>
                       {!flat && <div className="flex justify-between gap-3">
                         <span className="text-muted-foreground">Subcategories</span>

@@ -15,13 +15,6 @@
 /** Canonical separator for the visible gallery cell. */
 export const GALLERY_SEPARATOR = " | ";
 
-export const GALLERY_IMAGES_COLUMN = "gallery_images";
-export const GALLERY_MEDIA_COLUMN = "gallery_media";
-
-/** Images fetched per product when the user names no number. */
-export const DEFAULT_GALLERY_IMAGE_COUNT = 4;
-/** Hard ceiling even when the user asks for more. */
-export const MAX_GALLERY_IMAGE_COUNT = 6;
 
 /** Shopify caps media (images + video + 3D) per product; verified 2026-04. */
 export const SHOPIFY_MAX_MEDIA_PER_PRODUCT = 250;
@@ -119,51 +112,4 @@ export function buildGalleryMediaIndex(
     if (!index.has(key)) index.set(key, entry);
   }
   return index;
-}
-
-/**
- * Clamps how many gallery images one search may fetch per product.
- * No number from the user → DEFAULT; a number → capped at MAX.
- */
-export function clampGalleryImageCount(requested?: unknown): number {
-  const num = Number(requested);
-  if (!Number.isFinite(num) || num <= 0) return DEFAULT_GALLERY_IMAGE_COUNT;
-  return Math.min(Math.max(1, Math.floor(num)), MAX_GALLERY_IMAGE_COUNT);
-}
-
-/**
- * Merges freshly found URLs into an existing gallery.
- * Drops blanks, duplicates, and anything already used as the featured image —
- * a gallery that repeats the main picture looks broken on the storefront.
- */
-export function mergeGalleryImages(params: {
-  existing: unknown;
-  incoming: readonly string[];
-  featuredImage?: unknown;
-  /** Replace the gallery instead of appending to it. */
-  overwrite?: boolean;
-}): { urls: string[]; added: string[]; skipped: number } {
-  const featuredKey = galleryUrlKey(params.featuredImage);
-  const existing = params.overwrite ? [] : parseGalleryImages(params.existing);
-  const taken = new Set(existing.map(galleryUrlKey));
-  if (featuredKey) taken.add(featuredKey);
-
-  const added: string[] = [];
-  let skipped = 0;
-  for (const candidate of params.incoming) {
-    const clean = toText(candidate);
-    if (!clean) {
-      skipped += 1;
-      continue;
-    }
-    const key = galleryUrlKey(clean);
-    if (taken.has(key)) {
-      skipped += 1;
-      continue;
-    }
-    taken.add(key);
-    added.push(clean);
-  }
-
-  return { urls: [...existing, ...added], added, skipped };
 }

@@ -4,18 +4,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { round4 } from "@/lib/wallet/format";
 import { chargeMrWallet } from "@/lib/market-research/wallet-ops";
 import { readWorkspaceWallet } from "@/lib/wallet/server";
-import { chargeAssessmentWallet } from "@/lib/free-assessment/wallet-ops";
-import { readFaWallet } from "@/lib/free-assessment/wallet-server";
 
 /**
- * Market Research and Free Assessment pass their AI cost (Gemini, OpenAI,
- * embeddings) through to the tool's USD wallet at cost. A scope wraps one
+ * Market Research passes its AI cost (Gemini, OpenAI, embeddings) through to
+ * the workspace's USD wallet at cost. A scope wraps one
  * route request or one job run; the AI runners record spend into it, and it
  * is charged in small settlements so a long job stops when the wallet runs
  * dry instead of running far past zero.
  */
-
-export type AiWallet = "market-research" | "free-assessment";
 
 export type AiBillingBinding = {
   admin: SupabaseClient;
@@ -24,7 +20,6 @@ export type AiBillingBinding = {
 };
 
 type Scope = {
-  wallet: AiWallet;
   operation: string;
   runKey: string;
   binding: AiBillingBinding | null;
@@ -43,12 +38,8 @@ export const AI_SETTLE_THRESHOLD_USD = 0.25;
 const storage = new AsyncLocalStorage<Scope>();
 
 export class WalletExhaustedError extends Error {
-  constructor(wallet: AiWallet) {
-    super(
-      wallet === "free-assessment"
-        ? "The Free Assessment wallet is empty. Top up the wallet to continue."
-        : "The wallet balance is empty. Top up the wallet to continue."
-    );
+  constructor() {
+    super("The wallet balance is empty. Top up the wallet to continue.");
     this.name = "WalletExhaustedError";
   }
 }
@@ -69,12 +60,8 @@ export function aiBillingActive(): boolean {
   return Boolean(storage.getStore());
 }
 
-async function readBalance(scope: Scope, binding: AiBillingBinding): Promise<number> {
-  const wallet =
-    scope.wallet === "free-assessment"
-      ? await readFaWallet(binding.admin, binding.workspaceId)
-      : await readWorkspaceWallet(binding.admin, binding.workspaceId);
-  return wallet.balance;
+async function readBalance(binding: AiBillingBinding): Promise<number> {
+  return (await readWorkspaceWallet(binding.admin, binding.workspaceId)).balance;
 }
 
 /**
@@ -85,25 +72,22 @@ export async function bindAiBilling(binding: AiBillingBinding): Promise<string |
   const scope = storage.getStore();
   if (!scope) return null;
   scope.binding = binding;
-  scope.balanceCheck ??= readBalance(scope, binding).then((balance) => {
+  scope.balanceCheck ??= readBalance(binding).then((balance) => {
     if (!(balance > 0)) scope.exhausted = true;
   });
   await scope.balanceCheck;
-  return scope.exhausted ? new WalletExhaustedError(scope.wallet).message : null;
+  return scope.exhausted ? new WalletExhaustedError().message : null;
 }
 
 async function charge(scope: Scope, binding: AiBillingBinding, amountUsd: number, key: string) {
-  const input = {
+  return chargeMrWallet(binding.admin, {
     workspaceId: binding.workspaceId,
     userId: binding.userId,
     amountUsd,
     description: `AI usage · ${scope.operation}`,
     idempotencyKey: key,
     details: { operation: scope.operation, calls: scope.calls },
-  };
-  return scope.wallet === "free-assessment"
-    ? chargeAssessmentWallet(binding.admin, input)
-    : chargeMrWallet(binding.admin, input);
+  });
 }
 
 function settle(scope: Scope): Promise<void> {
@@ -147,29 +131,28 @@ export async function ensureAiBudget(): Promise<void> {
   if (!scope?.binding) return;
   if (scope.balanceCheck) await scope.balanceCheck;
   if (scope.pendingUsd >= AI_SETTLE_THRESHOLD_USD) await settle(scope);
-  if (scope.exhausted) throw new WalletExhaustedError(scope.wallet);
+  if (scope.exhausted) throw new WalletExhaustedError();
 }
 
 /** Throws when an earlier settlement found the wallet empty. */
 export function assertAiBudget(): void {
   const scope = storage.getStore();
-  if (scope?.exhausted) throw new WalletExhaustedError(scope.wallet);
+  if (scope?.exhausted) throw new WalletExhaustedError();
 }
 
 /** Binds the payer and throws WalletExhaustedError when the wallet is empty. */
 export async function bindAiBillingOrThrow(binding: AiBillingBinding): Promise<void> {
   const scope = storage.getStore();
   const blocked = await bindAiBilling(binding);
-  if (blocked && scope) throw new WalletExhaustedError(scope.wallet);
+  if (blocked && scope) throw new WalletExhaustedError();
 }
 
 /** Runs `fn` in a billing scope and charges all recorded spend when it ends. */
 export async function runWithAiBilling<T>(
-  opts: { wallet: AiWallet; operation: string; binding?: AiBillingBinding },
+  opts: { operation: string; binding?: AiBillingBinding },
   fn: () => Promise<T>
 ): Promise<T> {
   const scope: Scope = {
-    wallet: opts.wallet,
     operation: opts.operation,
     runKey: randomUUID(),
     binding: opts.binding ?? null,
@@ -193,33 +176,32 @@ export async function runWithAiBilling<T>(
   }
 }
 
-function walletEmptyResponse(wallet: AiWallet): Response {
+function walletEmptyResponse(): Response {
   return Response.json(
-    { error: new WalletExhaustedError(wallet).message, code: "WALLET_EMPTY" },
+    { error: new WalletExhaustedError().message, code: "WALLET_EMPTY" },
     { status: 402 }
   );
 }
 
 /**
- * Wraps a route handler so its AI spend is charged to the tool's wallet.
+ * Wraps a route handler so its AI spend is charged to the workspace wallet.
  * A wallet that runs dry mid-request answers 402 WALLET_EMPTY, whether the
  * handler let the error escape or turned it into a generic 5xx.
  */
 export function withAiWalletBilling<A extends unknown[], R>(
-  wallet: AiWallet,
   operation: string,
   handler: (...args: A) => Promise<R>
 ): (...args: A) => Promise<R> {
   return (...args: A) =>
-    runWithAiBilling({ wallet, operation }, async () => {
+    runWithAiBilling({ operation }, async () => {
       try {
         const result = await handler(...args);
         if (result instanceof Response && result.status >= 500 && storage.getStore()?.exhausted) {
-          return walletEmptyResponse(wallet) as R;
+          return walletEmptyResponse() as R;
         }
         return result;
       } catch (error) {
-        if (isWalletExhaustedError(error)) return walletEmptyResponse(wallet) as R;
+        if (isWalletExhaustedError(error)) return walletEmptyResponse() as R;
         throw error;
       }
     });
@@ -227,14 +209,12 @@ export function withAiWalletBilling<A extends unknown[], R>(
 
 /** Charges a one-off AI cost outside a scope, idempotent on `key`. */
 export async function chargeAiCostOnce(
-  wallet: AiWallet,
   binding: AiBillingBinding,
   input: { operation: string; amountUsd: number; key: string }
 ): Promise<void> {
   const amount = round4(input.amountUsd);
   if (!(amount > 0)) return;
   const scope: Scope = {
-    wallet,
     operation: input.operation,
     runKey: input.key,
     binding,

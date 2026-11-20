@@ -1,5 +1,5 @@
 import type { KeywordRow } from "./providers/keyword-provider";
-import { isQuestionKeyword, sheetForIntents } from "./providers/semrush-codes";
+import { isQuestionKeyword } from "./providers/semrush-codes";
 import { wordCount } from "./filters";
 
 export type DisplayKeyword = {

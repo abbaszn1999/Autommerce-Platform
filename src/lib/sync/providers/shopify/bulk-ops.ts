@@ -197,7 +197,6 @@ export async function pollBulkOperation(params: {
   const timeoutMs = params.timeoutMs ?? 10 * 60 * 1000;
   const deadline = Date.now() + timeoutMs;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     if (params.signal?.aborted) throw new Error("pollBulkOperation aborted");
 
@@ -245,7 +244,6 @@ export async function* streamBulkJsonl<T = unknown>(
   let buffer = "";
 
   try {
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;

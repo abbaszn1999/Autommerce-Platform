@@ -53,7 +53,7 @@ export function OnboardingLock({ stage, onUnlockAnyway }: { stage: OnboardingSta
     return () => clearTimeout(timer);
   }, [stage]);
 
-  const agentDown = availability === "off" || availability === "no_store" || availability === "error";
+  const agentDown = availability === "off" || availability === "not_connected" || availability === "error";
   const filling = stage === "filling";
 
   return (

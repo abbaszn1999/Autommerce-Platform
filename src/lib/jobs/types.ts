@@ -15,11 +15,8 @@ export type JobKind =
   | "gallery"
   | "visualizer"
   | "mr_extract"
-  | "fa_extract"
   | "mr_stage1"
-  | "fa_stage1"
   | "mr_classify"
-  | "fa_classify"
   | "mr_collections";
 
 export type JobRunStatus =

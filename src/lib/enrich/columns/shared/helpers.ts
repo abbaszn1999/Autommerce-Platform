@@ -105,50 +105,6 @@ export function boundedCount(
   return Math.min(max, Math.max(min, value ?? fallback));
 }
 
-/**
- * Last segment of a category path, so "Shoes > Running Shoes" and
- * "Running Shoes" compare equal. Handles both " > " and "/" hierarchies.
- */
-export function categoryLeaf(value: string): string {
-  const parts = value.split(/\s*>\s*|\//).filter((p) => p.trim());
-  return (parts[parts.length - 1] ?? value).trim();
-}
-
-/**
- * Labels identifying the row being enriched, in both leaf and path form, so a
- * category page is never returned as its own parent or its own related link.
- */
-export function buildSelfLabels(rowData: Record<string, string>): Set<string> {
-  const raw = [
-    rowData.name,
-    rowData.Name,
-    rowData.title,
-    rowData.Title,
-    rowData.fullPath,
-    rowData.slug,
-  ];
-  const labels = new Set<string>();
-  for (const value of raw) {
-    const text = asTrimmedString(value);
-    if (!text) continue;
-    labels.add(text.toLowerCase());
-    labels.add(categoryLeaf(text).toLowerCase());
-  }
-  return labels;
-}
-
-/** True when a category value refers to the row being enriched. */
-export function isSelfCategory(
-  value: string,
-  selfLabels: Set<string>
-): boolean {
-  if (!value) return false;
-  return (
-    selfLabels.has(value.toLowerCase()) ||
-    selfLabels.has(categoryLeaf(value).toLowerCase())
-  );
-}
-
 /** A character-budget instruction phrased so the model treats it as hard. */
 export function charBudgetRule(maxChars?: number): string {
   if (!maxChars) return "";

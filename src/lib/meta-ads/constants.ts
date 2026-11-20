@@ -316,10 +316,6 @@ export const OPPORTUNITY_CATEGORIES: Record<OpportunityCategory, string> = {
   PLACEMENTS: "Placements",
 };
 
-export const ASSET_RATIOS = ["1:1", "4:5", "9:16"] as const;
-
-export const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
-
 /** Prompts offered in an empty chat. */
 export const STARTER_PROMPTS = [
   "Run a full audit of my Meta account",

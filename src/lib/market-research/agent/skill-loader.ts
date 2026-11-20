@@ -113,13 +113,3 @@ export async function loadSkill(stageOrId: number | string): Promise<MarketResea
   return skill;
 }
 
-export async function getAllSkills(): Promise<MarketResearchSkill[]> {
-  const stages = Object.keys(STAGE_TO_FILE)
-    .map(Number)
-    .sort((a, b) => a - b);
-  const skills: MarketResearchSkill[] = [];
-  for (const stage of stages) {
-    skills.push(await loadSkill(stage));
-  }
-  return skills;
-}

@@ -229,16 +229,3 @@ export async function listWalletTransactions(
   return { items, nextCursor };
 }
 
-export async function updateWalletAutoReload(
-  admin: SupabaseClient,
-  workspaceId: string,
-  autoReload: WalletAutoReload
-): Promise<void> {
-  const { error } = await admin.from("workspace_wallets").upsert({
-    workspace_id: workspaceId,
-    auto_reload_enabled: autoReload.enabled,
-    auto_reload_threshold: round2(autoReload.threshold),
-    auto_reload_amount: round2(autoReload.amount),
-  });
-  if (error) throw error;
-}

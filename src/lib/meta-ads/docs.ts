@@ -153,21 +153,6 @@ export function reviseDoc(doc: AgentDoc, sections: DocSection[], note: string, a
   };
 }
 
-export function docToMarkdown(doc: AgentDoc): string {
-  const out: string[] = [`# ${doc.title}`, doc.subtitle ?? "", ""];
-  for (const s of doc.sections) {
-    out.push(`## ${s.title}`, "");
-    for (const b of s.blocks) {
-      if (b.kind === "text") out.push(b.md, "");
-      if (b.kind === "callout") out.push(`> **${b.title}** ${b.text}`, "");
-      if (b.kind === "table") out.push(`| ${b.columns.join(" | ")} |`, `| ${b.columns.map(() => "---").join(" | ")} |`, ...b.rows.map((r) => `| ${r.join(" | ")} |`), "");
-      if (b.kind === "checklist") out.push(...b.items.map((i) => `- [${i.done ? "x" : " "}] ${i.text}`), "");
-      if (b.kind === "timeline") out.push(...b.phases.map((p) => `- **${p.label}** (${p.when}): ${p.focus}`), "");
-    }
-  }
-  return out.join("\n");
-}
-
 
 // The business profile and memory are shared with the Google Ads agent: one per workspace.
 export {

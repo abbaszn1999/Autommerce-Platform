@@ -336,8 +336,3 @@ export async function classifyProducts(input: {
   return { decisions, totalCostUsd, validatedCount: products.length };
 }
 
-export const CLASSIFY_TUNING = {
-  PRODUCTS_PER_CALL,
-  CONCURRENT_CALLS,
-  MAX_CANDIDATES_PER_PRODUCT,
-} as const;

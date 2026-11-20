@@ -29,11 +29,8 @@ import {
   type EnrichmentColumnType,
   type WritingTone,
 } from "@/types";
-import { createAdminClient } from "@/lib/supabase-admin";
 import { deductCreditsIdempotent, isInsufficientCredits } from "./credits";
 import { JOB_ROW_ATTEMPTS } from "./config";
-import { loadProjectJsonAdmin } from "./project-json";
-import { isJobCancelRequested, loadJobRun } from "./repo";
 import type { CatalogJobSettings } from "./types";
 import type { ProjectRow } from "@/lib/storage-helpers";
 import { buildRowSources } from "./row-sources";
@@ -410,43 +407,4 @@ export async function chargeCatalogRow(params: {
     noCredits,
     error: result.error || "Credit deduction failed",
   };
-}
-
-export type CatalogRowTaskInput = {
-  runId: string;
-  rowId: string;
-} & CatalogRowContext;
-
-export async function executeCatalogRow(
-  input: CatalogRowTaskInput
-): Promise<EnrichRowOutcome> {
-  const admin = createAdminClient();
-  const run = await loadJobRun(admin, input.runId);
-  if (!run || run.kind !== "catalog") {
-    return { ok: false, rowId: input.rowId, error: "Job run not found" };
-  }
-  const settings = run.settings as CatalogJobSettings;
-  const project = await loadProjectJsonAdmin(
-    run.workspace_id,
-    run.session_id,
-    admin
-  );
-  const row = project?.rows.find((candidate) => candidate.id === input.rowId);
-  if (!row) {
-    return { ok: false, rowId: input.rowId, error: "Row not found" };
-  }
-  return processCatalogRow({
-    sessionId: run.session_id,
-    workspaceId: run.workspace_id,
-    row,
-    settings,
-    // Each row runs as its own Render task, so it needs its own poll rather
-    // than sharing the session worker's in-memory check.
-    shouldCancel: () => isJobCancelRequested(admin, run.id),
-    context: {
-      learnedDomains: input.learnedDomains,
-      recheck: input.recheck,
-      sourceUrlsRetry: input.sourceUrlsRetry,
-    },
-  });
 }

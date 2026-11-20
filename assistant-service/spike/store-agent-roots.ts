@@ -3,9 +3,9 @@
 // the API no longer has.
 // Run: npx tsx --env-file=.env.local --env-file=../.env --env-file=../.env.local spike/store-agent-roots.ts <workspaceId>
 import { createClient } from "@supabase/supabase-js";
-import { createResilientFetch } from "../src/store-agent/resilient-fetch";
-import { loadShopifyConnection, shopifyGraphql } from "../src/store-agent/shopify/client";
-import { MUTATION_ROOTS, QUERY_ROOTS } from "../src/store-agent/shopify/scopes";
+import { createResilientFetch } from "../src/core/resilient-fetch";
+import { loadShopifyConnection, shopifyGraphql } from "../src/core/store-access/shopify/client";
+import { MUTATION_ROOTS, QUERY_ROOTS } from "../src/core/store-access/shopify/scopes";
 
 const [workspaceId] = process.argv.slice(2);
 const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false }, global: { fetch: createResilientFetch() } });

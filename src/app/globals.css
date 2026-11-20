@@ -264,7 +264,7 @@
 
 /* ═══ Dashboard Animations ═══ */
 
-/* In-app assistant: moving highlight on live status text. */
+/* Agent chats: moving highlight on live status text (Vera is thinking, starting, working). */
 @keyframes assistant-shimmer {
   0% { background-position: 100% 0; }
   100% { background-position: -100% 0; }

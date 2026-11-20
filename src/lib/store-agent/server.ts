@@ -4,9 +4,7 @@ import { createClient } from "@/lib/supabase-server";
 import { PREVIEW_COOKIE, hasPreviewAccess } from "@/lib/google-ads/preview-access";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { hideProviderNames } from "@/lib/provider-names";
-import { storeToolBlock } from "@/lib/integrations/store-scopes";
-import { isStoreAgentPlatform } from "./platforms";
-import { signServiceRequest } from "@/lib/assistant/service-client";
+import { signServiceRequest } from "./signing";
 import { getWorkspaceContext, isContextSubscriptionActive, type WorkspaceContext } from "@/lib/workspace-context";
 import { AGENT_DOMAIN_HEADER, STORE_AGENT_LIMITS, isAdsDomain, parseAgentDomain, type AgentDomain, type StoreAgentEvent } from "./protocol";
 
@@ -65,8 +63,10 @@ async function requestDomain(): Promise<AgentDomain> {
 }
 
 /**
- * Store Assistant ("store"): a signed-in member (not a viewer) of a workspace
- * with a connected Shopify or WooCommerce store.
+ * Store Assistant ("store"): a signed-in member (not a viewer) of a workspace.
+ * It does not need a connected store (it works on the web, files and images
+ * without one) or any particular store access: when a store or an access is
+ * missing, the agent says so in the chat.
  * Google Ads ("google_ads"): the workspace owner or an admin (its changes move
  * real money), with Google Ads connected and an ad account picked, and the
  * Google Ads preview unlocked like the page itself.
@@ -114,8 +114,6 @@ export async function authorizeStoreAgent(params: {
       .not("composio_connected_account_id", "is", null)
       .maybeSingle();
     if (!ads?.account_id) return NextResponse.json({ error: "NO_GOOGLE_ADS" }, { status: 409 });
-  } else if (!isStoreAgentPlatform(ctx.integration?.provider)) {
-    return NextResponse.json({ error: "NO_STORE" }, { status: 409 });
   }
   if (params.requireCredits) {
     if (!ctx.subscription || !isContextSubscriptionActive(ctx)) {
@@ -126,11 +124,6 @@ export async function authorizeStoreAgent(params: {
     }
   }
   const admin = createAdminClient();
-  // A new run needs the store's products readable; the rest only limits what it can do.
-  if (params.requireCredits && domain === "store") {
-    const noAccess = await storeToolBlock(admin, params.workspaceId, "store-assistant");
-    if (noAccess) return noAccess;
-  }
   return { userId: user.id, ctx, admin, domain };
 }
 
@@ -177,6 +170,8 @@ export function publicEvent(event: StoreAgentEvent): StoreAgentEvent {
       return { ...event, title: hideProviderNames(event.title), content: hideProviderNames(event.content) };
     case "doc":
       return { ...event, title: hideProviderNames(event.title) };
+    case "access":
+      return event.note ? { ...event, note: hideProviderNames(event.note) } : event;
     default:
       return event;
   }

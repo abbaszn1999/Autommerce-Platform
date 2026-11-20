@@ -218,35 +218,6 @@ export const agentSeedsBodySchema = z.object({
     .max(100),
 });
 
-// Stage 4 classifies each term purely on its own wording — no store name, no
-// niche/collection list, no volume/difficulty/intent signal. Those fields
-// already live on the keyword row from extraction and are never touched by
-// classification, so they are intentionally not part of this request body.
-//
-// The route now runs exclusively as a cursor job over the full extract
-// archive (not a client-passed keyword list): 20k+ extracted keywords never
-// fit in one request body or one `maxDuration = 60` call, so the client
-// loops on `offset` until `done`, same pattern as the Apify extract poll.
-export const agentIntentBodySchema = z.object({
-  workspaceId: workspaceIdSchema,
-  projectId: projectIdSchema,
-  mode: z.literal("archive"),
-  offset: z.number().int().nonnegative(),
-});
-
-// Stage 5 Phase 2 (Gemini exclusion) is likewise a cursor job over the full
-// classified/embedded archive — a store with thousands of surviving
-// category terms is thousands of candidate collections, far past one
-// request or one route call.
-export const agentClusterBodySchema = z.object({
-  workspaceId: workspaceIdSchema,
-  projectId: projectIdSchema,
-  mode: z.literal("archive"),
-  offset: z.number().int().nonnegative(),
-  /** Applied "Suitable for categories" sheet filters from Tab 4. */
-  filters: keywordSheetFiltersSchema.optional(),
-});
-
 // Stage 5 Phase 3 (duplicate-collection exclusion) runs once, after the
 // Phase 2 cursor loop above has fully finished and the "collections" slice
 // holds the complete final list — no offset/paging needed here.

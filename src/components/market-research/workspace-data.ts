@@ -1,8 +1,7 @@
-import { formatUsd, type MockSeedRow, type SeedProbe } from "./mock-data";
+import { type MockSeedRow, type SeedProbe } from "./mock-data";
 import {
   COLLECTION_PUSH_USD,
   EXTRACT_CAP_PER_SEED,
-  collectionPushCostUsd,
 } from "@/lib/market-research/cost";
 
 /** Full-page workspace after Stage 3 Extract. Agent is gone. */
@@ -48,11 +47,6 @@ export function briefStageFromFlow(tab: FlowTab): 1 | 2 | 3 | null {
 
 export { EXTRACT_CAP_PER_SEED };
 export const USD_PER_COLLECTION = COLLECTION_PUSH_USD;
-export const EXTRACT_MS = 8_000;
-export const ANALYZE_MS = 2_200;
-export const CLUSTER_MS = 2_800;
-export const CONTENT_MS = 4_200;
-export const STRATEGY_MS = 2_600;
 
 export type KeywordSheet = "category" | "informational" | "excluded";
 
@@ -393,102 +387,6 @@ export function keywordPassesFilters(
   return true;
 }
 
-function hash(value: string): number {
-  let h = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    h = (h * 31 + value.charCodeAt(i)) % 100000;
-  }
-  return h;
-}
-
-const INFO_PATTERNS = [
-  "how to choose {s}",
-  "what is {s}",
-  "{s} vs glasses",
-  "best {s} guide",
-  "how to clean {s}",
-  "{s} buying guide",
-  "are {s} worth it",
-  "why buy {s}",
-  "{s} for beginners",
-  "difference between {s}",
-];
-
-const CATEGORY_PATTERNS = [
-  "{s}",
-  "buy {s}",
-  "{s} online",
-  "cheap {s}",
-  "best {s}",
-  "men's {s}",
-  "women's {s}",
-  "kids {s}",
-  "{s} sale",
-  "designer {s}",
-  "polarized {s}",
-  "aviator {s}",
-  "{s} shop",
-  "wholesale {s}",
-];
-
-function fill(pattern: string, seed: string): string {
-  return pattern.replace("{s}", seed.toLowerCase());
-}
-
-/**
- * Placeholder rows for the extracted set, shown only until the real pulled
- * keywords load in. Every seed's real total is reported separately via
- * `pulledCountForSeed`.
- */
-export function buildExtractedKeywords(
-  seeds: MockSeedRow[],
-  probes: Record<string, SeedProbe>
-): ExtractedKeyword[] {
-  const rows: ExtractedKeyword[] = [];
-  for (const seed of seeds) {
-    const seedTerm = seed.broadSeedVariation;
-    const products = seed.productCount;
-
-    CATEGORY_PATTERNS.forEach((pattern, i) => {
-      const keyword = fill(pattern, seedTerm);
-      const h = hash(keyword);
-      rows.push({
-        id: `${seed.id}-c-${i}`,
-        seedId: seed.id,
-        seed: seedTerm,
-        keyword,
-        volume: 40 + (h % 9800),
-        difficulty: 8 + (h % 72),
-        wordCount: keyword.split(/\s+/).length,
-        isQuestion: false,
-        sheet: "category",
-        productMatches: Math.max(
-          4,
-          Math.round(products * (0.04 + (h % 40) / 100))
-        ),
-      });
-    });
-
-    INFO_PATTERNS.forEach((pattern, i) => {
-      const keyword = fill(pattern, seedTerm);
-      const h = hash(keyword + "i");
-      rows.push({
-        id: `${seed.id}-i-${i}`,
-        seedId: seed.id,
-        seed: seedTerm,
-        keyword,
-        volume: 20 + (h % 4200),
-        difficulty: 5 + (h % 55),
-        wordCount: keyword.split(/\s+/).length,
-        isQuestion: /^(how|what|why|are)\b/.test(keyword),
-        sheet: "informational",
-        productMatches: Math.max(0, Math.round(products * 0.01)),
-      });
-    });
-  }
-  return rows;
-}
-
 export function pulledCountForSeed(
   seed: MockSeedRow,
   probes: Record<string, SeedProbe>
@@ -508,74 +406,6 @@ export function filterKeywords(
     if (sheet === "category" && row.sameIntentOf) return false;
     return keywordPassesFilters(row, filters);
   });
-}
-
-export function buildProposedCollections(
-  seeds: MockSeedRow[],
-  keywords: ExtractedKeyword[]
-): ProposedCollection[] {
-  const byCanonical = new Map<string, MockSeedRow[]>();
-  for (const seed of seeds) {
-    const key = seed.canonicalNicheSeed;
-    byCanonical.set(key, [...(byCanonical.get(key) ?? []), seed]);
-  }
-
-  const list: ProposedCollection[] = [];
-  for (const [canonical, family] of byCanonical) {
-    const head = family.find((s) => s.scopeMatch === "Exact") ?? family[0];
-    const related = keywords.filter(
-      (k) =>
-        k.sheet === "category" &&
-        family.some((s) => s.id === k.seedId)
-    );
-    const volume = related.reduce((sum, k) => sum + k.volume, 0);
-    const difficulty = related.length
-      ? Math.round(
-          related.reduce((sum, k) => sum + k.difficulty, 0) / related.length
-        )
-      : 28;
-    const existing = head.scopeMatch === "Exact";
-    list.push({
-      id: `col-${head.collectionId}`,
-      name: canonical,
-      headKeyword: head.broadSeedVariation.toLowerCase(),
-      parentNiche: head.broadParentNiche,
-      volume,
-      difficulty,
-      productCount: head.productCount,
-      keywordCount: related.length,
-      status: "new",
-    });
-  }
-
-  // A couple of gap collections the matching step would surface.
-  if (seeds.some((s) => /sun/i.test(s.broadSeedVariation))) {
-    list.push({
-      id: "col-polarized-sunglasses",
-      name: "Polarized Sunglasses",
-      headKeyword: "polarized sunglasses",
-      parentNiche: "Eyewear",
-      volume: 18400,
-      difficulty: 34,
-      productCount: 860,
-      keywordCount: 42,
-      status: "new",
-    });
-  }
-  if (seeds.some((s) => /toy|game/i.test(s.broadSeedVariation))) {
-    list.push({
-      id: "col-educational-toys",
-      name: "Educational Toys",
-      headKeyword: "educational toys",
-      parentNiche: "Toys",
-      volume: 22100,
-      difficulty: 29,
-      productCount: 410,
-      keywordCount: 38,
-      status: "new",
-    });
-  }
-  return list;
 }
 
 export function buildCollectionContent(
@@ -704,14 +534,6 @@ export function selectStrategyKeywords(
   return picked.sort(
     (a, b) => b.volume - a.volume || a.keyword.localeCompare(b.keyword)
   );
-}
-
-export function collectionCharge(count: number): number {
-  return collectionPushCostUsd(count);
-}
-
-export function formatCollectionCharge(count: number): string {
-  return formatUsd(collectionCharge(count));
 }
 
 export function tabIndex(tab: WorkspaceTab): number {

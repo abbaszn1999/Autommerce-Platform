@@ -56,7 +56,6 @@ export async function updateSession(request: NextRequest) {
     pathname === "/widget.js" ||
     pathname.endsWith(".js") ||
     pathname.endsWith(".css");
-  const isDemoRoute = pathname.startsWith("/demo");
   const isAdminRoute = isAdminPublicPath(pathname) || isAdminInternalPath(pathname);
   const isApiRoute = pathname.startsWith("/api");
 
@@ -83,8 +82,8 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  if (isPublicRoute || isDemoRoute || isAdminRoute || isApiRoute) {
-    if (isPublicRoute && !isDemoRoute && !isAdminRoute && !isApiRoute) {
+  if (isPublicRoute || isAdminRoute || isApiRoute) {
+    if (isPublicRoute && !isAdminRoute && !isApiRoute) {
       const presenceValue = request.cookies.get(SIGNED_IN_PRESENCE_COOKIE)?.value;
       if (presenceValue && presenceValue !== "0" && presenceValue !== "false") {
         const {

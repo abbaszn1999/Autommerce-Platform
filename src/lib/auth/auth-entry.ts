@@ -1,6 +1,3 @@
-/** Canonical Start for Free URL. Marketing: https://platform.autommerce.com/signup */
-export const SIGNUP_PATH = "/signup";
-
 export const AUTH_ENTRY_PATHS = ["/login", "/signup", "/sign-up", "/register"] as const;
 
 export function isAuthEntryPath(pathname: string): boolean {

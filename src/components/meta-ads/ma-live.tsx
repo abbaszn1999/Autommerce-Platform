@@ -1,6 +1,6 @@
 "use client";
 
-// The real Meta connection (meta-ads/connect-plan.md, stage A): Connect Meta
+// The real Meta connection (stage A): Connect Meta
 // with Facebook Login for Business, pick the assets, Vera's live chat on the
 // left (Meta's official Ads MCP tools, every change approved on a card) and
 // the account on the right with live data only (ma-live-account.tsx).

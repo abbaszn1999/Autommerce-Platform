@@ -1,5 +1,3 @@
-export type AdminPlanId = "free" | "starter" | "growth" | "pro" | "enterprise";
-
 export type AdminBillingCycle = "monthly" | "yearly";
 
 export type AdminSubscriptionStatus =
@@ -40,7 +38,7 @@ export type AdminWalletModule =
   | "topup"
   | "Billing";
 
-export type AdminJobKind = "catalog" | "gallery" | "visualizer" | "mr_extract" | "fa_extract";
+export type AdminJobKind = "catalog" | "gallery" | "visualizer" | "mr_extract";
 
 export type AdminJobStatus =
   | "queued"
@@ -53,105 +51,6 @@ export type AdminJobStatus =
 export type AdminIntegrationProvider = "shopify" | "woocommerce" | "wordpress";
 
 export type AdminIntegrationStatus = "connected" | "error" | "disconnected";
-
-export type AdminPlan = {
-  id: AdminPlanId;
-  displayName: string;
-  monthlyCredits: number;
-  priceMonthly: number;
-  priceYearly: number;
-};
-
-export type AdminUser = {
-  id: string;
-  fullName: string;
-  email: string;
-  createdAt: string;
-  lastSeenAt: string;
-  status: AdminUserStatus;
-};
-
-export type AdminWorkspace = {
-  id: string;
-  name: string;
-  slug: string;
-  ownerId: string;
-  createdAt: string;
-  productCount: number;
-};
-
-export type AdminMember = {
-  workspaceId: string;
-  userId: string;
-  role: AdminMemberRole;
-  joinedAt: string;
-};
-
-export type AdminSubscription = {
-  id: string;
-  userId: string;
-  planId: AdminPlanId;
-  billingCycle: AdminBillingCycle;
-  status: AdminSubscriptionStatus;
-  currentPeriodStart: string;
-  currentPeriodEnd: string;
-  cancelAtPeriodEnd: boolean;
-  creditsUsed: number;
-  bonusCredits: number;
-  stripeCustomerId: string;
-  stripeSubscriptionId: string | null;
-};
-
-export type AdminCreditTx = {
-  id: string;
-  createdAt: string;
-  workspaceId: string;
-  userId: string;
-  operation: AdminCreditOperation;
-  credits: number;
-  remainingAfter: number;
-};
-
-export type AdminWallet = {
-  workspaceId: string;
-  balanceUsd: number;
-};
-
-export type AdminWalletTx = {
-  id: string;
-  createdAt: string;
-  workspaceId: string;
-  userId: string;
-  kind: AdminWalletTxKind;
-  module: AdminWalletModule;
-  amountUsd: number;
-  balanceAfter: number;
-  description: string;
-};
-
-export type AdminJob = {
-  id: string;
-  createdAt: string;
-  workspaceId: string;
-  createdBy: string;
-  kind: AdminJobKind;
-  status: AdminJobStatus;
-  completedCount: number;
-  failedCount: number;
-  total: number;
-  lastError: string | null;
-  durationMs: number | null;
-};
-
-export type AdminIntegration = {
-  id: string;
-  workspaceId: string;
-  provider: AdminIntegrationProvider;
-  storeName: string;
-  baseUrl: string;
-  status: AdminIntegrationStatus;
-  lastSyncAt: string | null;
-};
 
 export type AdminAttentionKind =
   | "past_due"

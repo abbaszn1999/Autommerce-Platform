@@ -1,4 +1,4 @@
-import type { GalleryAiSettings, GalleryRow, GalleryWorksheetJson } from "@/lib/gallery/types";
+import type { GalleryAiSettings } from "@/lib/gallery/types";
 
 /**
  * Reference image for Gemini Interactions API.
@@ -26,16 +26,6 @@ export function normalizeMimeType(
   value: string
 ): "image/jpeg" | "image/png" | "image/webp" {
   if (value === "image/png" || value === "image/webp") return value;
-  return "image/jpeg";
-}
-
-/** Guess MIME for Gemini `mime_type` when attaching a public image URL. */
-export function mimeTypeFromImageUrl(
-  url: string
-): "image/jpeg" | "image/png" | "image/webp" {
-  const lower = url.toLowerCase();
-  if (/\.png(\?|#|$)/i.test(lower)) return "image/png";
-  if (/\.webp(\?|#|$)/i.test(lower)) return "image/webp";
   return "image/jpeg";
 }
 
@@ -90,70 +80,6 @@ export function styleInstruction(style: string, hasSceneReference: boolean): str
     default:
       return "Clean professional ecommerce studio photography with controlled softbox lighting, realistic materials, and a polished catalog finish.";
   }
-}
-
-export function sceneInstruction(hasSceneReference: boolean): string {
-  if (!hasSceneReference) return "";
-  return [
-    "SCENE / MODEL REFERENCE IS MANDATORY — the attached reference image must visibly drive this output.",
-    "If the reference shows a person: keep that same recognizable person (face, hair, body type, clothing style unless the product replaces a garment).",
-    "If the product is wearable (apparel, shoes, watch, jewelry, bag on body, etc.): the person must wear/use the exact product naturally.",
-    "If the product is NOT wearable (ball, rope, equipment, bottle, etc.): the same person must still appear in the frame actively holding, using, or posing with the exact product in a natural fitness/lifestyle composition inspired by the reference setting.",
-    "Never output a lone product on an empty studio background when a person reference was provided.",
-    "Never replace the product with the reference subject; the product from the worksheet remains the hero object.",
-  ].join(" ");
-}
-
-export function brandingInstruction(params: {
-  brandingEnabled: boolean;
-  brandColors: string[];
-  hasLogo: boolean;
-  hasBrandGuide: boolean;
-  /** When false, skip hex palette lines (Upload image brand-guide mode). Default true. */
-  includeBrandColors?: boolean;
-}): string {
-  if (!params.brandingEnabled) {
-    return "Branding is disabled; do not infer branding requirements from unused assets.";
-  }
-  const includeBrandColors = params.includeBrandColors !== false;
-  const parts = ["BRANDING IS MANDATORY for this image."];
-  if (includeBrandColors) {
-    parts.push(
-      `Brand palette (use these colors in commercially natural accents, props, backdrop tones, or packaging cues where appropriate): ${params.brandColors.join(", ") || "not specified"}.`
-    );
-  }
-  if (params.hasLogo) {
-    parts.push(
-      "A brand logo reference image is attached. Preserve its exact recognizable mark, proportions, and colors. Place it only where commercially natural (tag, packaging, subtle environmental branding). Never invent, redraw, or misspell logo text."
-    );
-  }
-  if (params.hasBrandGuide) {
-    parts.push(
-      "A brand-guide / art-direction reference image is attached. Follow its visual language: typography mood, photography style, spacing, color usage, and overall brand feel. The output must look on-brand with that guide."
-    );
-  } else if (includeBrandColors) {
-    parts.push(
-      "Apply Primary / Secondary / Accent palette colors subtly without inventing a logo or brand text unless a logo reference is attached."
-    );
-  }
-  return parts.join(" ");
-}
-
-export function buildProductDescription(
-  worksheet: GalleryWorksheetJson,
-  row: GalleryRow
-): string {
-  const columns = worksheet.selectedColumns.length
-    ? worksheet.selectedColumns
-    : worksheet.columns;
-  return columns
-    .map((column) => {
-      const value = String(row.originalData[column] ?? "").trim();
-      return value ? `${column}: ${value}` : "";
-    })
-    .filter(Boolean)
-    .join("\n")
-    .slice(0, 18_000);
 }
 
 export function referenceFlags(references: AiReferenceImage[]) {

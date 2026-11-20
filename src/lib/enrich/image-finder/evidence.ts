@@ -29,15 +29,6 @@ export function nearCodeKey(rowKey: string, pageCode: string): string {
   return `${rowKey}>${pageCode}`;
 }
 
-/** Registrable-ish site of a page (host without `www.`), used to count independent sources. */
-export function pageSite(evidence: PageEvidence): string {
-  try {
-    return new URL(evidence.finalUrl || evidence.url).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return evidence.url;
-  }
-}
-
 const SIZE_PARAMS = new Set([
   "width", "height", "w", "h", "size", "quality", "q", "fit", "crop", "format", "fm", "auto", "dpr", "v", "resize", "scale",
 ]);
@@ -151,10 +142,6 @@ function mergeEvidence(a: PageEvidence, b: PageEvidence): PageEvidence {
     nearCodes: new Set([...a.nearCodes, ...b.nearCodes]),
     matchText: a.matchText === b.matchText ? a.matchText : `${a.matchText}${b.matchText}`.slice(0, MAX_MATCH_TEXT),
   };
-}
-
-export function isOkPage(evidence: PageEvidence | undefined): evidence is PageEvidence {
-  return Boolean(evidence && evidence.status >= 200 && evidence.status < 300);
 }
 
 export function pageShowsImage(evidence: PageEvidence, imageUrl: string): boolean {

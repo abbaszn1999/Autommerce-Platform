@@ -26,7 +26,3 @@ export function canImport(role: Role): boolean {
 export function isOwner(role: Role): boolean {
   return role === "owner";
 }
-
-export function hasMinRole(userRole: Role, minRole: Role): boolean {
-  return ROLE_LEVELS[userRole] >= ROLE_LEVELS[minRole];
-}

@@ -33,8 +33,6 @@ export const SERVER_FILTER_KEYS = [
   "vendor",
 ] as const;
 
-export type ServerFilterKey = (typeof SERVER_FILTER_KEYS)[number];
-
 /** Keys the agent may apply locally after fetch (Shopify cannot filter them). */
 export const CLIENT_PREDICATE_KINDS = [
   "missing_image",
@@ -47,32 +45,6 @@ export const CLIENT_PREDICATE_KINDS = [
   "no_collections",
   "body_html_empty",
 ] as const;
-
-export type ClientPredicateKind = (typeof CLIENT_PREDICATE_KINDS)[number];
-
-/** Approximate GraphQL field costs used by the planner for pre-flight estimate. */
-export const FIELD_COSTS = {
-  productsConnection: 5, // base for `products(first:N)`
-  perProductBase: 1,
-  variantsFirst10: 2,
-  variantsFirst100: 10,
-  imagesFirst10: 2,
-  metafieldsFirst25: 2.5,
-  collectionsFirst25: 2.5,
-  seoField: 0.5,
-  productSetMutation: 10,
-  productSetMetafield: 0.4,
-  productSetFile: 1.9,
-} as const;
-
-/** Shopify hard limits (verified). */
-export const SHOPIFY_LIMITS = {
-  singleQueryMaxCost: 1000,
-  inputArrayMax: 250,
-  bulkConcurrentMax: 5,
-  bulkJsonlMaxBytes: 100 * 1024 * 1024,
-  bulkTimeoutMs: 24 * 60 * 60 * 1000,
-} as const;
 
 /**
  * Columns the AI is allowed to write into via `sync_columns_write_with_ai`.
@@ -98,8 +70,6 @@ export const WRITABLE_COLUMNS = [
   "featured_image_alt_text",
   "image_alt_text",
 ] as const;
-
-export type WritableColumn = (typeof WRITABLE_COLUMNS)[number];
 
 /** Column profiles — replaces static SHEET_VIEWS. */
 export const COLUMN_PROFILES: Record<string, string[]> = {

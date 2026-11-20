@@ -1,4 +1,4 @@
-import type { ApplyChangesInput, ApplyChangesResult, IntegrationRecord, SyncSheetRow } from "../../core/types";
+import type { ApplyChangesInput, ApplyChangesResult, SyncSheetRow } from "../../core/types";
 import { runWithConcurrency, chunk } from "../../core/batch-executor";
 import { createWooClient } from "./client";
 import {

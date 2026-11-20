@@ -7,8 +7,8 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { Agent, type AgentOptions } from "@cursor/sdk";
 import { createClient } from "@supabase/supabase-js";
-import { SupabaseAgentStoreBackend } from "../src/store-agent/agent-store/supabase-backend";
-import { WriteBehindAgentStore } from "../src/store-agent/agent-store/write-behind-store";
+import { SupabaseAgentStoreBackend } from "../src/core/agent-store/supabase-backend";
+import { WriteBehindAgentStore } from "../src/core/agent-store/write-behind-store";
 
 const workspaceId = process.argv[2];
 if (!workspaceId) throw new Error("usage: store-agent-persistence.ts <workspaceId>");

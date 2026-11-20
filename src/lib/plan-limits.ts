@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getOwnerSubscription } from "@/lib/stripe";
-import { getCachedProductsCountServer } from "@/lib/storage-helpers-server";
 import { CATALOG_INTELLIGENCE } from "@/lib/product-modules";
 
 export type PlanResource = "products" | "imports";
@@ -88,36 +87,17 @@ export function planLimitResponse(
   );
 }
 
-export async function assertProductQuota(params: {
-  workspaceId: string;
-  incoming: number;
-  currentOverride?: number;
-}): Promise<{ current: number; limit: number | null; projected: number; warning: boolean }> {
-  const ownerSub = await getOwnerSubscription(params.workspaceId);
-  const limit = ownerSub?.plan?.max_products_per_workspace ?? null;
-  const current =
-    params.currentOverride ??
-    (await getCachedProductsCountServer(params.workspaceId));
-  return assertWithinLimit({
-    resource: "products",
-    current,
-    incoming: params.incoming,
-    limit,
-  });
-}
-
-/**
- * Cap a single gallery/visualizer job at the plan's product ceiling.
- * Does not add catalog size — a 200-row job on a full catalog must still run.
- */
+/** Cap a single gallery/visualizer job at the plan's product ceiling. */
 export async function assertJobRowQuota(params: {
   workspaceId: string;
   rowCount: number;
 }): Promise<{ current: number; limit: number | null; projected: number; warning: boolean }> {
-  return assertProductQuota({
-    workspaceId: params.workspaceId,
+  const ownerSub = await getOwnerSubscription(params.workspaceId);
+  return assertWithinLimit({
+    resource: "products",
+    current: 0,
     incoming: params.rowCount,
-    currentOverride: 0,
+    limit: ownerSub?.plan?.max_products_per_workspace ?? null,
   });
 }
 

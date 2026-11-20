@@ -6,7 +6,7 @@
 --
 -- Files of old projects live in the `workspace-files` bucket under
 -- `<workspace_id>/website-restructure/`. Supabase does not allow deleting storage
--- rows from SQL, so remove them with scripts/purge-website-restructure-storage.ts.
+-- rows from SQL, so remove them with scripts/purge-retired-storage.ts.
 
 -- 1. The admin usage view counted wr_projects: redefine it without that table first,
 --    or dropping the table would break it.

@@ -12,13 +12,14 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { installDnsCache } from "../src/dns-cache";
-import { createResilientFetch } from "../src/store-agent/resilient-fetch";
+import { createResilientFetch } from "../src/core/resilient-fetch";
 installDnsCache();
-import { SupabaseAgentStoreBackend } from "../src/store-agent/agent-store/supabase-backend";
-import { WriteBehindAgentStore } from "../src/store-agent/agent-store/write-behind-store";
-import { ChatFiles, mimeFor } from "../src/store-agent/files";
-import { StoreAgentRegistry } from "../src/store-agent/run";
-import { executeStoreRun } from "../src/store-agent/runner";
+import { SupabaseAgentStoreBackend } from "../src/core/agent-store/supabase-backend";
+import { WriteBehindAgentStore } from "../src/core/agent-store/write-behind-store";
+import { ChatFiles, mimeFor } from "../src/core/files";
+import { StoreAgentRegistry } from "../src/core/run";
+import { AGENTS } from "../src/agents";
+import { executeStoreRun } from "../src/core/runner";
 
 const [workspaceId, userId, message, existingChat] = process.argv.slice(2);
 if (!workspaceId || !userId || !message) throw new Error("usage: store-agent-e2e.ts <workspaceId> <userId> <message> [chatId]");
@@ -106,6 +107,7 @@ await executeStoreRun(
     db,
     store,
     registry,
+    agents: AGENTS,
     cursorApiKey: process.env.CURSOR_API_KEY!,
     workRoot,
     log: console.log,

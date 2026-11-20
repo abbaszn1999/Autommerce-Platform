@@ -120,14 +120,6 @@ export function quantFromInt8(values: Int8Array): QuantVec {
   return { values, norm: Math.sqrt(norm) || 1, prefixNorm: Math.sqrt(prefix) || 1 };
 }
 
-/** Exact cosine at full width. */
-export function quantCosine(a: QuantVec, b: QuantVec): number {
-  const n = Math.min(a.values.length, b.values.length);
-  let dot = 0;
-  for (let i = 0; i < n; i += 1) dot += a.values[i]! * b.values[i]!;
-  return dot / (a.norm * b.norm);
-}
-
 /**
  * Nearest leader at or above `threshold`, or -1. With `prefilter`, a leader
  * is first screened on the leading PREFIX_DIMS and only compared at full

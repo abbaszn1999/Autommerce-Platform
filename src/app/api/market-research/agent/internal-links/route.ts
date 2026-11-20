@@ -152,4 +152,4 @@ async function handlePost(request: NextRequest) {
   }
 }
 
-export const POST = withAiWalletBilling("market-research", "mr_internal_links", handlePost);
+export const POST = withAiWalletBilling("mr_internal_links", handlePost);

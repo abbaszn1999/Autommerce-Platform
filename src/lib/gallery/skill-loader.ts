@@ -80,12 +80,3 @@ export async function loadGallerySkill(id: GallerySkillId): Promise<GallerySkill
   skillCache.set(id, skill);
   return skill;
 }
-
-export async function getAllGallerySkills(): Promise<GallerySkill[]> {
-  const ids = Object.keys(ID_TO_FILE) as GallerySkillId[];
-  const skills: GallerySkill[] = [];
-  for (const id of ids) {
-    skills.push(await loadGallerySkill(id));
-  }
-  return skills.sort((a, b) => a.frontmatter.order - b.frontmatter.order);
-}

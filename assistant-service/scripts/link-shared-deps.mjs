@@ -1,5 +1,5 @@
-// The service imports ../src/lib/assistant/protocol.ts, which resolves its
-// packages from the repo root. On a host that installs only this service
+// The service imports shared modules from ../src/lib (store-agent protocol and
+// others), which resolve their packages from the repo root. On a host that installs only this service
 // (Render), link those packages from here; when the root is installed, do nothing.
 import { existsSync, mkdirSync, symlinkSync } from "node:fs";
 import path from "node:path";

@@ -19,7 +19,6 @@ export const OS_PRODUCTS = [
 ] as const;
 
 export type PaidPlanName = "growth" | "pro" | "enterprise";
-export type PlanName = "trial" | "starter" | PaidPlanName;
 export type CheckoutKind = "stripe" | "contact" | "none";
 
 export type CanonicalPlan = {
@@ -154,10 +153,6 @@ export function isGrandfatheredPlanName(name: string | null | undefined): boolea
 
 export function isContactPlanName(name: string | null | undefined): boolean {
   return name === "enterprise";
-}
-
-export function isPublicCatalogPlanName(name: string | null | undefined): name is PaidPlanName {
-  return name === "growth" || name === "pro" || name === "enterprise";
 }
 
 export function checkoutBlockedReason(

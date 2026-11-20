@@ -148,10 +148,6 @@ export function mrSlicePath(
   return `${mrProjectPath(workspaceId, projectId)}/${sliceName}.json`;
 }
 
-export function mrKeywordsSamplePath(workspaceId: string, projectId: string): string {
-  return mrSlicePath(workspaceId, projectId, "keywords");
-}
-
 export function mrExtractChunkPath(
   workspaceId: string,
   projectId: string,
@@ -831,18 +827,6 @@ export type SameIntentState = {
   updatedAt: string;
 };
 
-export type SameIntentSurvivorRecord = {
-  id: string;
-  keyword: string;
-  volume: number;
-  vector: string;
-};
-
-export type SameIntentLeaderRecord = {
-  id: string;
-  vector: string;
-};
-
 export type SameIntentClusterRecord = {
   members: Array<{ id: string; keyword: string; volume: number }>;
 };
@@ -910,97 +894,6 @@ export async function loadSameIntentDrops(
 ): Promise<SameIntentDropRecord[]> {
   const state = await loadSameIntentState(admin, workspaceId, projectId);
   return state?.drops ?? [];
-}
-
-export async function loadSameIntentSurvivors(
-  admin: SupabaseClient,
-  workspaceId: string,
-  projectId: string
-): Promise<SameIntentSurvivorRecord[]> {
-  return (
-    (await loadMrJsonAdmin<SameIntentSurvivorRecord[]>(
-      admin,
-      sameIntentFile(workspaceId, projectId, "survivors")
-    )) ?? []
-  );
-}
-
-export async function saveSameIntentSurvivors(
-  admin: SupabaseClient,
-  workspaceId: string,
-  projectId: string,
-  rows: SameIntentSurvivorRecord[]
-): Promise<void> {
-  await saveMrJsonAdmin(
-    admin,
-    sameIntentFile(workspaceId, projectId, "survivors"),
-    rows
-  );
-}
-
-export async function loadSameIntentLeaders(
-  admin: SupabaseClient,
-  workspaceId: string,
-  projectId: string
-): Promise<SameIntentLeaderRecord[]> {
-  return (
-    (await loadMrJsonAdmin<SameIntentLeaderRecord[]>(
-      admin,
-      sameIntentFile(workspaceId, projectId, "leaders")
-    )) ?? []
-  );
-}
-
-export async function saveSameIntentLeaders(
-  admin: SupabaseClient,
-  workspaceId: string,
-  projectId: string,
-  rows: SameIntentLeaderRecord[]
-): Promise<void> {
-  await saveMrJsonAdmin(
-    admin,
-    sameIntentFile(workspaceId, projectId, "leaders"),
-    rows
-  );
-}
-
-export async function loadSameIntentAssignments(
-  admin: SupabaseClient,
-  workspaceId: string,
-  projectId: string
-): Promise<Record<string, string>> {
-  return (
-    (await loadMrJsonAdmin<Record<string, string>>(
-      admin,
-      sameIntentFile(workspaceId, projectId, "assignments")
-    )) ?? {}
-  );
-}
-
-export async function saveSameIntentAssignments(
-  admin: SupabaseClient,
-  workspaceId: string,
-  projectId: string,
-  assignments: Record<string, string>
-): Promise<void> {
-  await saveMrJsonAdmin(
-    admin,
-    sameIntentFile(workspaceId, projectId, "assignments"),
-    assignments
-  );
-}
-
-export async function loadSameIntentClusters(
-  admin: SupabaseClient,
-  workspaceId: string,
-  projectId: string
-): Promise<SameIntentClusterRecord[]> {
-  return (
-    (await loadMrJsonAdmin<SameIntentClusterRecord[]>(
-      admin,
-      sameIntentFile(workspaceId, projectId, "clusters")
-    )) ?? []
-  );
 }
 
 export async function saveSameIntentClusters(

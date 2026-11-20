@@ -9,7 +9,6 @@ import {
   RefreshCw,
   Wallet,
   Bot,
-  BarChart3,
   CreditCard,
   Users,
   Settings,
@@ -20,7 +19,7 @@ import {
 /** How a tool is paid for. Drives the badge shown on its card. */
 export type ToolBilling = "credits" | "wallet" | "free";
 
-export type ToolCategory = "agents" | "visual" | "growth" | "data" | "analytics" | "account";
+export type ToolCategory = "agents" | "visual" | "growth" | "data" | "account";
 
 export interface ToolDefinition {
   /** Path segment appended to /w/[slug] — empty string means the workspace root. */
@@ -40,74 +39,6 @@ export interface ToolDefinition {
   /** Extra keywords so search finds the tool by what it does, not just its name. */
   keywords?: string[];
 }
-
-export const TOOL_CATEGORIES: {
-  id: ToolCategory | "all";
-  label: string;
-}[] = [
-  { id: "all", label: "Everything" },
-  { id: "agents", label: "AI agents" },
-  { id: "visual", label: "Visual AI" },
-  { id: "growth", label: "Growth" },
-  { id: "data", label: "Catalog" },
-  { id: "analytics", label: "Analytics" },
-  { id: "account", label: "Workspace" },
-];
-
-/** Per-category accent, kept as literal class strings so Tailwind keeps them. */
-export const CATEGORY_STYLE: Record<
-  ToolCategory,
-  { text: string; bg: string; ring: string; glow: string; dot: string }
-> = {
-  agents: {
-    text: "text-violet-500",
-    bg: "bg-violet-500/10",
-    ring: "ring-violet-500/20",
-    glow: "rgba(139,92,246,0.16)",
-    dot: "bg-violet-500",
-  },
-  visual: {
-    text: "text-sky-500",
-    bg: "bg-sky-500/10",
-    ring: "ring-sky-500/20",
-    glow: "rgba(14,165,233,0.16)",
-    dot: "bg-sky-500",
-  },
-  growth: {
-    text: "text-emerald-500",
-    bg: "bg-emerald-500/10",
-    ring: "ring-emerald-500/20",
-    glow: "rgba(16,185,129,0.16)",
-    dot: "bg-emerald-500",
-  },
-  data: {
-    text: "text-amber-500",
-    bg: "bg-amber-500/10",
-    ring: "ring-amber-500/20",
-    glow: "rgba(245,158,11,0.16)",
-    dot: "bg-amber-500",
-  },
-  analytics: {
-    text: "text-indigo-500",
-    bg: "bg-indigo-500/10",
-    ring: "ring-indigo-500/20",
-    glow: "rgba(99,102,241,0.16)",
-    dot: "bg-indigo-500",
-  },
-  account: {
-    text: "text-slate-500",
-    bg: "bg-slate-500/10",
-    ring: "ring-slate-500/20",
-    glow: "rgba(100,116,139,0.14)",
-    dot: "bg-slate-500",
-  },
-};
-
-export const BILLING_LABEL: Record<ToolBilling, string> = {
-  credits: "AI credits",
-  wallet: "Wallet",
-  free: "Included",
-};
 
 /** Every tool in the workspace, in the order they should be showcased. */
 export const TOOLS: ToolDefinition[] = [
@@ -219,17 +150,6 @@ export const TOOLS: ToolDefinition[] = [
     category: "growth",
     billing: "free",
     keywords: ["balance", "top up", "money", "billing", "ledger", "stripe"],
-  },
-  {
-    path: "/analytics/overview",
-    name: "Analytics",
-    blurb:
-      "Search Console and GA4 in one place: clicks, sessions, and the pages that move them.",
-    icon: BarChart3,
-    category: "analytics",
-    billing: "free",
-    requiresRole: "admin",
-    keywords: ["gsc", "ga4", "search console", "traffic", "seo", "overview", "plp"],
   },
   {
     path: "/usage",

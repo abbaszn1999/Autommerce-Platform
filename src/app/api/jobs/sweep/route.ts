@@ -9,7 +9,6 @@ import { CATALOG_WORKER_STALE_MS } from "@/lib/jobs/config";
 import { recoverStaleCatalogRun } from "@/lib/jobs/catalog-recovery";
 import { recoverStuckGrowthJobs } from "@/lib/jobs/growth-recovery";
 import { expireStaleHeldExtracts as expireStaleMrHeldExtracts } from "@/lib/market-research/extract-advance";
-import { expireStaleHeldExtracts as expireStaleFaHeldExtracts } from "@/lib/free-assessment/extract-advance";
 import { expireElapsedTrials } from "@/lib/trial-server";
 
 import { cronSecretFromEnv, cronSecretMatches } from "@/lib/auth/cron-secret";
@@ -117,16 +116,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let expiredFaExtracts = 0;
-  try {
-    expiredFaExtracts = await expireStaleFaHeldExtracts(admin);
-  } catch (error) {
-    console.error(
-      "[jobs/sweep] expire held fa extracts failed",
-      error instanceof Error ? error.message : error
-    );
-  }
-
   let expiredTrials = 0;
   try {
     expiredTrials = await expireElapsedTrials();
@@ -146,7 +135,6 @@ export async function POST(request: NextRequest) {
     growthCancelled: growthRecovered.cancelled,
     notified,
     expiredExtracts,
-    expiredFaExtracts,
     expiredTrials,
   });
 }

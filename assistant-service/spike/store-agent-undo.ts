@@ -6,8 +6,8 @@
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { signRequest } from "../src/auth";
-import { createResilientFetch } from "../src/store-agent/resilient-fetch";
-import { loadShopifyConnection, shopifyGraphql } from "../src/store-agent/shopify/client";
+import { createResilientFetch } from "../src/core/resilient-fetch";
+import { loadShopifyConnection, shopifyGraphql } from "../src/core/store-access/shopify/client";
 
 const WS = "b13fd1f7-02da-4efc-af1a-ead12f14c155";
 const USER = "ff85a680-e373-470d-b762-89856ed60a0a";

@@ -30,21 +30,6 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-export async function saveSession(session: PersistedSession): Promise<void> {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    store.put(session, SESSION_KEY);
-    return new Promise((resolve, reject) => {
-      tx.oncomplete = () => { db.close(); resolve(); };
-      tx.onerror = () => { db.close(); reject(tx.error); };
-    });
-  } catch (e) {
-    console.warn("Failed to save session to IndexedDB:", e);
-  }
-}
-
 export async function loadSession(): Promise<PersistedSession | null> {
   try {
     const db = await openDB();

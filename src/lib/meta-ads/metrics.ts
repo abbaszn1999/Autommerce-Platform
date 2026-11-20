@@ -32,12 +32,6 @@ export function addBase(a: BaseMetrics, b: BaseMetrics): BaseMetrics {
   return out;
 }
 
-export function scaleBase(b: BaseMetrics, factor: number): BaseMetrics {
-  const out = { ...EMPTY_BASE };
-  for (const k of BASE_KEYS) out[k] = b[k] * factor;
-  return out;
-}
-
 export function derive(base: BaseMetrics): Metrics {
   return {
     ...base,

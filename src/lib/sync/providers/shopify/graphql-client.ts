@@ -238,17 +238,3 @@ export async function shopifyGraphQL<T>(params: {
     };
   }
 }
-
-/** Read current bucket state (for planner cost estimation). */
-export function getBucketSnapshot(integration: IntegrationRecord): {
-  available: number;
-  max: number;
-  restoreRate: number;
-} {
-  const state = getBucket(integration);
-  return {
-    available: projectAvailable(state),
-    max: state.max,
-    restoreRate: state.restoreRatePerSecond,
-  };
-}

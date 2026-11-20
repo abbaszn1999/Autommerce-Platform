@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
-import { getCachedProductsCountServer, getCachedCategoriesCountServer } from "@/lib/storage-helpers-server";
+import { getCachedCategoriesCountServer } from "@/lib/storage-helpers-server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 
 export async function GET(request: NextRequest) {
@@ -39,17 +39,12 @@ export async function GET(request: NextRequest) {
 
     // Parallelize all dashboard queries on the server side
     const [
-      productsCount,
       categoriesCount,
       sessionsRes,
       membersRes,
       txRes,
       importSessionsRes,
     ] = await Promise.all([
-      getCachedProductsCountServer(workspaceId).catch((err) => {
-        console.warn("[Dashboard Summary] getCachedProductsCountServer failed:", err.message);
-        return 0;
-      }),
       getCachedCategoriesCountServer(workspaceId).catch((err) => {
         console.warn("[Dashboard Summary] getCachedCategoriesCountServer failed:", err.message);
         return 0;
@@ -86,7 +81,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       stats: {
-        totalProducts: productsCount,
         totalCategories: categoriesCount,
         recentImports: sessionsRes.count ?? 0,
         teamMembers: membersRes.count ?? 0,

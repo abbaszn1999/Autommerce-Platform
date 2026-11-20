@@ -2,10 +2,6 @@
  * Root Cause A — row stores.
  * Set any of these to "0" to roll that module back to blobs.
  */
-export function productsRowStoreEnabled(): boolean {
-  return process.env.PRODUCTS_ROW_STORE !== "0";
-}
-
 export function catalogRowStoreEnabled(): boolean {
   return process.env.CATALOG_ROW_STORE !== "0";
 }

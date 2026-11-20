@@ -5,10 +5,7 @@ import {
   CheckCircle2,
   CircleDashed,
   Cpu,
-  Database,
-  Layers,
   Loader2,
-  ShieldCheck,
   Sparkles,
   Store,
 } from "lucide-react";
@@ -146,7 +143,6 @@ export function FuturisticAiLoader({
           {steps.map((step, idx) => {
             const isFinished = progress >= ((idx + 1) / steps.length) * 100 || idx < activeStepIndex;
             const isCurrent = idx === activeStepIndex && !isFinished;
-            const isPending = idx > activeStepIndex;
 
             return (
               <div

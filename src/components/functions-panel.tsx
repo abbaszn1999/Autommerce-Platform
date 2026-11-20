@@ -21,7 +21,6 @@ import {
   CaseUpper,
   CaseLower,
   RemoveFormatting,
-  Search,
   Replace,
   Scissors,
   Merge,
@@ -35,7 +34,6 @@ import {
   SendHorizonal,
   Bot,
   Loader2,
-  Check,
   AlertTriangle,
   Sparkles,
 } from "lucide-react";
@@ -50,11 +48,6 @@ import { subscriptionHref } from "@/lib/billing/billing-toast";
 import Link from "next/link";
 
 type FunctionCategory = "math" | "text" | "generate" | "clean" | "copy";
-type MathOp = "add_percent" | "sub_percent" | "add_fixed" | "sub_fixed" | "multiply" | "divide" | "round";
-type TextOp = "uppercase" | "lowercase" | "titlecase" | "trim" | "prefix" | "suffix" | "find_replace";
-type GenerateOp = "slug" | "sku" | "extract_numbers" | "split";
-type CleanOp = "remove_duplicates" | "remove_empty" | "strip_html" | "standardize";
-type CopyOp = "copy_column" | "fill_empty" | "concatenate" | "conditional";
 
 interface FunctionOperation {
   id: string;

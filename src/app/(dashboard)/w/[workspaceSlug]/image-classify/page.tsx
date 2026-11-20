@@ -35,7 +35,6 @@ import {
   deleteImageClassificationSession,
   type ImageClassificationSession,
 } from "@/lib/supabase";
-import { usePageAgentHandlers } from "@/lib/assistant/driver/page-handlers";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
@@ -149,22 +148,7 @@ export default function ImageClassifyPage() {
     router.push(`/w/${slug}/image-classify/${id}`);
   };
 
-  usePageAgentHandlers("classify", {
-    getState: () => ({
-      view: "projects",
-      canCreate: canEdit,
-      loading,
-      projects: sessions.slice(0, 30).map((session) => ({
-        id: session.id,
-        name: session.name,
-        status: STATUS_LABEL[session.status] ?? session.status,
-        images: session.total_images || 0,
-        groups: session.group_count || 0,
-      })),
-    }),
-  });
-
-  const handleDelete = async () => {
+const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeletingProject(true);
     try {
@@ -202,7 +186,7 @@ export default function ImageClassifyPage() {
               className="h-9 gap-2 self-start rounded-xl bg-[#400095] px-4 text-[10px] text-white shadow-[0_8px_24px_rgba(64,0,149,.2)] hover:bg-[#6B358D] dark:bg-[#F76D01] sm:self-auto"
               asChild
             >
-              <Link href={`/w/${slug}/image-classify/new`} data-agent-id="classify.new-project">
+              <Link href={`/w/${slug}/image-classify/new`}>
                 <Plus className="h-3.5 w-3.5" /> New project <ArrowRight className="h-3 w-3" />
               </Link>
             </Button>
@@ -337,7 +321,6 @@ export default function ImageClassifyPage() {
                       transition={{ delay: Math.min(index * .04, .2) }}
                       role="button"
                       tabIndex={0}
-                      data-agent-id={`classify.project.${session.id}`}
                       aria-label={`Open project ${session.name}`}
                       onClick={() => openProject(session.id)}
                       onKeyDown={(event) => {

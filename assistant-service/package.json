@@ -3,17 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Private service that runs the in-app assistant agent. Local development only until deployment is approved.",
+  "description": "Private service that runs the Store Assistant, Google Ads and Meta Ads agents.",
   "engines": {
     "node": ">=22.13"
   },
   "scripts": {
-    "dev": "npm run knowledge && tsx watch --env-file=.env.local src/main.ts",
+    "dev": "tsx watch --env-file=.env.local src/main.ts",
     "start": "tsx --env-file=.env.local src/main.ts",
     "start:prod": "tsx src/main.ts",
-    "knowledge": "node scripts/build-knowledge.mjs",
     "postinstall": "node scripts/link-shared-deps.mjs",
-    "spike": "tsx --env-file=.env.local spike/spike.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

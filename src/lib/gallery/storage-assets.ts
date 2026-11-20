@@ -19,22 +19,6 @@ async function retry<T>(operation: () => Promise<T>, attempts = 3): Promise<T> {
   throw lastError;
 }
 
-export async function uploadGalleryAsset(
-  admin: Admin,
-  path: string,
-  buffer: Buffer,
-  contentType: string
-): Promise<void> {
-  await retry(async () => {
-    const { error } = await admin.storage.from(BUCKET).upload(path, buffer, {
-      contentType,
-      cacheControl: "3600",
-      upsert: false,
-    });
-    if (error) throw error;
-  });
-}
-
 export async function removeGalleryAssets(
   admin: Admin,
   paths: string[]

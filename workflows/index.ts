@@ -19,11 +19,8 @@ import { runGallerySession } from "../src/lib/jobs/gallery-session";
 import { executeVisualizerRow, type VisualizerRowTaskInput } from "../src/lib/jobs/visualizer-row";
 import { runVisualizerSession } from "../src/lib/jobs/visualizer-session";
 import { runMrExtractSession } from "../src/lib/jobs/mr-extract-session";
-import { runFaExtractSession } from "../src/lib/jobs/fa-extract-session";
 import { runMrStage1Session } from "../src/lib/jobs/mr-stage1-session";
-import { runFaStage1Session } from "../src/lib/jobs/fa-stage1-session";
 import { runMrClassifySession } from "../src/lib/jobs/mr-classify-session";
-import { runFaClassifySession } from "../src/lib/jobs/fa-classify-session";
 import { runMrCollectionsSession } from "../src/lib/jobs/mr-collections-session";
 import {
   GALLERY_ROW_TIMEOUT_SECONDS,
@@ -142,19 +139,6 @@ export const mrStage1Session = task(
   }
 );
 
-export const faStage1Session = task(
-  {
-    name: "faStage1Session",
-    timeoutSeconds: SESSION_TIMEOUT_SECONDS,
-    plan: JOB_TASK_PLAN,
-    retry: sessionRetry,
-  },
-  async (_ctx: TaskContext, runId: string) => {
-    await runFaStage1Session(runId);
-    return { ok: true, runId };
-  }
-);
-
 export const mrClassifySession = task(
   {
     name: "mrClassifySession",
@@ -168,19 +152,6 @@ export const mrClassifySession = task(
   }
 );
 
-export const faClassifySession = task(
-  {
-    name: "faClassifySession",
-    timeoutSeconds: SESSION_TIMEOUT_SECONDS,
-    plan: JOB_TASK_PLAN,
-    retry: sessionRetry,
-  },
-  async (_ctx: TaskContext, runId: string) => {
-    await runFaClassifySession(runId);
-    return { ok: true, runId };
-  }
-);
-
 export const mrCollectionsSession = task(
   {
     name: "mrCollectionsSession",
@@ -190,19 +161,6 @@ export const mrCollectionsSession = task(
   },
   async (_ctx: TaskContext, runId: string) => {
     await runMrCollectionsSession(runId);
-    return { ok: true, runId };
-  }
-);
-
-export const faExtractSession = task(
-  {
-    name: "faExtractSession",
-    timeoutSeconds: SESSION_TIMEOUT_SECONDS,
-    plan: JOB_TASK_PLAN,
-    retry: sessionRetry,
-  },
-  async (_ctx: TaskContext, runId: string) => {
-    await runFaExtractSession(runId);
     return { ok: true, runId };
   }
 );

@@ -1,5 +1,5 @@
 // Contract between the Next.js gateway (/api/store-agent/*) and the Store
-// Agent service (assistant-service/src/store-agent). Imported by both, so it
+// Agent service (assistant-service/src/core and src/agents). Imported by both, so it
 // uses relative-safe imports only.
 
 import { z } from "zod";
@@ -31,7 +31,6 @@ export const attachmentRefSchema = z.object({
   size: z.number().int().nonnegative(),
   storagePath: z.string().min(1).max(500),
 });
-export type AttachmentRef = z.infer<typeof attachmentRefSchema>;
 
 /**
  * Where a chat lives: the Store Assistant ("store"), the Google Ads page
@@ -109,6 +108,9 @@ export type QuestionItem = { id: string; text: string; options: string[]; multip
 
 export type PlanStatus = "draft" | "building" | "built";
 
+/** Why an agent asks for store access. */
+export type AccessReason = "no_store" | "store_problem" | "missing_access";
+
 export type ApprovalPreview = {
   /** One line per affected record: what changes, before → after when known. */
   items: Array<{ id: string; label: string; changes: Array<{ field: string; before?: string; after?: string }> }>;
@@ -171,14 +173,17 @@ export type StoreAgentEvent =
   | { type: "doc"; docId: string; kind: "plan" | "report"; title: string; version: number; steps?: number; seq: number }
   /** `shown`: a result for the user (opened, or made for them), not one of the agent's working files. */
   | { type: "file"; fileId: string; name: string; kind: string; mime: string; open: boolean; shown?: boolean; folder?: string | null; seq: number }
+  /**
+   * The agent needs store access it does not have: no store is connected, a connected store could not be read, or a
+   * Shopify store has not granted `scopes`. Shown as a card that leads to Settings; it does not pause the run.
+   */
+  | { type: "access"; reason: AccessReason; scopes: string[]; note?: string; seq: number }
   | { type: "summary"; status: "started" | "completed"; seq: number }
   | { type: "context"; usedTokens: number; windowTokens: number; seq: number }
   | { type: "usage"; credits: number; usd: number; seq: number }
   | { type: "error"; message: string; seq: number }
   | { type: "done"; status: "finished" | "cancelled" | "error" | "interrupted"; credits: number; seq: number }
   | { type: "ping"; seq: number };
-
-export type StoreAgentEventType = StoreAgentEvent["type"];
 
 /** Events with the seq left to the emitter. */
 export type StoreAgentEventInput = StoreAgentEvent extends infer E ? (E extends StoreAgentEvent ? Omit<E, "seq"> : never) : never;

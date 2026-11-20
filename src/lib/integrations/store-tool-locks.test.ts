@@ -10,10 +10,12 @@ describe("store tool locks", () => {
     expect(locks["market-research"]).toMatchObject({ reason: "missing-scopes", missing: ["read_publications", "write_publications", "read_content", "write_content"] });
   });
 
-  it("opens the Store Assistant with read_products alone, and only with it", () => {
+  it("always opens the Store Assistant: with any access, with none, with no store, on any platform", () => {
     expect(storeToolLocks("shopify", ["read_products"])["store-assistant"]).toBeNull();
-    expect(storeToolLocks("shopify", ["write_products"])["store-assistant"]).toBeNull();
-    expect(storeToolLocks("shopify", ["read_inventory"])["store-assistant"]).toEqual({ reason: "missing-scopes", missing: ["read_products"] });
+    expect(storeToolLocks("shopify", ["read_inventory"])["store-assistant"]).toBeNull();
+    expect(storeToolLocks("shopify", [])["store-assistant"]).toBeNull();
+    expect(storeToolLocks(null, null)["store-assistant"]).toBeNull();
+    expect(storeToolLocks("wordpress", null)["store-assistant"]).toBeNull();
   });
 
   it("opens the Google Ads agent with read_products, and keeps its optional scopes out of the lock", () => {
@@ -29,7 +31,6 @@ describe("store tool locks", () => {
   it("handles no store, other platforms and unknown scopes", () => {
     expect(storeToolLocks(null, null)["growth-sync"]).toEqual({ reason: "no-store" });
     expect(storeToolLocks("woocommerce", null)["store-assistant"]).toBeNull();
-    expect(storeToolLocks("wordpress", null)["store-assistant"]).toEqual({ reason: "unsupported-store" });
     // Shopify could not be asked: nothing is locked by a failed check.
     expect(storeToolLocks("shopify", null)["growth-sync"]).toBeNull();
   });

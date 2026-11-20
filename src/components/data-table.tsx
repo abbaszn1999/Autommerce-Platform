@@ -17,14 +17,6 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -1051,7 +1043,6 @@ function ImageUrlsCell({
                   aria-label={`Preview image ${i + 1}`}
                   title={img.title || "Product image"}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <SheetImage
                     url={img.imageUrl}
                     alt={img.title || "Product"}
@@ -1167,7 +1158,6 @@ function ImageUrlsCell({
                 </div>
               ) : active ? (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <SheetImage
                     url={active.imageUrl}
                     alt={active.title || "Product"}
@@ -1315,7 +1305,6 @@ function ImageUrlsCell({
                       }`}
                       aria-label={`View image ${index + 1}`}
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <SheetImage
                         url={img.imageUrl}
                         alt={img.title || `Image ${index + 1}`}
@@ -1888,18 +1877,13 @@ export function DataTable({
     deselectAllRows,
     selectRowsByIds,
     deleteSelectedRows,
-    selectByStatus,
-    invertSelection,
     addRow,
     deleteColumn,
     renameColumn,
     moveColumnLayout,
     toggleColumnLayoutHidden,
-    setRowStatus,
     undo,
     redo,
-    canUndo,
-    canRedo,
     saveStatus,
     enrichingColumns,
     productGroupColumn,
@@ -2636,7 +2620,6 @@ export function DataTable({
             {expandableParentIds.length > 0 && (
               <button
                 type="button"
-                data-agent-id="ci.expand-all"
                 onClick={() => setExpandedParents(allExpanded ? new Set() : new Set(expandableParentIds))}
                 className="flex items-center gap-1 rounded border border-border/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
@@ -2960,7 +2943,6 @@ export function DataTable({
                                   onClick={() => toggleExpanded(row.original.id)}
                                   aria-label={isExpanded ? "Hide variations" : "Show variations"}
                                   title={isExpanded ? "Hide variations" : `Show ${groupSize} variations`}
-                                  data-agent-id={`ci.row.expand.${row.original.id}`}
                                   className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                                 >
                                   {isExpanded ? (

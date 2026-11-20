@@ -94,12 +94,6 @@ export async function updatePassword(newPassword: string) {
   if (error) throw error;
 }
 
-export async function getUser() {
-  const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.user ?? null;
-}
-
 export async function getSession() {
   const supabase = createClient();
   const { data: { session } } = await supabase.auth.getSession();

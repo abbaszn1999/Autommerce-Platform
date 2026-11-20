@@ -1,4 +1,4 @@
-// Server side of the Meta connection (stage A, meta-ads/connect-plan.md).
+// Server side of the Meta connection (stage A).
 // Facebook Login for Business on our own Meta app → server-side code exchange →
 // long-lived user token, stored encrypted in meta_ads_connections. The token
 // never reaches the browser or the agent service. Never import from client code.

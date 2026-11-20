@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 
 interface DashboardStats {
-  totalProducts: number;
   totalCategories: number;
   recentImports: number;
   teamMembers: number;

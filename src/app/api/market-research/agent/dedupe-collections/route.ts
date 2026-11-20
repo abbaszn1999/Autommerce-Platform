@@ -63,4 +63,4 @@ async function handlePost(request: NextRequest) {
   }
 }
 
-export const POST = withAiWalletBilling("market-research", "mr_dedupe_collections", handlePost);
+export const POST = withAiWalletBilling("mr_dedupe_collections", handlePost);

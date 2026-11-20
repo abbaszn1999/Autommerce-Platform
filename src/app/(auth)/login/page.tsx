@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Mail, Lock, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ import { safeRedirectPath } from "@/lib/auth/auth-entry";
 import { PageLoader } from "@/components/brand/page-loader";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = safeRedirectPath(searchParams.get("redirect"));
   const prefillEmail = searchParams.get("email") || "";

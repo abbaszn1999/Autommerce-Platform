@@ -26,15 +26,3 @@ export const SHOPIFY_CORE_PRODUCT_COLUMNS = [
   "created_at",
   "updated_at",
 ] as const;
-
-/** Shopify product columns that map directly onto the REST `product` payload. */
-export const SHOPIFY_SYNCABLE_COLUMN_MAP: Record<string, string> = {
-  title: "title",
-  handle: "handle",
-  status: "status",
-  vendor: "vendor",
-  product_type: "product_type",
-  tags: "tags",
-  description: "body_html",
-  body_html: "body_html",
-};

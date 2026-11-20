@@ -5,13 +5,11 @@ import { toast } from "sonner";
 import { billingBlockReason, showBillingBlockedToast } from "@/lib/billing/billing-toast";
 import {
   Sparkles,
-  Play,
   RotateCcw,
   CheckCircle2,
   AlertCircle,
   Loader2,
   Database,
-  Columns3,
   ChevronDown,
   ChevronRight,
   ChevronsLeft,
@@ -83,7 +81,6 @@ import {
   type CatalogSidebarMode,
   type OutputLanguage,
   type EnrichmentPreset,
-  type EnrichmentColumn,
 } from "@/types";
 import type { EnrichSettings } from "@/lib/enrich";
 import { IMAGE_FINDER_MAX_IMAGES } from "@/lib/enrich/image-finder/brief";
@@ -159,18 +156,17 @@ interface RailTool {
   id: string;
   mode: CatalogSidebarMode;
   finder?: FinderOutput;
-  agentId: string;
   label: string;
   hint: string;
   icon: LucideIcon;
 }
 const SIDEBAR_TOOLS: RailTool[] = [
-  { id: "enrich", mode: "enrich", agentId: "ci.mode.enrich", label: "Enrichment", hint: "Titles, descriptions, AI text", icon: Sparkles },
-  { id: "categories", mode: "categories", agentId: "ci.mode.categories", label: "Categorize", hint: "Assign store categories", icon: FolderTree },
-  { id: "sources", mode: "images", finder: "sourceUrls", agentId: "ci.mode.sources", label: "Source Finder", hint: "Product pages for each item", icon: Globe },
-  { id: "images", mode: "images", finder: "images", agentId: "ci.mode.images", label: "Image Finder", hint: "Product images", icon: ImageIcon },
-  { id: "lens", mode: "lens", agentId: "ci.mode.lens", label: "Lens Source Checker", hint: "Find pages from a picture", icon: ScanSearch },
-  { id: "functions", mode: "functions", agentId: "ci.mode.functions", label: "Sheet Tools", hint: "Bulk edits, prices, cleanup", icon: Wrench },
+  { id: "enrich", mode: "enrich", label: "Enrichment", hint: "Titles, descriptions, AI text", icon: Sparkles },
+  { id: "categories", mode: "categories", label: "Categorize", hint: "Assign store categories", icon: FolderTree },
+  { id: "sources", mode: "images", finder: "sourceUrls", label: "Source Finder", hint: "Product pages for each item", icon: Globe },
+  { id: "images", mode: "images", finder: "images", label: "Image Finder", hint: "Product images", icon: ImageIcon },
+  { id: "lens", mode: "lens", label: "Lens Source Checker", hint: "Find pages from a picture", icon: ScanSearch },
+  { id: "functions", mode: "functions", label: "Sheet Tools", hint: "Bulk edits, prices, cleanup", icon: Wrench },
 ];
 
 /** The progress line of a running Source / Image Finder or Lens run, from the columns it generates. */
@@ -180,17 +176,6 @@ function finderRunningLabel(columnIds: string[]): string {
   const images = columnIds.includes(PRODUCT_MODE_COLUMN_IDS.images);
   if (sources && images) return "Finding sources & images...";
   return sources ? "Finding source URLs..." : "Finding images...";
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 function projectJsonToProductRows(project: ProjectJson): ProductRow[] {
@@ -223,9 +208,7 @@ function FinderOutputCard({
   onToggle,
   onExpand,
   children,
-  agentId,
 }: {
-  agentId?: string;
   label: string;
   badge?: string;
   description: string;
@@ -250,7 +233,6 @@ function FinderOutputCard({
           className="shrink-0"
           onClick={toggle}
           disabled={onToggle ? disabled : false}
-          data-agent-id={agentId}
           aria-pressed={onToggle ? enabled : undefined}
           aria-label={onToggle ? (enabled ? `Switch off ${label}` : `Switch on ${label}`) : label}
         >
@@ -297,7 +279,6 @@ export function Sidebar() {
   const isViewer = role === "viewer";
   const {
     rows,
-    fileName,
     originalColumns,
     sourceColumns,
     enrichmentColumns,
@@ -310,16 +291,13 @@ export function Sidebar() {
     applyProjectRows,
     applyEnrichmentPreset,
     toggleEnrichmentColumn,
-    setAllEnrichmentColumns,
     addCustomEnrichmentColumn,
     removeCustomEnrichmentColumn,
     reorderEnrichmentColumns,
     updateEnrichmentColumnConfig,
     toggleSourceColumn,
     setAllSourceColumns,
-    updateCellValue,
     isEnriching,
-    isPaused,
     isStoppingEnrich,
     setIsEnriching,
     setStoppingEnrich,
@@ -329,10 +307,7 @@ export function Sidebar() {
     completedEnrich,
     errorCount,
     setRowStatus,
-    setRowEnrichedData,
     setEnrichProgress,
-    incrementError,
-    resetEnrichState,
     sidebarOpen,
     setSidebarOpen,
     updateSettings,
@@ -1354,18 +1329,18 @@ export function Sidebar() {
                 <ImageIcon className="h-3.5 w-3.5 text-primary" />
               )}
               <span className="text-[11px] font-semibold">{activeTool?.label ?? "Image Finder"}</span>
-            </div>
+          </div>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 shrink-0"
-            onClick={() => setSidebarOpen(false)}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              onClick={() => setSidebarOpen(false)}
             aria-label="Hide settings panel"
             title="Hide settings panel"
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </Button>
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
         </div>
       </div>
 
@@ -1575,7 +1550,6 @@ export function Sidebar() {
                         </button>
                         <button
                           type="button"
-                          data-agent-id={`ci.col.${col.id}`}
                           className="min-w-0 flex-1 truncate text-left text-[11px] font-medium leading-none"
                           onClick={() => toggleEnrichmentColumn(col.id)}
                         >
@@ -1745,7 +1719,7 @@ export function Sidebar() {
                 ) : activeFinder === "sourceUrls" ? (
                   <Globe className="h-4 w-4 text-primary" />
                 ) : (
-                  <ImageIcon className="h-4 w-4 text-primary" />
+                <ImageIcon className="h-4 w-4 text-primary" />
                 )}
                 <span className="text-xs font-semibold">
                   {mode === "lens"
@@ -1765,7 +1739,6 @@ export function Sidebar() {
               <div className="space-y-0.5">
                 {sourceUrlsColumn && activeFinder === "sourceUrls" && (
                   <FinderOutputCard
-                    agentId="ci.finder.source-urls"
                     label="Source URLs"
                     description="The web pages that sell this exact product: the brand's own site, factories and suppliers, wholesalers and retailers. Name the websites you want in the custom instruction. Written to the Source URLs column."
                     enabled={runsSourceUrls}
@@ -1799,7 +1772,6 @@ export function Sidebar() {
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-medium text-muted-foreground">Picture column</label>
                       <select
-                        data-agent-id="ci.lens.picture-column"
                         value={lensImageColumn ?? ""}
                         onChange={(e) => pickLensImageColumn(e.target.value)}
                         disabled={isEnriching || lensImageOptions.length === 0}
@@ -1887,7 +1859,6 @@ export function Sidebar() {
                 )}
                 {modeColumn && activeFinder === "images" && (
                   <FinderOutputCard
-                    agentId="ci.finder.images"
                     label="Images"
                     description={`Finds up to ${IMAGE_FINDER_MAX_IMAGES} images of each exact product, and the pages they came from.`}
                     enabled={runsImages}
@@ -2080,24 +2051,24 @@ export function Sidebar() {
                 <Database className="h-4 w-4 text-blue-500" />
                 <span className="text-xs font-semibold">Source Columns</span>
               </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-[10px] h-5 px-1.5"
-                  onClick={() => setAllSourceColumns(true)}
-                >
-                  All
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-[10px] h-5 px-1.5"
-                  onClick={() => setAllSourceColumns(false)}
-                >
-                  None
-                </Button>
-              </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-[10px] h-5 px-1.5"
+                    onClick={() => setAllSourceColumns(true)}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-[10px] h-5 px-1.5"
+                    onClick={() => setAllSourceColumns(false)}
+                  >
+                    None
+                  </Button>
+                </div>
             </div>
 
             {sourceSectionOpen && (
@@ -2296,7 +2267,6 @@ export function Sidebar() {
                     variant="ghost"
                     size="sm"
                     className="h-6 px-2 text-[10px] text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    data-agent-id="ci.stop"
                     onClick={handleStopEnrich}
                     disabled={isStoppingEnrich}
                   >
@@ -2360,8 +2330,6 @@ export function Sidebar() {
       <div className="p-4 border-t bg-muted/20 space-y-2 shrink-0">
         {!isEnriching && (
           <Button
-            data-agent-id="ci.run"
-            data-agent-spend="enrich"
             onClick={handleEnrich}
             disabled={
               (mode === "images" || mode === "lens"
@@ -2600,20 +2568,20 @@ export function Sidebar() {
           {!railCollapsed && (
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tools</span>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
+        <Button
+          variant="ghost"
+          size="icon"
             className={railCollapsed ? "h-8 w-8" : "h-7 w-7"}
             onClick={toggleRailCollapsed}
             aria-label={railCollapsed ? "Show tool names" : "Hide tool names"}
             title={railCollapsed ? "Show tool names" : "Hide tool names"}
           >
             {railCollapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
-          </Button>
+        </Button>
         </div>
         <Separator className={railCollapsed ? "w-6" : undefined} />
         <div className={`flex flex-col gap-1 ${railCollapsed ? "items-center" : "px-2"}`}>
-          {SIDEBAR_TOOLS.map(({ id, mode: toolMode, finder, agentId, label, hint, icon: Icon }) => {
+          {SIDEBAR_TOOLS.map(({ id, mode: toolMode, finder, label, hint, icon: Icon }) => {
             const isActive = sidebarOpen && mode === toolMode && (!finder || finder === activeFinder);
             return (
               <Fragment key={id}>
@@ -2621,7 +2589,6 @@ export function Sidebar() {
                 {id === "functions" && <Separator className={`my-1 ${railCollapsed ? "w-6" : ""}`} />}
               <button
                 type="button"
-                data-agent-id={agentId}
                 title={`${label}: ${hint}`}
                 aria-label={label}
                 aria-pressed={isActive}

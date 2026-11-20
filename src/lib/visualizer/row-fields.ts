@@ -108,11 +108,3 @@ export function validateVisualizerSettings(
   }
   return null;
 }
-
-/** @deprecated Use validateVisualizerSettings */
-export function validateDescriptionMapping(
-  settings: VisualizerProjectSettings,
-  columns: string[]
-): string | null {
-  return validateVisualizerSettings(settings, columns);
-}

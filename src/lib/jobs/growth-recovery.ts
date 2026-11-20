@@ -12,16 +12,13 @@ type Admin = ReturnType<typeof createAdminClient>;
 
 export const GROWTH_JOB_KINDS: readonly JobKind[] = [
   "mr_stage1",
-  "fa_stage1",
   "mr_extract",
-  "fa_extract",
   "mr_classify",
-  "fa_classify",
   "mr_collections",
 ];
 
 /** Extract Stop aborts Apify, settles the hold and closes the run itself. */
-const SELF_CANCELLING_KINDS = new Set<JobKind>(["mr_extract", "fa_extract"]);
+const SELF_CANCELLING_KINDS = new Set<JobKind>(["mr_extract"]);
 
 const STALE_MS = JOB_HEARTBEAT_STALE_MINUTES * 60_000;
 

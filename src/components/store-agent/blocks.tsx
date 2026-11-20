@@ -35,6 +35,7 @@ import { questionCard, type MessageBlock } from "@/lib/store-agent/blocks";
 import type { ToolKind } from "@/lib/store-agent/protocol";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { AccessCard } from "./access-card";
 import type { ApprovalState } from "./api";
 import { canOpenDocs, openAgentDoc } from "@/lib/store-agent/doc-links";
 import { isExtractedImage } from "@/lib/store-agent/file-kinds";
@@ -713,6 +714,8 @@ export function ReplyBlocks({ blocks, ...handlers }: { blocks: MessageBlock[] } 
             return <PlanBlock key={block.planId} block={block} onOpenPlan={handlers.onOpenPlan} />;
           case "doc":
             return <DocCard key={block.docId} block={block} />;
+          case "access":
+            return <AccessCard key={`access-${block.reason}`} block={block} />;
           case "file":
             if (!chipped.has(block.fileId)) return null;
             return (

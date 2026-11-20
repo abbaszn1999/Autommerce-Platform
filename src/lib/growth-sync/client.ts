@@ -2,15 +2,6 @@ import type { RuleMode, SyncInterval, WatchedTaxonomy } from "./types";
 
 /** Browser-side calls into the Growth Sync API. */
 
-export const SYNC_INTERVALS: { id: SyncInterval; label: string }[] = [
-  { id: "manual", label: "Manual only" },
-  { id: "24h", label: "Every 24 hours" },
-];
-
-export function intervalLabel(id: SyncInterval): string {
-  return SYNC_INTERVALS.find((row) => row.id === id)?.label ?? id;
-}
-
 export type RuleRow = {
   id: string;
   workspace_id: string;

@@ -30,7 +30,3 @@ let active: MetaAdsDataSource = demoDataSource;
 
 export const getDataSource = () => active;
 
-/** Swap the data source (for example to the Marketing API) at app start. */
-export function setDataSource(source: MetaAdsDataSource) {
-  active = source;
-}

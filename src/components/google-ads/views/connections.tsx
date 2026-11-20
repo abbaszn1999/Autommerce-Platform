@@ -10,6 +10,7 @@ import { useGoogleAds } from "@/lib/google-ads/store";
 import { Card, Pill, ViewHeader } from "../ga-ui";
 import { useGa } from "../use-ga";
 import { useWorkspaceContext } from "@/app/(dashboard)/w/[workspaceSlug]/workspace-context";
+import { scopeLabel } from "@/lib/integrations/shopify-access";
 
 const ADS_SCOPE = "https://www.googleapis.com/auth/adwords";
 
@@ -190,7 +191,7 @@ export function ConnectionsView() {
               !hasStoreAgentStore
                 ? "Locked until your store is connected (Settings, Integrations). Then the agent plans from your real catalogue and sales, and can fix product data that breaks your feed."
                 : storeLock?.reason === "missing-scopes"
-                  ? `The store is connected but its access is missing ${storeLock.missing.join(", ")}. Add it in Settings so the agent can read your catalogue.`
+                  ? `The store is connected but has not given permission to ${storeLock.missing.map(scopeLabel).join(", ")}. Grant it in Settings (Autommerce access) so the agent can read your catalogue.`
                   : "Read the catalogue and sales totals (no customer data), fix product data that breaks Merchant Center. Every change waits for your approval; the theme and orders stay out of reach."
             }
           />

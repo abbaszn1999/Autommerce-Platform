@@ -1,5 +1,4 @@
 export const TRIAL_DAYS = 14;
-export const TRIAL_CREDITS = 100;
 export const TRIAL_PLAN_NAME = "trial";
 
 export type TrialEligibilityRow = {

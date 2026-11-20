@@ -8,9 +8,8 @@ import {
   useRef,
   useState,
 } from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Settings, Store, Unplug } from "lucide-react";
+import { Settings, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/brand/page-loader";
@@ -106,13 +105,9 @@ import {
   DEFAULT_MARKET,
   MAX_MARKET_RESEARCH_PROJECTS,
   PROBE_BEATS,
-  STAGE1_ANALYSIS_BEATS,
-  STAGE1_ANALYSIS_MS,
   STAGE1_NICHE_READINGS,
   STAGE2_PREP_BEATS,
   STAGE2_PREP_MS,
-  STAGE3_PREP_BEATS,
-  STAGE3_PREP_MS,
   STAGE_META,
   collectionNamesForIds,
   countProductsForCollections,
@@ -137,11 +132,6 @@ import {
   type SeedProbe,
 } from "./mock-data";
 import {
-  ANALYZE_MS,
-  CLUSTER_MS,
-  CONTENT_MS,
-  STRATEGY_MS,
-  USD_PER_COLLECTION,
   buildCollectionContent,
   EMPTY_ON_PAGE_INSTRUCTIONS,
   clampWorkspaceTab,
@@ -1031,11 +1021,6 @@ export function MarketResearchShell() {
     proposedCollections.length,
     hydrateProjectProducts,
   ]);
-  const selectedCollections = useMemo(
-    () =>
-      proposedCollections.filter((row) => clusterSelection.includes(row.id)),
-    [proposedCollections, clusterSelection]
-  );
   const strategyArticles = useMemo(() => {
     if (!activeProject) return [] as StrategyArticle[];
     return strategyByProject[activeProject.id] ?? [];
@@ -2049,7 +2034,6 @@ export function MarketResearchShell() {
     }
 
     const allResults: Record<string, SeedProbe> = {};
-    let totalCostUsd = 0;
     let failedChunks = 0;
     let lastErrorMessage: string | null = null;
 
@@ -2068,7 +2052,6 @@ export function MarketResearchShell() {
         );
         if (probeGen.current !== gen) return;
 
-        totalCostUsd += response.probeCostUsd ?? 0;
         const chunkResults: Record<string, SeedProbe> = {};
         for (const row of response.results) {
           if (row.failed) {
@@ -4754,7 +4737,6 @@ export function MarketResearchShell() {
                     generating={generating}
                     contentGenProgress={contentGenProgress}
                     contentReady={contentReady}
-                    pushed={contentPushed}
                     syncingSeo={Boolean(
                       activeProject && syncingSeoByProject[activeProject.id]
                     )}
@@ -4768,7 +4750,6 @@ export function MarketResearchShell() {
                     onStartContent={handleStartContent}
                     onPush={handlePush}
                     onSyncSeo={handleSyncSeo}
-                    pushCostUsd={collectionPushCostUsd(clusterSelection.length)}
                     onNextStrategy={handleNextStrategy}
                     strategyArticles={strategyArticles}
                     generatedArticles={generatedArticles}

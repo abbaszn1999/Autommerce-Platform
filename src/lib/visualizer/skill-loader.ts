@@ -85,12 +85,3 @@ export async function loadVisualizerSkill(id: VisualizerSkillId): Promise<Visual
   skillCache.set(id, skill);
   return skill;
 }
-
-export async function getAllVisualizerSkills(): Promise<VisualizerSkill[]> {
-  const ids = Object.keys(ID_TO_FILE) as VisualizerSkillId[];
-  const skills: VisualizerSkill[] = [];
-  for (const id of ids) {
-    skills.push(await loadVisualizerSkill(id));
-  }
-  return skills.sort((a, b) => a.frontmatter.order - b.frontmatter.order);
-}

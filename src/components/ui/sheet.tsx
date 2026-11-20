@@ -5,7 +5,6 @@ import { XIcon } from "lucide-react"
 import { Dialog as SheetPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
-import { keepOpenForAssistant } from "@/components/ui/dialog"
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
@@ -73,7 +72,7 @@ function SheetContent({
             "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t",
           className
         )}
-        onInteractOutside={keepOpenForAssistant(onInteractOutside)}
+        onInteractOutside={onInteractOutside}
         {...props}
       >
         {children}

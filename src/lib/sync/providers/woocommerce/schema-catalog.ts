@@ -52,8 +52,6 @@ export const WOOCOMMERCE_WRITABLE_COLUMNS = [
   "seo_description",
 ] as const;
 
-export type WooCommerceWritableColumn = (typeof WOOCOMMERCE_WRITABLE_COLUMNS)[number];
-
 export const WOOCOMMERCE_COLUMN_PROFILES: Record<string, string[]> = {
   core: [
     "title",

@@ -6,11 +6,8 @@ const KIND_LABEL: Record<JobKind, string> = {
   gallery: "Products Gallery",
   visualizer: "Products Visualizer",
   mr_extract: "Market Research",
-  fa_extract: "Free Assessment",
   mr_stage1: "Market Research",
-  fa_stage1: "Free Assessment",
   mr_classify: "Market Research",
-  fa_classify: "Free Assessment",
   mr_collections: "Market Research",
 };
 
@@ -37,9 +34,6 @@ export function jobHref(params: {
     params.kind === "mr_collections"
   ) {
     return `/w/${slug}/market-research`;
-  }
-  if (params.kind === "fa_extract" || params.kind === "fa_stage1" || params.kind === "fa_classify") {
-    return `/w/${slug}/free-assessment`;
   }
   return `/w/${slug}/products-visualizer?project=${encodeURIComponent(params.sessionId)}`;
 }

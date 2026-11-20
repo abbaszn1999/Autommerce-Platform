@@ -1,6 +1,5 @@
 import { createAdminClient } from "@/lib/supabase-admin";
 import {
-  EXTRACT_MAX_AGE_MS,
   abortActiveMrExtractRuns,
   advanceMrExtract,
   isExtractTimedOut,
@@ -266,8 +265,3 @@ async function runMrExtractSessionInner(runId: string): Promise<void> {
   await dispatchJob(job.id, "mr_extract");
 }
 
-export const MR_EXTRACT_TUNING = {
-  PUMP_BUDGET_MS,
-  TICK_MS,
-  EXTRACT_MAX_AGE_MS,
-} as const;

@@ -3,11 +3,11 @@
 // npx tsx --env-file=.env.local --env-file=../.env --env-file=../.env.local spike/store-agent-woo-undo.ts <approvalId> <userId>
 import { createClient } from "@supabase/supabase-js";
 import { signRequest } from "../src/auth";
-import { FILES_BUCKET } from "../src/store-agent/files";
-import { createResilientFetch } from "../src/store-agent/resilient-fetch";
-import type { Backup } from "../src/store-agent/shopify/snapshot";
-import { loadWooConnection, wooRequest } from "../src/store-agent/woocommerce/client";
-import { parseTargetKey, wooCollectionPath } from "../src/store-agent/woocommerce/snapshot";
+import { FILES_BUCKET } from "../src/core/files";
+import { createResilientFetch } from "../src/core/resilient-fetch";
+import type { Backup } from "../src/core/store-access/shopify/snapshot";
+import { loadWooConnection, wooRequest } from "../src/core/store-access/woocommerce/client";
+import { parseTargetKey, wooCollectionPath } from "../src/core/store-access/woocommerce/snapshot";
 
 const [approvalId, userId] = process.argv.slice(2);
 if (!approvalId || !userId) throw new Error("usage: store-agent-woo-undo.ts <approvalId> <userId>");

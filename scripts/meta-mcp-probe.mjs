@@ -5,12 +5,13 @@
 //
 // It connects to https://mcp.facebook.com/ads, lists the tools with their input formats,
 // calls four read-only tools (ad accounts, businesses, pages, catalogs) and writes the
-// result to meta-ads/mcp-probe-result.json.
+// result to meta-mcp-probe-result.json in the system's temp folder: it holds ad account
+// ids, so it stays outside the repository.
 // The token itself is never printed or saved. Nothing is created, changed or spent.
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 const URL_MCP = "https://mcp.facebook.com/ads";
 const token = process.env.META_TEST_TOKEN?.trim();
@@ -19,8 +20,7 @@ if (!token) {
   process.exit(1);
 }
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const outFile = path.join(root, "meta-ads", "mcp-probe-result.json");
+const outFile = path.join(os.tmpdir(), "meta-mcp-probe-result.json");
 const redact = (s) => String(s).split(token).join("<token>");
 
 let sessionId = null;
@@ -123,9 +123,8 @@ try {
   result.error = redact(e?.message ?? e);
 }
 
-fs.mkdirSync(path.dirname(outFile), { recursive: true });
 fs.writeFileSync(outFile, JSON.stringify(result, null, 2));
 console.log(`initialize: ${result.steps.initialize?.status ?? "failed"}`);
 console.log(`tools/list: ${result.steps.toolsList?.count ?? "-"} tools`);
 console.log(`ads_get_ad_accounts: ${result.steps.readCall ? (result.steps.readCall.isError ? "error" : "ok") : "-"}`);
-console.log(`Saved to ${path.relative(root, outFile)} (no token inside).`);
+console.log(`Saved to ${outFile} (no token inside).`);

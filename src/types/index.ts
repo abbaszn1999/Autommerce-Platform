@@ -26,11 +26,6 @@ export interface ImageUrl {
   title: string;
 }
 
-export interface ColumnMapping {
-  original: string[];
-  enriched: EnrichmentColumn[];
-}
-
 /**
  * What a Catalog Intelligence session enriches. Only product sheets exist now;
  * how their rows are treated (one row per product, or variation rows under a
@@ -44,8 +39,6 @@ export type SessionKind = "product";
  *   the sheet shows the parent row and its variation rows expand beneath it.
  */
 export type ProductMode = "parent" | "variable";
-
-export const DEFAULT_SESSION_KIND: SessionKind = "product";
 
 export type EnrichmentColumnType =
   | "text"
@@ -342,16 +335,6 @@ export function catalogModeForRunColumns(columnIds: string[]): CatalogSidebarMod
   return "enrich";
 }
 
-export interface EnrichmentEvent {
-  type: "progress" | "row_complete" | "row_error" | "done" | "error";
-  rowId: string;
-  rowIndex: number;
-  data?: Record<string, any>;
-  error?: string;
-  totalRows: number;
-  completedRows: number;
-}
-
 export type OutputLanguage = "English" | "Arabic" | "French" | "Spanish" | "Turkish" | "German" | "Chinese" | "Japanese" | "custom";
 
 /**
@@ -457,19 +440,6 @@ export const LANGUAGE_OPTIONS: { value: OutputLanguage; label: string; flag: str
   { value: "Chinese", label: "中文", flag: "🇨🇳" },
   { value: "Japanese", label: "日本語", flag: "🇯🇵" },
   { value: "custom", label: "Custom...", flag: "🌐" },
-];
-
-export const MODEL_OPTIONS: { value: EnrichmentModel; label: string; description: string; icon: string }[] = [
-  { value: "standard", label: "Standard", description: "Balanced quality and cost", icon: "⚡" },
-  { value: "premium", label: "Premium", description: "Highest quality, deeper search", icon: "✨" },
-];
-
-export const TONE_OPTIONS: { value: WritingTone; label: string; description: string }[] = [
-  { value: "professional", label: "Professional", description: "Formal and business-like" },
-  { value: "persuasive", label: "Persuasive", description: "Sales-focused, compelling" },
-  { value: "simple", label: "Simple", description: "Clear and straightforward" },
-  { value: "technical", label: "Technical", description: "Detailed and precise" },
-  { value: "custom", label: "Custom...", description: "Your own instructions" },
 ];
 
 export interface CategoryItem {

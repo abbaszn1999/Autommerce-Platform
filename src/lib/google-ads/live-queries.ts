@@ -95,5 +95,3 @@ export const LIVE_QUERIES = {
     `SELECT campaign.id, ad_group.id, search_term_view.search_term, search_term_view.status, segments.search_term_match_type, ${METRICS}
      FROM search_term_view WHERE ${between(assertIsoDay(start), assertIsoDay(end))} ORDER BY metrics.impressions DESC LIMIT 10000`,
 };
-
-export type LiveQueryName = keyof typeof LIVE_QUERIES;

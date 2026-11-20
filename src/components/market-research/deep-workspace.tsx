@@ -77,13 +77,11 @@ export function DeepWorkspace({
   generating,
   contentGenProgress,
   contentReady,
-  pushed,
   syncingSeo = false,
   seoSynced = false,
   onStartContent,
   onPush,
   onSyncSeo,
-  pushCostUsd,
   onNextStrategy,
   strategyArticles,
   generatedArticles,
@@ -161,13 +159,11 @@ export function DeepWorkspace({
   /** Live progress across the Stage 6 on-page copywriting cursor job's pages. */
   contentGenProgress?: { processed: number; total: number } | null;
   contentReady: boolean;
-  pushed: boolean;
   syncingSeo?: boolean;
   seoSynced?: boolean;
   onStartContent: (ids: string[]) => void;
   onPush: () => void;
   onSyncSeo?: () => void;
-  pushCostUsd?: number;
   onNextStrategy: () => void;
   strategyArticles: StrategyArticle[];
   generatedArticles: Record<string, GeneratedArticle>;
@@ -285,13 +281,11 @@ export function DeepWorkspace({
             generating={generating}
             contentGenProgress={contentGenProgress}
             ready={contentReady}
-            pushed={pushed}
             syncingSeo={syncingSeo}
             seoSynced={seoSynced}
             onStart={onStartContent}
             onPush={onPush}
             onSyncSeo={onSyncSeo}
-            pushCostUsd={pushCostUsd}
             onNextStrategy={onNextStrategy}
           />
         ) : null}

@@ -9,7 +9,6 @@ import { catalogRowStoreEnabled } from "@/lib/catalog/flag";
 import {
   countCatalogSessionRows,
   hydrateProjectRows,
-  patchCatalogSessionRows,
   replaceCatalogSessionRows,
   updateExistingCatalogSessionRows,
 } from "@/lib/catalog/session-rows";
@@ -149,52 +148,4 @@ export async function saveProjectJsonAdmin(
   if (catalogRowStoreEnabled()) {
     await replaceCatalogSessionRows(admin, sessionId, project.rows);
   }
-}
-
-export async function patchProjectRowsAdmin(params: {
-  workspaceId: string;
-  sessionId: string;
-  patches: Array<{
-    id: string;
-    status?: ProjectRow["status"];
-    errorMessage?: string;
-    enrichedData?: Record<string, unknown>;
-    originalData?: Record<string, string>;
-  }>;
-  admin?: Admin;
-}): Promise<ProjectJson> {
-  const admin = params.admin ?? createAdminClient();
-  if (catalogRowStoreEnabled()) {
-    await patchCatalogSessionRows(admin, params.sessionId, params.patches);
-    const project = await loadProjectJsonAdmin(
-      params.workspaceId,
-      params.sessionId,
-      admin
-    );
-    if (!project) {
-      throw new Error("Project data not found in storage");
-    }
-    return project;
-  }
-  const project = await loadProjectJsonAdmin(
-    params.workspaceId,
-    params.sessionId,
-    admin
-  );
-  if (!project) {
-    throw new Error("Project data not found in storage");
-  }
-  const byId = new Map(project.rows.map((row) => [row.id, row]));
-  for (const patch of params.patches) {
-    const row = byId.get(patch.id);
-    if (!row) continue;
-    if (patch.status) row.status = patch.status;
-    if (patch.errorMessage !== undefined) row.errorMessage = patch.errorMessage;
-    if (patch.originalData) row.originalData = { ...row.originalData, ...patch.originalData };
-    if (patch.enrichedData) {
-      row.enrichedData = { ...(row.enrichedData ?? {}), ...patch.enrichedData };
-    }
-  }
-  await saveProjectJsonAdmin(params.workspaceId, params.sessionId, project, admin);
-  return project;
 }

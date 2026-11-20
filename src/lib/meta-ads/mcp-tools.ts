@@ -1,5 +1,5 @@
 // Which of Meta's Ads MCP server tools our agent may use, and how. Pure, so the
-// rules are testable and the same on every call (meta-ads/connect-plan.md §9).
+// rules are testable and the same on every call.
 
 import { createHash } from "node:crypto";
 

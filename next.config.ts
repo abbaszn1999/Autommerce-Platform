@@ -27,7 +27,6 @@ const nextConfig: NextConfig = {
   // missing from the traced build and every agent call throws ENOENT.
   outputFileTracingIncludes: {
     "/api/market-research/**": ["./src/lib/market-research/skills/*.md"],
-    "/api/free-assessment/**": ["./src/lib/free-assessment/skills/*.md"],
     "/api/growth-sync/**": ["./src/lib/growth-sync/skills/*.md"],
     "/api/visualizer/**": ["./src/lib/visualizer/skills/*.md"],
     "/api/gallery/**": ["./src/lib/gallery/skills/*.md"],
@@ -85,16 +84,6 @@ const nextConfig: NextConfig = {
       {
         source: "/api/sync/:path*",
         destination: "/api/store-agent/:path*",
-        permanent: false,
-      },
-      {
-        source: "/demo/import",
-        destination: "/demo/catalog-intelligence",
-        permanent: false,
-      },
-      {
-        source: "/demo/import/:path*",
-        destination: "/demo/catalog-intelligence/:path*",
         permanent: false,
       },
     ];

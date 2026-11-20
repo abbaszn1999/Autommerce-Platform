@@ -56,10 +56,6 @@ export function actualExtractCostUsd(rowsReturned: number): number {
   return roundUsd(Math.max(0, Math.floor(rowsReturned)) * APIFY_KEYWORD_USD_PER_ROW);
 }
 
-export function actualProbeCostUsd(seedsReturned: number): number {
-  return estimateProbeCostUsd(seedsReturned);
-}
-
 export function collectionPushCostUsd(collectionCount: number): number {
   return roundUsd(Math.max(0, Math.floor(collectionCount)) * COLLECTION_PUSH_USD);
 }

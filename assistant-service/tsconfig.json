@@ -12,5 +12,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src", "spike", "test", "../src/lib/assistant/protocol.ts"]
+  "include": ["src", "spike", "test"]
 }

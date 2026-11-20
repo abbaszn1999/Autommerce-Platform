@@ -5,7 +5,6 @@
 
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Pill } from "@/components/google-ads/ga-ui";
 import { ADVANTAGE_STATES, DELIVERY, OBJECTIVES, RANKINGS } from "@/lib/meta-ads/constants";
 import type { AdSetLearning, AdvantageState, DeliveryStatus, EntityStatus, Objective, Ranking, ReviewStatus } from "@/lib/meta-ads/types";
@@ -20,27 +19,6 @@ export const STATUS_META: Record<EntityStatus, { label: string; dot: string }> =
 
 export function StatusDot({ status, className }: { status: EntityStatus; className?: string }) {
   return <span className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-background", STATUS_META[status].dot, status === "PAUSED" && "rounded-[3px]", className)} aria-label={STATUS_META[status].label} />;
-}
-
-/** The on/off dot that opens On / Off, like Ads Manager's toggle column. */
-export function StatusMenu({ status, onChange, disabled }: { status: EntityStatus; onChange: (status: EntityStatus) => void; disabled?: boolean }) {
-  if (disabled || status === "ARCHIVED") return <StatusDot status={status} />;
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-muted" onClick={(e) => e.stopPropagation()} aria-label={`Status: ${STATUS_META[status].label}`}>
-        <StatusDot status={status} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-36" onClick={(e) => e.stopPropagation()}>
-        {(["ACTIVE", "PAUSED"] as EntityStatus[]).map((s) => (
-          <DropdownMenuItem key={s} onSelect={() => s !== status && onChange(s)} className="gap-2 text-xs">
-            <StatusDot status={s} />
-            {s === "ACTIVE" ? "Turn on" : "Turn off"}
-            {s === status && <span className="ml-auto text-[10px] text-muted-foreground">current</span>}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 }
 
 export function DeliveryPill({ delivery, className }: { delivery: DeliveryStatus; className?: string }) {
