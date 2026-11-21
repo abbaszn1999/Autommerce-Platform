@@ -302,7 +302,7 @@ browsing, not browse right now.
 
 **Output:**
 ```json
-{ "id": "kw-3", "sheet": "informational", "confidence": 0.95, "reason": "Buying-guide question; suitable for blog/FAQ content, not a category page." }
+{ "id": "kw-3", "sheet": "informational", "confidence": 0.95, "reason": "Buying-guide question; not a category page." }
 ```
 
 ---

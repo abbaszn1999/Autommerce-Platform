@@ -1,80 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  codeKeysInText,
-  distinctiveWords,
-  extractRowIdentifiers,
-  identifiersSeenIn,
-  isSpecificPartNumber,
-  nearIdentifiersSeenIn,
-  normalizeMatchText,
-  wordsPresentRatio,
-} from "./identifiers";
-
-describe("isSpecificPartNumber", () => {
-  it("accepts a specific part number (letters plus 3+ digits, 5+ chars) but not a family/series name", () => {
-    expect(isSpecificPartNumber("AN253")).toBe(true);
-    expect(isSpecificPartNumber("AN241")).toBe(true);
-    expect(isSpecificPartNumber("ESP32")).toBe(false); // only 2 digits
-    expect(isSpecificPartNumber("AN25")).toBe(false); // too short
-  });
-});
-
-describe("nearIdentifiersSeenIn", () => {
-  const ids = extractRowIdentifiers({ Part: "AN5120", Barcode: "4901234567894" });
-
-  it("finds a near code for a 5-character part number, below the strong bar", () => {
-    const shortIds = extractRowIdentifiers({ Part: "AN253" });
-    expect(shortIds[0]!.strong).toBe(false);
-    expect(nearIdentifiersSeenIn("Panasonic AN253P DIP-16", shortIds)).toEqual([
-      { rowKey: "AN253", rowValue: "AN253", pageCode: "AN253P" },
-    ]);
-  });
-
-  it("finds a code with one or two extra trailing letters, in either direction", () => {
-    expect(nearIdentifiersSeenIn("Panasonic AN5120N DIP-16", ids)).toEqual([
-      { rowKey: "AN5120", rowValue: "AN5120", pageCode: "AN5120N" },
-    ]);
-    expect(nearIdentifiersSeenIn("AN5120NK", ids).map((m) => m.pageCode)).toEqual(["AN5120NK"]);
-    const longer = extractRowIdentifiers({ Part: "AN5120N" });
-    expect(nearIdentifiersSeenIn("Part no. AN5120", longer).map((m) => m.pageCode)).toEqual(["AN5120"]);
-  });
-
-  it("ignores digit changes, three or more letters, the exact code and barcodes", () => {
-    expect(nearIdentifiersSeenIn("AN5121 AN51201 AN5120 AN5120ABC", ids)).toEqual([]);
-    expect(nearIdentifiersSeenIn("4901234567894A 490123456789", ids)).toEqual([]);
-  });
-
-  it("never treats a cut inside the code as a suffix", () => {
-    const row = extractRowIdentifiers({ Model: "ESP32S3N" });
-    // ESP32S is not "code + letters": the shorter code must end in a digit.
-    expect(nearIdentifiersSeenIn("ESP32S board", row)).toEqual([]);
-  });
-});
-
-describe("distinctiveWords", () => {
-  it("keeps descriptive words and drops stop words, numbers, codes, URLs and list cells", () => {
-    expect(
-      distinctiveWords({
-        Code: "RCP1151426",
-        Description: "2.4G RC Engineering Vehicle (YELLOW) with 4 pcs set",
-        Image: "https://cdn.test/a.jpg",
-        Similar: "Red truck | Blue car | Green bus",
-      })
-    ).toEqual(["engineering", "vehicle", "yellow"]);
-  });
-
-  it("works for non-Latin scripts", () => {
-    expect(distinctiveWords({ Name: "لعبة سيارة حمراء" })).toEqual(["لعبة", "سيارة", "حمراء"]);
-  });
-});
-
-describe("wordsPresentRatio", () => {
-  it("counts exact words and shared stems of four or more letters", () => {
-    const page = normalizeMatchText("Running Shoes — Men's, white");
-    expect(wordsPresentRatio(["shoe", "white", "running", "red"], page)).toBe(0.75);
-    expect(wordsPresentRatio([], page)).toBe(0);
-  });
-});
+import { extractRowIdentifiers } from "./identifiers";
 
 describe("extractRowIdentifiers", () => {
   it("never takes codes from links (found pages, image URLs)", () => {
@@ -142,29 +67,5 @@ describe("extractRowIdentifiers with list-like columns", () => {
   it("keeps several codes in an ordinary description", () => {
     const ids = extractRowIdentifiers({ Item: "Arduino Wifi Esp32-S3 631958 100432" });
     expect(ids).toHaveLength(3);
-  });
-});
-
-describe("identifiersSeenIn", () => {
-  const ids = extractRowIdentifiers({ Item: "Esp32-S3 631958" });
-
-  it("matches on token boundaries, ignoring case and separators", () => {
-    const seen = identifiersSeenIn('{"sku":"esp32s3-n16r8","barcode":"631958"}', ids);
-    expect(seen.map((id) => id.value).sort()).toEqual(["631958", "Esp32-S3"]);
-  });
-
-  it("never matches a code inside a longer number", () => {
-    expect(identifiersSeenIn("Part 16319580", ids)).toEqual([]);
-  });
-
-  it("does not confuse a neighbouring version", () => {
-    expect(identifiersSeenIn("ESP32-S2 development board", ids)).toEqual([]);
-  });
-});
-
-describe("codeKeysInText", () => {
-  it("yields every separator-bounded run of a code token", () => {
-    const keys = codeKeysInText("SKU: ESP32-S3-N16R8");
-    for (const key of ["ESP32", "ESP32S3", "ESP32S3N16R8", "S3N16R8", "N16R8"]) expect(keys.has(key)).toBe(true);
   });
 });

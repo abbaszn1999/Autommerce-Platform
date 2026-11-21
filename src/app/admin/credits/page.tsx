@@ -87,7 +87,7 @@ export default function AdminCreditsPage() {
     <>
       <PageHeader
         title={<PageTitle label="AI credits" badge={<LiveBadge>{total} live</LiveBadge>} />}
-        description="Ledger of credit spend and top-ups. Separate from the USD wallet."
+        description="Ledger of credit spend and top-ups."
       />
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <AdminListLayout>

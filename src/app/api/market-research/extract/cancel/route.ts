@@ -6,8 +6,8 @@ import {
 } from "@/lib/market-research/api-schema";
 import {
   abortActiveMrExtractRuns,
+  finishRunningExtract,
   loadMrExtractHeader,
-  settleHeldExtract,
 } from "@/lib/market-research/extract-advance";
 import {
   finishJobRun,
@@ -57,9 +57,8 @@ export async function POST(request: NextRequest) {
     (sum, run) => sum + (Number(run.rows_returned) || 0),
     0
   );
-  const settled = await settleHeldExtract(auth.admin, {
+  await finishRunningExtract(auth.admin, {
     extract,
-    userId: auth.user.id,
     rowsReturned,
     status: "aborted",
     runs,
@@ -78,8 +77,6 @@ export async function POST(request: NextRequest) {
     {
       ok: true,
       rowsReturned,
-      settledUsd: settled.settledUsd ?? (Number(extract.actual_usd) || 0),
-      billingPending: settled.billingPending,
     },
     { headers: auth.headers }
   );

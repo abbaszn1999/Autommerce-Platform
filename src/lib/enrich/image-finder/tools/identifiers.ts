@@ -1,7 +1,7 @@
 /**
  * Code-like values from a row (SKUs, barcodes, model/version tokens such as
- * `ESP32-S3` or `631958`) and a boundary-exact way to tell whether a page
- * contains them. Column names are never consulted, so this works for any sheet.
+ * `ESP32-S3` or `631958`). Column names are never consulted, so this works for
+ * any sheet.
  */
 
 export interface RowIdentifier {
@@ -14,9 +14,8 @@ export interface RowIdentifier {
 }
 
 const MAX_IDENTIFIERS = 12;
-const SEPARATORS = /[-_./]/;
 
-export function normalizeCode(value: string): string {
+function normalizeCode(value: string): string {
   return value.toUpperCase().replace(/[\s\-_./]+/g, "");
 }
 
@@ -101,142 +100,4 @@ export function extractRowIdentifiers(rowData: Record<string, string>): RowIdent
   return out
     .sort((a, b) => Number(b.strong) - Number(a.strong) || b.key.length - a.key.length)
     .slice(0, MAX_IDENTIFIERS);
-}
-
-/**
- * Every separator-bounded run inside every code-like token of `text`,
- * normalized. "SKU: ESP32-S3-N16R8" yields ESP32, ESP32S3, ESP32S3N16R8,
- * S3, S3N16R8, N16R8 — so a row code matches only on real token boundaries,
- * never as an arbitrary substring (631958 does not match 16319580).
- */
-export function codeKeysInText(text: string): Set<string> {
-  const keys = new Set<string>();
-  const tokens = text.match(/[A-Za-z0-9]+(?:[-_./][A-Za-z0-9]+)*/g) ?? [];
-  for (const token of tokens) {
-    if (!/\d/.test(token)) continue;
-    const parts = token.split(SEPARATORS).slice(0, 8);
-    for (let start = 0; start < parts.length; start += 1) {
-      let joined = "";
-      for (let end = start; end < parts.length; end += 1) {
-        joined += parts[end]!.toUpperCase();
-        if (joined.length >= 4) keys.add(joined);
-      }
-    }
-  }
-  return keys;
-}
-
-export function identifiersSeenIn(text: string, identifiers: RowIdentifier[]): RowIdentifier[] {
-  if (identifiers.length === 0) return [];
-  const keys = codeKeysInText(text);
-  return identifiers.filter((identifier) => keys.has(identifier.key));
-}
-
-export interface NearCodeMatch {
-  /** The row's own code, normalized. */
-  rowKey: string;
-  rowValue: string;
-  /** The page's code that differs only by trailing letters, normalized. */
-  pageCode: string;
-}
-
-const NEAR_SUFFIX = /^[A-Z]{1,2}$/;
-
-/**
- * Letters plus at least three digits, five or more characters: specific
- * enough to be one part's own number rather than a family/series name (e.g.
- * AN241, AN253 — but not ESP32, a whole product line). Used both to accept
- * such a code as an exact match on its own (see guards.ts) and to consider
- * it for a near-code (trailing-letter) variant below: many real part
- * numbers are only 5 characters, under the 6-character "strong" bar.
- */
-export function isSpecificPartNumber(key: string): boolean {
-  return key.length >= 5 && /[A-Z]/.test(key) && (key.match(/\d/g)?.length ?? 0) >= 3;
-}
-
-/**
- * Page codes that differ from a specific row code only by 1–2 trailing
- * letters, in either direction (sheet AN5120 / page AN5120N, or the
- * reverse) — the pattern of package or ordering suffixes and of sheets that
- * dropped a letter. The shorter code must end in a digit, so this is always
- * an appended suffix, never a cut inside a code. All-digit codes (barcodes)
- * and digit changes never qualify. Whether the suffix is harmless is judged
- * by the model; code only records the pattern.
- */
-export function nearIdentifiersSeenIn(text: string, identifiers: RowIdentifier[]): NearCodeMatch[] {
-  const candidates = identifiers.filter(
-    (id) => (id.strong || isSpecificPartNumber(id.key)) && /[A-Z]/.test(id.key) && /\d/.test(id.key)
-  );
-  if (candidates.length === 0) return [];
-  const keys = codeKeysInText(text);
-  const out: NearCodeMatch[] = [];
-  const seen = new Set<string>();
-  for (const id of candidates) {
-    for (const key of keys) {
-      if (key === id.key) continue;
-      const [shorter, longer] = key.length < id.key.length ? [key, id.key] : [id.key, key];
-      if (shorter.length < 5 || !/\d$/.test(shorter) || !longer.startsWith(shorter)) continue;
-      if (!NEAR_SUFFIX.test(longer.slice(shorter.length))) continue;
-      const dedupe = `${id.key}>${key}`;
-      if (seen.has(dedupe)) continue;
-      seen.add(dedupe);
-      out.push({ rowKey: id.key, rowValue: id.value, pageCode: key });
-    }
-  }
-  return out;
-}
-
-const STOP_WORDS = new Set([
-  "the", "and", "for", "with", "from", "this", "that", "new", "set", "sets", "pcs", "pack", "piece", "pieces",
-  "size", "color", "colour", "colors", "colours", "item", "items", "product", "products", "original", "genuine",
-  "assorted", "ass", "mix", "mixed", "style", "styles", "model", "type", "each", "per", "box", "price", "one",
-  "two", "three", "four", "five", "six", "yes", "stock", "available", "unit", "units", "brand", "none",
-  "pdq", "asst", "pcs", "pc", "pk",
-]);
-
-/** Lowercased letters/digits separated by single spaces — the form pages and rows are compared in. */
-export function normalizeMatchText(text: string): string {
-  return ` ${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
-}
-
-/**
- * The words that describe a row without codes: letters-only words of 3+
- * characters from its ordinary (non-list) cells, minus stop words, numbers,
- * codes and URLs. Column names are never used.
- */
-export function distinctiveWords(rowData: Record<string, string>, limit = 15): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const raw of Object.values(rowData)) {
-    const text = String(raw ?? "").trim();
-    if (!text || /^https?:\/\//i.test(text) || listSegments(text)) continue;
-    for (const word of normalizeMatchText(text).trim().split(" ")) {
-      if (word.length < 3 || /\d/.test(word) || STOP_WORDS.has(word) || seen.has(word)) continue;
-      seen.add(word);
-      out.push(word);
-      if (out.length >= limit) return out;
-    }
-  }
-  return out;
-}
-
-/**
- * Share of `words` present in normalized page text. Words of 4+ letters also
- * match a longer or shorter form sharing the stem ("shoe" / "shoes").
- */
-export function wordsPresentRatio(words: string[], normalizedText: string): number {
-  if (words.length === 0) return 0;
-  const pageWords = normalizedText.trim().split(" ");
-  const pageSet = new Set(pageWords);
-  let present = 0;
-  for (const word of words) {
-    if (pageSet.has(word)) {
-      present += 1;
-      continue;
-    }
-    if (word.length >= 4 && pageWords.some((p) => p.length >= 4 && (p.startsWith(word) || word.startsWith(p)))) {
-      present += 1;
-    }
-  }
-  return present / words.length;
 }

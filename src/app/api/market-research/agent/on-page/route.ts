@@ -1,22 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAiWalletBilling } from "@/lib/billing/ai-wallet-billing";
 import {
   agentOnPageBodySchema,
-  billMrAiUnlessCovered,
   jsonError,
-  requireMrWriteUnbilled,
+  requireMrWrite,
 } from "@/lib/market-research/api-schema";
-import { isPushedCollection } from "@/lib/market-research/push-coverage";
-import {
-  fetchStoreCatalog,
-  type StoreCollectionItem,
-} from "@/lib/market-research/agent/store-catalog";
 import { runStage6OnPageGeneration } from "@/lib/market-research/agent/stage6-on-page-generator";
 import {
   loadProjectSliceAdmin,
   saveProjectSliceAdmin,
 } from "@/lib/market-research/storage-admin";
-import type { InternalLinkGraph } from "@/lib/market-research/agent/internal-links";
 import type {
   CollectionContent,
   ProposedCollection,
@@ -25,20 +17,18 @@ import type {
 export const maxDuration = 60;
 
 // One page of the selected collection ids per call. Each page is chunked
-// into Gemini copywriting batches of 10, 5 batches running concurrently —
-// smaller than the link engine's page because each call's output (title,
-// meta, description, FAQs) is much heavier per collection.
+// into Gemini copywriting batches of 10, 5 batches running concurrently.
 const PAGE_SIZE = 100;
 
 /**
- * "Generate" is now a SEO-only pass: the canonical collection list (with real
- * storeHandles) and the precomputed internal-link graph are both loaded from
- * storage rather than trusted from the request body, so this route only ever
- * needs the ids of the collections to write copy for. Looped by the client
+ * "Generate" is an SEO-only pass: the canonical collection list (with real
+ * storeHandles) is loaded from storage rather than trusted from the request
+ * body, so this route only ever needs the ids of the collections to write copy
+ * for. Looped by the client
  * (runOnPageGenerationLoop) until `done`, so a 10k-collection store keeps
  * filling the content table in the background instead of dying at 60s.
  */
-async function handlePost(request: NextRequest) {
+export async function POST(request: NextRequest) {
   let json: unknown;
   try {
     json = await request.json();
@@ -51,24 +41,19 @@ async function handlePost(request: NextRequest) {
     return jsonError("Invalid on-page payload", 400);
   }
 
-  const auth = await requireMrWriteUnbilled(parsed.data.workspaceId);
+  const auth = await requireMrWrite(parsed.data.workspaceId);
   if (!auth.ok) return auth.response;
 
   try {
-    let storeName = "Ecommerce Store";
-    let storeCollections: StoreCollectionItem[] = [];
-    let provider: string | undefined;
-    try {
-      const catalog = await fetchStoreCatalog(auth.admin, parsed.data.workspaceId);
-      storeName = catalog.storeName || storeName;
-      storeCollections = catalog.collections || [];
-      provider = catalog.provider;
-    } catch {
-      // Proceed even if catalog fetch fails
-    }
+    const { data: integrationRow } = await auth.admin
+      .from("workspace_integrations")
+      .select("integration_name")
+      .eq("workspace_id", parsed.data.workspaceId)
+      .maybeSingle();
+    const storeName =
+      (integrationRow?.integration_name as string | undefined)?.trim() || "Ecommerce Store";
 
-    // Internal links must match the handles the push step actually created, and
-    // those carry the workspace naming prefix.
+    // Collection titles on the store carry the workspace naming prefix.
     const { data: workspaceRow } = await auth.admin
       .from("workspaces")
       .select("collection_prefix")
@@ -97,34 +82,6 @@ async function handlePost(request: NextRequest) {
       .map((id) => proposedById.get(id))
       .filter((c): c is ProposedCollection => Boolean(c));
 
-    const walletEmpty = await billMrAiUnlessCovered(
-      auth,
-      parsed.data.workspaceId,
-      pageCollections.every(isPushedCollection)
-    );
-    if (walletEmpty) return walletEmpty;
-
-    // The link graph is normally already built in the background right after
-    // the collections were pushed (see /api/market-research/agent/internal-links
-    // and handlePushToStore). Reusing it here means "Generate" only has to run
-    // the Gemini copywriting pass. If the precomputed slice is missing or empty
-    // — e.g. the background pass hasn't finished yet — leave it undefined so
-    // runStage6OnPageGeneration falls back to building it inline, as before.
-    let precomputedLinks: InternalLinkGraph | undefined;
-    try {
-      const saved = await loadProjectSliceAdmin<InternalLinkGraph>(
-        auth.admin,
-        parsed.data.workspaceId,
-        parsed.data.projectId,
-        "internal-links"
-      );
-      if (saved && Object.keys(saved).length > 0) {
-        precomputedLinks = saved;
-      }
-    } catch (err) {
-      console.warn("[on-page] Could not load internal-links slice:", err);
-    }
-
     let pageContentById: Record<string, CollectionContent> = {};
     let isAiGenerated = false;
     let degradedCount = 0;
@@ -133,11 +90,8 @@ async function handlePost(request: NextRequest) {
         storeName,
         parentNiches: parsed.data.parentNiches,
         collections: pageCollections,
-        allStoreCollections: storeCollections,
         customInstructions: parsed.data.customInstructions,
         collectionPrefix,
-        provider,
-        internalLinks: precomputedLinks,
       });
       pageContentById = result.contentById;
       isAiGenerated = result.isAiGenerated;
@@ -187,5 +141,3 @@ async function handlePost(request: NextRequest) {
     return jsonError(msg, 500);
   }
 }
-
-export const POST = withAiWalletBilling("mr_on_page", handlePost);

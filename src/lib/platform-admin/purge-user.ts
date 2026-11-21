@@ -9,10 +9,8 @@ const REASSIGN_COLUMNS: Array<{ table: string; column: string }> = [
   { table: "visualizer_sessions", column: "created_by" },
   { table: "mr_projects", column: "created_by" },
   { table: "mr_extracts", column: "created_by" },
-  { table: "gs_rules", column: "created_by" },
   { table: "job_runs", column: "created_by" },
   { table: "activity_log", column: "user_id" },
-  { table: "wallet_transactions", column: "user_id" },
   { table: "credit_transactions", column: "user_id" },
   { table: "workspace_invites", column: "invited_by" },
 ];
@@ -64,7 +62,6 @@ export async function purgeUser(
   await deleteMatching(admin, "notifications", "user_id", userId);
   await deleteMatching(admin, "credit_purchases", "user_id", userId);
   await deleteMatching(admin, "user_subscriptions", "user_id", userId);
-  await deleteMatching(admin, "wallet_stripe_customers", "user_id", userId);
   await deleteMatching(admin, "profiles", "id", userId);
 
   const { error } = await admin.auth.admin.deleteUser(userId);

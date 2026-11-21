@@ -29,11 +29,10 @@ function roundUsd(value: number): number {
 export function buildOverviewSeries(
   range: AdminOverviewRange,
   credits: { createdAt: string; credits: number }[],
-  wallet: { createdAt: string; amountUsd: number; status: string }[],
   now = new Date()
 ): OverviewDayPoint[] {
   const dates = utcDateList(range, now);
-  const byDay = new Map(dates.map((date) => [date, { date, creditUsd: 0, walletUsd: 0, credits: 0 }]));
+  const byDay = new Map(dates.map((date) => [date, { date, creditUsd: 0, credits: 0 }]));
 
   for (const tx of credits) {
     if (tx.credits <= 0) continue;
@@ -43,21 +42,12 @@ export function buildOverviewSeries(
     row.creditUsd += tx.credits * CREDIT_TOPUP_USD_PER_CREDIT;
   }
 
-  for (const tx of wallet) {
-    if (tx.status && tx.status !== "completed") continue;
-    if (tx.amountUsd >= 0) continue;
-    const row = byDay.get(utcDay(tx.createdAt));
-    if (!row) continue;
-    row.walletUsd += Math.abs(tx.amountUsd);
-  }
-
   return dates.map((date) => {
     const row = byDay.get(date)!;
     return {
       date,
       credits: row.credits,
       creditUsd: roundUsd(row.creditUsd),
-      walletUsd: roundUsd(row.walletUsd),
     };
   });
 }

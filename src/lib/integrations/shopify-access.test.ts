@@ -24,8 +24,7 @@ describe("shopify access", () => {
   it("lists what each tool is missing", () => {
     const granted = ["write_products"];
     const missing = Object.fromEntries(SHOPIFY_TOOL_ACCESS.map((t) => [t.id, missingShopifyScopes(granted, t.scopes)]));
-    expect(missing["growth-sync"]).toEqual([]);
-    expect(missing["market-research"]).toEqual(["read_publications", "write_publications", "read_content", "write_content"]);
+    expect(missing["market-research"]).toEqual(["read_publications", "write_publications"]);
     expect(missing["store-assistant"]).toContain("write_inventory");
   });
 

@@ -59,8 +59,8 @@ export function toExtractedKeyword(
 /**
  * Hard safety ceiling on how many rows the client keeps in memory / persists
  * for a single project's extract. Every real pull (including duplicate
- * phrases pulled under different seeds — they're real, distinct rows the
- * merchant paid for) is kept as-is; this only guards against a truly
+ * phrases pulled under different seeds — they're real, distinct rows)
+ * is kept as-is; this only guards against a truly
  * pathological pull size and should essentially never be hit in practice.
  */
 export const MAX_DISPLAY_ROWS = 50_000;

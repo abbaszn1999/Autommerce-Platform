@@ -1,6 +1,6 @@
 /**
  * Canonical identifiers for merchant-facing modules.
- * URLs, credit ledger operations, wallet modules, and job labels
+ * URLs, credit ledger operations and job labels
  * must import from here rather than restating the strings.
  */
 export const CATALOG_INTELLIGENCE = {

@@ -9,11 +9,6 @@ import {
   saveProjectSliceAdmin,
 } from "@/lib/market-research/storage-admin";
 import { markSliceSavedAdmin } from "@/lib/market-research/server-persist";
-import {
-  assertAiBudget,
-  bindAiBillingOrThrow,
-  runWithAiBilling,
-} from "@/lib/billing/ai-wallet-billing";
 import { runJobWithFailureGuard, withHeartbeat } from "./guard";
 import { notifyJobEvent } from "./notify";
 import { isTerminalJobStatus } from "./types";
@@ -26,11 +21,7 @@ import {
 } from "./repo";
 
 export async function runMrStage1Session(runId: string): Promise<void> {
-  await runJobWithFailureGuard(runId, () =>
-    runWithAiBilling({ operation: "mr_stage1" }, () =>
-      runMrStage1SessionInner(runId)
-    )
-  );
+  await runJobWithFailureGuard(runId, () => runMrStage1SessionInner(runId));
 }
 
 async function runMrStage1SessionInner(runId: string): Promise<void> {
@@ -39,7 +30,6 @@ async function runMrStage1SessionInner(runId: string): Promise<void> {
   if (!job || job.kind !== "mr_stage1" || isTerminalJobStatus(job.status)) return;
   const projectId = String(job.settings.projectId || job.session_id);
   const workspaceId = job.workspace_id;
-  await bindAiBillingOrThrow({ admin, workspaceId, userId: job.created_by });
   await markJobRunning(admin, job.id);
 
   await withHeartbeat(job.id, async () => {
@@ -83,7 +73,6 @@ async function runMrStage1SessionInner(runId: string): Promise<void> {
         completed: checkpoint.offset,
         failed: 0,
       });
-      assertAiBudget();
       if (!step.done || !step.result) continue;
       if (await isJobCancelRequested(admin, job.id)) {
         await finishJobRun(admin, job.id, {

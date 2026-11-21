@@ -12,14 +12,11 @@ import {
   normalizeOnPageInstructions,
   normalizeSheetFilters,
   type CollectionContent,
-  type CollectionLink,
   type ExtractedKeyword,
-  type GeneratedArticle,
   type MarketResearchProduct,
   type OnPageInstructions,
   type ProposedCollection,
   type SheetKeywordFilters,
-  type StrategyArticle,
   type WorkspaceTab,
 } from "./workspace-data";
 
@@ -59,42 +56,28 @@ export type MarketResearchPersisted = {
   probesByProject: Record<string, Record<string, SeedProbe>>;
   /** Broad seeds the customer added by hand. */
   manualSeedsByProject: Record<string, MockSeedRow[]>;
-  /** Projects where Extract was paid and the workspace opened. */
+  /** Projects where Extract was started and the workspace opened. */
   committedProjectIds: string[];
   workspaceTabByProject: Record<string, WorkspaceTab>;
   openedWorkspaceByProject: Record<string, WorkspaceTab>;
   clusterSelectionByProject: Record<string, string[]>;
   proposedCollectionsByProject: Record<string, ProposedCollection[]>;
   contentByIdByProject: Record<string, Record<string, CollectionContent>>;
-  /** @deprecated Legacy whole-project paid flag, superseded by paidCollectionIdsByProject. Kept only to migrate old projects. */
+  /** @deprecated Legacy whole-project pushed flag, superseded by paidCollectionIdsByProject. Kept only to migrate old projects. */
   paidCollectionProjectIds: string[];
-  /** Collection ids actually confirmed pushed and paid for, per project. */
+  /** Collection ids confirmed pushed to the store, per project. */
   paidCollectionIdsByProject: Record<string, string[]>;
   contentReadyIds: string[];
   pushedIds: string[];
   customInstructionByProject: Record<string, OnPageInstructions>;
   /** Extract-stage intent split finished (sheets live inside stage 4). */
   analyzedProjectIds: string[];
-  strategyReadyIds: string[];
-  strategyApprovedIds: string[];
-  extractChargeByProject: Record<string, number>;
   extractRowsByProject: Record<string, number>;
   keywordsByProject: Record<string, ExtractedKeyword[]>;
   /** Applied Extract-tab filters per sheet (category vs informational). */
   sheetFiltersByProject: Record<string, SheetKeywordFilters>;
   /** Last keyword extract id per project, so cancel/resume survive a reload. */
   extractIdByProject: Record<string, string>;
-  /** Stage 7 article plan rows. */
-  strategyByProject: Record<string, StrategyArticle[]>;
-  /** Stage 7 generated article bodies keyed by article id. */
-  articlesByProject: Record<string, Record<string, GeneratedArticle>>;
-  /**
-   * Internal-link graph built after push (keyed by collection id), so the
-   * Links column in Tab 6 has something to show. Written by the background
-   * link-build job and by Stage 6/7 generation; loaded server-side from the
-   * "internal-links" object-storage slice so it survives a refresh.
-   */
-  internalLinksByProject: Record<string, Record<string, CollectionLink[]>>;
 };
 
 function storageKey(workspaceSlug: string) {
@@ -136,16 +119,10 @@ export function emptyMarketResearchState(): MarketResearchPersisted {
     pushedIds: [],
     customInstructionByProject: {},
     analyzedProjectIds: [],
-    strategyReadyIds: [],
-    strategyApprovedIds: [],
-    extractChargeByProject: {},
     extractRowsByProject: {},
     keywordsByProject: {},
     sheetFiltersByProject: {},
     extractIdByProject: {},
-    strategyByProject: {},
-    articlesByProject: {},
-    internalLinksByProject: {},
   };
 }
 
@@ -169,7 +146,8 @@ export function isMarketResearchMigrated(workspaceSlug: string): boolean {
 
 function asStage(n: unknown): MarketResearchStage | null {
   const num = typeof n === "number" ? n : Number(n);
-  if (num >= 1 && num <= 7) return num as MarketResearchStage;
+  // The retired stage 7 (content strategy) folds into the last stage.
+  if (num >= 1) return Math.min(Math.floor(num), 6) as MarketResearchStage;
   return null;
 }
 
@@ -223,16 +201,10 @@ export function loadMarketResearchState(
         pushedIds: [],
         customInstructionByProject: {},
         analyzedProjectIds: [],
-        strategyReadyIds: [],
-        strategyApprovedIds: [],
-        extractChargeByProject: {},
         extractRowsByProject: {},
         keywordsByProject: {},
         sheetFiltersByProject: {},
         extractIdByProject: {},
-        strategyByProject: {},
-        articlesByProject: {},
-        internalLinksByProject: {},
       };
     }
     const parsed = JSON.parse(raw) as MarketResearchPersisted;
@@ -292,20 +264,10 @@ export function loadMarketResearchState(
             .map(([id]) => id),
         ])
       ),
-      strategyReadyIds: Array.isArray(parsed.strategyReadyIds)
-        ? parsed.strategyReadyIds
-        : [],
-      strategyApprovedIds: Array.isArray(parsed.strategyApprovedIds)
-        ? parsed.strategyApprovedIds
-        : [],
-      extractChargeByProject: isNumberMap(parsed.extractChargeByProject),
       extractRowsByProject: isNumberMap(parsed.extractRowsByProject),
       keywordsByProject: isKeywordMap(parsed.keywordsByProject),
       sheetFiltersByProject: isSheetFiltersMap(parsed.sheetFiltersByProject),
       extractIdByProject: isStringMap(parsed.extractIdByProject),
-      strategyByProject: isArrayMap<StrategyArticle>(parsed.strategyByProject),
-      articlesByProject: isObjectMap<GeneratedArticle>(parsed.articlesByProject),
-      internalLinksByProject: parsed.internalLinksByProject ?? {},
     };
   } catch {
     return null;
@@ -378,17 +340,6 @@ function isArrayMap<T>(raw: unknown): Record<string, T[]> {
   const out: Record<string, T[]> = {};
   for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
     if (Array.isArray(value)) out[id] = value as T[];
-  }
-  return out;
-}
-
-function isObjectMap<T>(raw: unknown): Record<string, Record<string, T>> {
-  if (!raw || typeof raw !== "object") return {};
-  const out: Record<string, Record<string, T>> = {};
-  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      out[id] = value as Record<string, T>;
-    }
   }
   return out;
 }

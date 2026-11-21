@@ -25,12 +25,8 @@ import {
   Boxes,
   Rocket,
   Search,
-  Paintbrush,
-  RefreshCw,
-  Wallet,
-  Bot,
-  Library,
-  Megaphone,
+  Sparkles,
+  MousePointerClick,
   Infinity as InfinityIcon,
   Lock,
 } from "lucide-react";
@@ -43,21 +39,29 @@ import { useCredits } from "@/hooks/use-credits";
 import { useSubscription } from "@/hooks/use-subscription";
 import { signOut } from "@/lib/auth";
 import { formatCredits } from "@/lib/format-credits";
-import { formatMoney } from "@/lib/wallet/format";
 import { trialDaysRemaining } from "@/lib/trial";
-import { useWallet } from "@/hooks/use-wallet";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { SubscriptionGate, SubscriptionBanner } from "@/components/subscription-gate";
 import { AutommerceLogo } from "@/components/brand/autommerce-logo";
 import { PageLoader } from "@/components/brand/page-loader";
 import { WorkspaceContext } from "./workspace-context";
 import { JobInbox } from "@/components/job-inbox";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { WelcomeGiftTicker } from "@/components/billing/welcome-gift-ticker";
 import { FeaturebaseMessenger } from "@/components/featurebase-messenger";
 import { isStoreAgentPlatform } from "@/lib/store-agent/platforms";
 import { ToolLockDetails } from "@/components/integrations/tool-lock";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { storeToolLocks, type StoreToolId } from "@/lib/integrations/shopify-access";
+
+type FlagshipLink = {
+  href: string;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  /** Tailwind gradient classes for the icon tile, from the Autommerce palette. */
+  tile: string;
+  tool?: StoreToolId;
+};
 
 export default function WorkspaceLayout({
   children,
@@ -78,8 +82,6 @@ export default function WorkspaceLayout({
   const permissions = useRole(role);
 
   const credits = useCredits(workspace?.id ?? null);
-  const { wallet } = useWallet(workspace?.id ?? null);
-  const walletBalance = wallet?.balance ?? null;
   const { subscription, isActive, isLoading: subLoading, plan: currentPlan, welcomeGift } = useSubscription(workspace?.id ?? null);
   const isTrialing = currentPlan?.name === "trial" && subscription?.status === "trialing" && isActive;
   const trialDaysLeft = isTrialing ? trialDaysRemaining(subscription?.trialEnd) : 0;
@@ -109,7 +111,7 @@ export default function WorkspaceLayout({
     /^\/w\/[^/]+\/catalog-intelligence\/[^/]+$/.test(pathname) &&
     !pathname.endsWith("/new");
   // Store Assistant: full-height chat + workspace, without the workspace sidebar.
-  const isSyncPage =
+  const isStoreAssistantPage =
     pathname === `${basePath}/store-assistant` || pathname.startsWith(`${basePath}/store-assistant/`);
   const isMarketResearchPage = pathname.includes("/market-research");
   const isGoogleAdsPage = pathname.includes("/google-ads");
@@ -126,14 +128,13 @@ export default function WorkspaceLayout({
     isMarketResearchPage ||
     isGoogleAdsPage ||
     isMetaAdsPage ||
-    isSyncPage;
+    isStoreAssistantPage;
   // Immersive mode hides the top header — keep false so Enrich shows it
   const isImmersive = false;
   // Lock main content height so tool UIs (Enrich sidebar/table) scroll internally.
-  // Growth Sync is a regular scrollable dashboard page, so it's excluded here.
   const lockContentHeight =
     isEnrichPage ||
-    isSyncPage ||
+    isStoreAssistantPage ||
     isMarketResearchPage ||
     isGoogleAdsPage ||
     isMetaAdsPage;
@@ -161,20 +162,6 @@ export default function WorkspaceLayout({
       disabled: !!toolLocks["market-research"],
       tool: "market-research" as const,
     },
-    {
-      href: hasIntegration ? `${basePath}/customize` : "",
-      label: "Customize",
-      icon: Paintbrush,
-      disabled: !hasIntegration,
-    },
-    {
-      href: toolLocks["growth-sync"] ? "" : `${basePath}/growth-sync`,
-      label: "Growth Sync",
-      icon: RefreshCw,
-      disabled: !!toolLocks["growth-sync"],
-      tool: "growth-sync" as const,
-    },
-    { href: `${basePath}/wallet`, label: "Wallet", icon: Wallet },
   ];
 
   const isMediaActive = mediaChildren.some(
@@ -201,18 +188,29 @@ export default function WorkspaceLayout({
     { href: `${basePath}/catalog-intelligence`, label: "Catalog Intelligence", icon: Upload },
   ];
 
-  const agentLinks = [
+  // The three flagship agents. Each gets a tile coloured from the Autommerce
+  // palette (literal classes so Tailwind keeps them).
+  const agentLinks: FlagshipLink[] = [
     {
       href: toolLocks["store-assistant"] ? "" : `${basePath}/store-assistant`,
       label: "Store assistant",
-      icon: Bot,
-      disabled: !!toolLocks["store-assistant"],
+      icon: Sparkles,
+      tile: "from-[#f76d01] to-[#c40000]",
       tool: "store-assistant" as const,
     },
     // Front-end prototype on demo data until the Google Ads API is connected.
-    { href: `${basePath}/google-ads`, label: "Google Ads", icon: Megaphone },
-    { href: `${basePath}/meta-ads`, label: "Meta Ads", icon: InfinityIcon },
-    { href: `${basePath}/library`, label: "Library", icon: Library },
+    {
+      href: `${basePath}/google-ads`,
+      label: "Google Ads",
+      icon: MousePointerClick,
+      tile: "from-[#c40000] to-[#79081d]",
+    },
+    {
+      href: `${basePath}/meta-ads`,
+      label: "Meta Ads",
+      icon: InfinityIcon,
+      tile: "from-[#6b358d] to-[#400095]",
+    },
   ];
 
   const accountLinks = [
@@ -357,6 +355,64 @@ export default function WorkspaceLayout({
             className="absolute right-1 top-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-primary"
           />
         )}
+      </Link>
+    );
+  };
+
+  // Flagship agent row: larger than a normal tab, with a palette-coloured icon
+  // tile and a tinted background, in both light and dark mode.
+  const renderFlagshipLink = (link: FlagshipLink) => {
+    const lock = link.tool ? toolLocks[link.tool] : null;
+    const isActive = isLinkActive(link.href);
+    const layout = sidebarCollapsed ? "justify-center px-1.5" : "px-2";
+    const surface = isActive
+      ? "bg-gradient-to-r from-[#f76d01]/15 via-[#c40000]/10 to-[#400095]/15 text-foreground ring-1 ring-[#c40000]/25 dark:ring-[#f76d01]/40"
+      : "bg-[#400095]/[0.05] text-foreground/90 ring-1 ring-[#400095]/10 hover:bg-[#400095]/[0.09] hover:text-foreground dark:bg-white/[0.05] dark:ring-white/10 dark:hover:bg-white/[0.09]";
+    const tile = (
+      <span
+        className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${link.tile} text-white shadow-sm shadow-black/25 ring-1 ring-white/25 transition-transform duration-150 group-hover:scale-105 ${
+          lock ? "opacity-45 grayscale" : ""
+        }`}
+      >
+        <link.icon className="h-[18px] w-[18px]" />
+      </span>
+    );
+    const row = `group relative flex w-full items-center gap-2.5 rounded-xl py-1.5 text-start text-[13px] font-semibold transition-colors duration-150 ${layout}`;
+
+    if (link.tool && lock) {
+      return (
+        <Popover key={link.label}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              title={sidebarCollapsed ? link.label : undefined}
+              className={`${row} bg-muted/40 text-muted-foreground/60 ring-1 ring-border/50 hover:bg-muted/60`}
+            >
+              {tile}
+              {!sidebarCollapsed && (
+                <>
+                  <span className="flex-1 truncate">{link.label}</span>
+                  <Lock className="h-3 w-3 shrink-0" />
+                </>
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="right" align="start">
+            <ToolLockDetails tool={link.tool} lock={lock} canAdmin={permissions.canAdmin} workspaceSlug={slug} />
+          </PopoverContent>
+        </Popover>
+      );
+    }
+
+    return (
+      <Link
+        key={link.href}
+        href={link.href}
+        title={sidebarCollapsed ? link.label : undefined}
+        className={`${row} ${surface}`}
+      >
+        {tile}
+        {!sidebarCollapsed && <span className="relative z-10 truncate">{link.label}</span>}
       </Link>
     );
   };
@@ -508,13 +564,7 @@ export default function WorkspaceLayout({
 
               <span className="text-muted-foreground/30">|</span>
 
-              <Link
-                href={basePath}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted text-sm transition-colors"
-              >
-                <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-medium text-xs">{workspace?.name ?? "..."}</span>
-              </Link>
+              <WorkspaceSwitcher currentSlug={slug} currentName={workspace?.name} />
             </div>
 
             <div className="hidden min-w-0 flex-1 justify-center px-2 md:flex">
@@ -526,7 +576,7 @@ export default function WorkspaceLayout({
               )}
             </div>
 
-            {/* Right: Wallet + Credits + Theme + User */}
+            {/* Right: Credits + Theme + User */}
             <div className="flex items-center gap-2 shrink-0">
               <div className="min-w-0 max-w-[11rem] md:hidden">
                 <WelcomeGiftTicker
@@ -534,21 +584,6 @@ export default function WorkspaceLayout({
                   href={`${basePath}/subscription#welcome-gift`}
                 />
               </div>
-              {walletBalance !== null && (
-                <Link
-                  href={`${basePath}/wallet`}
-                  title="Wallet balance"
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium tabular-nums transition-colors ${
-                    walletBalance < 25
-                      ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20"
-                      : "bg-muted hover:bg-muted/80 text-muted-foreground"
-                  }`}
-                >
-                  <Wallet className="h-3.5 w-3.5" />
-                  <span>{formatMoney(walletBalance)}</span>
-                </Link>
-              )}
-
               {/* Credits Badge */}
               {!credits.isLoading && (credits.total > 0 || isTrialing) && (
                 <Link
@@ -698,8 +733,10 @@ export default function WorkspaceLayout({
                 children: growthEngineChildren,
               })}
 
-              <SectionLabel>Agents</SectionLabel>
-              {agentLinks.map((link) => renderNavLink(link))}
+              <SectionLabel>Flagship agents</SectionLabel>
+              <div className="space-y-1.5 py-0.5">
+                {agentLinks.map((link) => renderFlagshipLink(link))}
+              </div>
 
               {accountLinks.length > 0 && (
                 <>
@@ -750,8 +787,8 @@ export default function WorkspaceLayout({
                 role={role}
               />
             )}
-            {isSubscriptionPage || isSyncPage ? (
-              <div className={isSyncPage ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "flex min-h-0 flex-1 flex-col"}>
+            {isSubscriptionPage || isStoreAssistantPage ? (
+              <div className={isStoreAssistantPage ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "flex min-h-0 flex-1 flex-col"}>
                 {children}
               </div>
             ) : (

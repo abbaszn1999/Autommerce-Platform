@@ -1,11 +1,10 @@
 import { type MockSeedRow, type SeedProbe } from "./mock-data";
 import {
-  COLLECTION_PUSH_USD,
   EXTRACT_CAP_PER_SEED,
 } from "@/lib/market-research/cost";
 
 /** Full-page workspace after Stage 3 Extract. Agent is gone. */
-export type WorkspaceTab = "extract" | "collections" | "content" | "strategy";
+export type WorkspaceTab = "extract" | "collections" | "content";
 export type FlowTab = "niches" | "catalog" | "seeds" | WorkspaceTab;
 
 export const FLOW_TABS: {
@@ -19,7 +18,6 @@ export const FLOW_TABS: {
   { id: "extract", n: 4, label: "Extract" },
   { id: "collections", n: 5, label: "Collections" },
   { id: "content", n: 6, label: "On-page" },
-  { id: "strategy", n: 7, label: "Content strategy" },
 ];
 
 export const WORKSPACE_TABS = FLOW_TABS.filter(
@@ -33,8 +31,7 @@ export function isWorkspaceTab(tab: FlowTab): tab is WorkspaceTab {
   return (
     tab === "extract" ||
     tab === "collections" ||
-    tab === "content" ||
-    tab === "strategy"
+    tab === "content"
   );
 }
 
@@ -46,7 +43,6 @@ export function briefStageFromFlow(tab: FlowTab): 1 | 2 | 3 | null {
 }
 
 export { EXTRACT_CAP_PER_SEED };
-export const USD_PER_COLLECTION = COLLECTION_PUSH_USD;
 
 export type KeywordSheet = "category" | "informational" | "excluded";
 
@@ -146,16 +142,11 @@ export type ProposedCollection = {
   storeCollectionId?: string;
 };
 
-export type CollectionFaq = { q: string; a: string };
-export type CollectionLink = { label: string; href: string };
-
 export type CollectionContent = {
   collectionId: string;
   seoTitle: string;
   seoDescription: string;
   collectionDescription: string;
-  faqs: CollectionFaq[];
-  links: CollectionLink[];
   /**
    * When this copy last reached the live store. Kept on the content itself so
    * the status survives a refresh, and so regenerating the copy resets it —
@@ -170,8 +161,7 @@ export type CollectionContent = {
 export type OnPageInstructionField =
   | "seoTitle"
   | "seoDescription"
-  | "collectionDescription"
-  | "faq";
+  | "collectionDescription";
 
 export type OnPageInstructions = Record<OnPageInstructionField, string>;
 
@@ -179,7 +169,6 @@ export const EMPTY_ON_PAGE_INSTRUCTIONS: OnPageInstructions = {
   seoTitle: "",
   seoDescription: "",
   collectionDescription: "",
-  faq: "",
 };
 
 export function normalizeOnPageInstructions(
@@ -191,7 +180,6 @@ export function normalizeOnPageInstructions(
       seoTitle: t,
       seoDescription: t,
       collectionDescription: t,
-      faq: t,
     };
   }
   if (value && typeof value === "object") {
@@ -200,92 +188,10 @@ export function normalizeOnPageInstructions(
       seoTitle: String(v.seoTitle ?? ""),
       seoDescription: String(v.seoDescription ?? ""),
       collectionDescription: String(v.collectionDescription ?? ""),
-      faq: String(v.faq ?? ""),
     };
   }
   return { ...EMPTY_ON_PAGE_INSTRUCTIONS };
 }
-
-export type StrategyArticleType = "guide" | "comparison" | "faq" | "roundup";
-export type StrategyPriority = "high" | "medium" | "low";
-
-/** A collection page the article must link to, with the anchor text to use. */
-export type ArticleLinkTarget = {
-  anchor: string;
-  url: string;
-  collectionName: string;
-};
-
-/** A product page the article may link to, with the anchor text to use. */
-export type ArticleSkuTarget = {
-  anchor: string;
-  url: string;
-  productName: string;
-};
-
-export type ArticleStatus =
-  | "pending"
-  | "generating"
-  | "ready"
-  | "syncing"
-  | "scheduled"
-  | "failed";
-
-export type StrategyArticle = {
-  id: string;
-  title: string;
-  /** The informational keyword the title was built from, verbatim. */
-  keyword: string;
-  type: StrategyArticleType;
-  /** Store blog the writer picked. "-" until the article is generated. */
-  category: string;
-  /** Copied verbatim from the source keyword. */
-  volume: number;
-  /** Copied verbatim from the source keyword. */
-  difficulty: number;
-  linksOut: ArticleLinkTarget[];
-  /** Verified product pages the article may link to; optional and capped at 5. */
-  skuLinks?: ArticleSkuTarget[];
-  priority: StrategyPriority;
-  /**
-   * Near-duplicate keywords folded into this article. One article covering the
-   * whole intent beats several competing for the same query.
-   */
-  mergedCount?: number;
-  status: ArticleStatus;
-  error?: string;
-};
-
-export type GeneratedArticle = {
-  articleId: string;
-  seoTitle: string;
-  seoDescription: string;
-  /** Blog title chosen from the store, or "none" when nothing fits. */
-  blogTitle: string;
-  bodyHtml: string;
-  images: Array<{ url: string; alt: string }>;
-  /** Cover image uploaded to the store's article listing. */
-  featuredImage?: { url: string; alt: string };
-  storeArticleId?: string;
-  storeHandle?: string;
-  scheduledAt?: string;
-};
-
-export type StoreBlog = {
-  id: string;
-  handle: string;
-  title: string;
-};
-
-/** Hard ceiling on how many informational keywords Stage 7 will plan for. */
-export const MAX_STRATEGY_KEYWORDS = 240;
-/** Articles generated in parallel, one request each. */
-export const ARTICLE_GENERATION_CONCURRENCY = 3;
-/**
- * Articles per sync request. The endpoint accepts 50 and creates them one at a
- * time against Shopify, so half that leaves room under the function timeout.
- */
-export const ARTICLE_SYNC_BATCH_SIZE = 25;
 
 export type KeywordFilters = {
   minVolume: number;
@@ -299,9 +205,8 @@ export type KeywordFilters = {
 
 /**
  * Auto-applied on the Extract tab: search volume ≥ 1, KD ≤ 50, word count
- * ≥ 2 (drops bare single-word seeds, keeps everything else). We own this
- * data post-extraction (already paid for), so these are free browse/apply
- * filters — not billing inputs.
+ * ≥ 2 (drops bare single-word seeds, keeps everything else). The data is
+ * already extracted, so these only filter what is shown and applied.
  */
 export const DEFAULT_FILTERS: KeywordFilters = {
   minVolume: 1,
@@ -421,119 +326,7 @@ export function buildCollectionContent(
     seoTitle: `${name} | Shop ${collection.headKeyword}`,
     seoDescription: `Browse ${collection.productCount.toLocaleString("en-US")} ${name.toLowerCase()}. Compare styles, find the right fit, and buy with fast shipping.${clip(fields.seoDescription)}`,
     collectionDescription: `${name} for every budget and style. This collection groups products your catalog already carries for “${collection.headKeyword}” — ${collection.productCount.toLocaleString("en-US")} matching items, covering ${collection.keywordCount} related search terms.${clip(fields.collectionDescription)}`,
-    faqs: [
-      {
-        q: `What should I look for when buying ${name.toLowerCase()}?`,
-        a: `Start with fit and use. ${name} in this collection are grouped so you can filter by the attributes shoppers actually search for, then compare a shortlist.${clip(fields.faq)}`,
-      },
-      {
-        q: `Do you sell ${collection.headKeyword} for kids and adults?`,
-        a: `Where the catalog supports it, both are included. Product count on this page is the live match against your store — not a marketing estimate.`,
-      },
-      {
-        q: `How do I care for ${name.toLowerCase()}?`,
-        a: `Follow the care notes on each product. Category FAQs stay high-level so they remain accurate across the whole collection.`,
-      },
-    ],
-    links: [
-      {
-        label: collection.existingName ?? collection.parentNiche,
-        href: `/collections/${collection.id.replace(/^col-/, "")}`,
-      },
-      { label: "Buying guide", href: "/pages/guide" },
-      { label: "Related collections", href: "/collections" },
-    ],
   };
-}
-
-export function titleFromKeyword(keyword: string): string {
-  const titled = keyword
-    .split(/\s+/)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ")
-    .replace(/\bVs\b/, "vs");
-  if (/^(Are|What|Why)\b/.test(titled) && !titled.endsWith("?")) {
-    return `${titled}?`;
-  }
-  return titled;
-}
-
-export function typeFromKeyword(keyword: string): StrategyArticleType {
-  const k = keyword.toLowerCase();
-  if (/\bvs\b|difference between/.test(k)) return "comparison";
-  if (/\bworth it\b|^(are|what is|why)\b/.test(k)) return "faq";
-  if (/buying guide|best .+ guide/.test(k)) return "roundup";
-  return "guide";
-}
-
-/**
- * How good a link/content target a keyword or collection is, purely from its
- * demand data: high volume and low difficulty score highest. Shared by the
- * Priority badge and by Stage 7's term and link-target ranking so "golden"
- * opportunities are judged the same way everywhere.
- */
-export function opportunityScore(volume: number, difficulty: number): number {
-  return volume / Math.max(12, difficulty);
-}
-
-export function priorityFor(volume: number, difficulty: number): StrategyPriority {
-  const score = opportunityScore(volume, difficulty);
-  if (score > 80) return "high";
-  if (score > 28) return "medium";
-  return "low";
-}
-
-/**
- * The informational keywords, deduplicated on normalized text and ordered by
- * volume. Uncapped: the cap is applied later, after the seeds have been given
- * their share.
- */
-export function uniqueInformationalKeywords(
-  keywords: ExtractedKeyword[]
-): ExtractedKeyword[] {
-  const seen = new Set<string>();
-  const unique: ExtractedKeyword[] = [];
-
-  for (const row of keywords) {
-    if (row.sheet !== "informational") continue;
-    const key = row.keyword.trim().toLowerCase().replace(/\s+/g, " ");
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    unique.push(row);
-  }
-
-  unique.sort((a, b) => b.volume - a.volume || a.keyword.localeCompare(b.keyword));
-  return unique;
-}
-
-/**
- * Picks the informational keywords Stage 7 will plan articles for.
- *
- * Purely opportunity-driven: every unique keyword is ranked by
- * `opportunityScore` (high volume, low-to-normal difficulty) and the top
- * `limit` survive, with no guaranteed spread across seeds. A store where one
- * department dominates search demand will get most of its plan from that
- * department — that is the intent, not a bug.
- */
-export function selectStrategyKeywords(
-  keywords: ExtractedKeyword[],
-  limit = MAX_STRATEGY_KEYWORDS
-): ExtractedKeyword[] {
-  const unique = uniqueInformationalKeywords(keywords);
-  const cap = Math.max(0, limit);
-  if (unique.length <= cap) return unique;
-
-  const picked = [...unique]
-    .sort(
-      (a, b) =>
-        opportunityScore(b.volume, b.difficulty) -
-        opportunityScore(a.volume, a.difficulty)
-    )
-    .slice(0, cap);
-
-  return picked.sort(
-    (a, b) => b.volume - a.volume || a.keyword.localeCompare(b.keyword)
-  );
 }
 
 export function tabIndex(tab: WorkspaceTab): number {
@@ -545,6 +338,8 @@ export function clampWorkspaceTab(
   fallback: WorkspaceTab = "extract"
 ): WorkspaceTab {
   if (value === "analyze") return "extract";
+  // The retired content-strategy tab folds into the last tab that remains.
+  if (value === "strategy") return "content";
   return TAB_ORDER.includes(value as WorkspaceTab)
     ? (value as WorkspaceTab)
     : fallback;

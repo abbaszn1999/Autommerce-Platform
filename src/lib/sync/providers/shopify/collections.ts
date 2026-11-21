@@ -7,7 +7,6 @@
 //   https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionAddProducts
 
 import type {
-  DetectedProduct,
   IntegrationRecord,
   SyncSheet,
   SyncSheetRow,
@@ -68,17 +67,6 @@ const COLLECTION_CREATE = /* GraphQL */ `
   }
 `;
 
-// Permanent deletion of a collection from the Shopify store.
-//   docs: https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionDelete
-const COLLECTION_DELETE = /* GraphQL */ `
-  mutation CollectionDelete($input: CollectionDeleteInput!) {
-    collectionDelete(input: $input) {
-      deletedCollectionId
-      userErrors { field message }
-    }
-  }
-`;
-
 // Collections created through the Admin API are not attached to any sales
 // channel, so their storefront URL returns 404 until they are published to the
 // Online Store publication.
@@ -104,48 +92,6 @@ const COLLECTION_ADD_PRODUCTS = /* GraphQL */ `
     collectionAddProducts(id: $id, productIds: $productIds) {
       collection { id productsCount { count } }
       userErrors { field message }
-    }
-  }
-`;
-
-// Removal is asynchronous: the mutation returns a Job, not the updated
-// collection. Deprecated alongside collectionAddProducts in favour of the new
-// collections model, but still served in 2026-07.
-//   docs: https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionRemoveProducts
-const COLLECTION_REMOVE_PRODUCTS = /* GraphQL */ `
-  mutation CollectionRemoveProducts($id: ID!, $productIds: [ID!]!) {
-    collectionRemoveProducts(id: $id, productIds: $productIds) {
-      job { id done }
-      userErrors { field message }
-    }
-  }
-`;
-
-// The products connection on Collection takes no `query` argument, so the only
-// way to find recently created members is to sort by creation time and walk.
-//   docs: https://shopify.dev/docs/api/admin-graphql/latest/enums/ProductCollectionSortKeys
-const COLLECTION_PRODUCTS_BY_CREATED = /* GraphQL */ `
-  query CollectionProductsByCreated($id: ID!, $first: Int!, $after: String) {
-    collection(id: $id) {
-      id
-      products(first: $first, after: $after, sortKey: CREATED, reverse: true) {
-        edges {
-          cursor
-          node {
-            id
-            title
-            handle
-            createdAt
-            onlineStoreUrl
-            productType
-            vendor
-            tags
-            description
-            featuredImage { url }
-          }
-        }
-        pageInfo { hasNextPage endCursor }
-      }
     }
   }
 `;
@@ -536,46 +482,6 @@ export async function createShopifyCollection(params: {
   };
 }
 
-/**
- * Permanently delete a Shopify collection by GID. Returns the deleted GID on
- * success. Idempotent in spirit — if Shopify reports the collection no longer
- * exists, we treat that as a successful delete (the end state is the same).
- *
- *   docs: https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionDelete
- */
-export async function deleteShopifyCollection(params: {
-  integration: IntegrationRecord;
-  collectionId: string;
-}): Promise<{ deletedId: string }> {
-  const id = params.collectionId;
-  if (!id || !id.startsWith("gid://shopify/Collection/")) {
-    throw new Error(`Invalid collection GID: "${id}"`);
-  }
-  const res = await shopifyGraphQL<{
-    collectionDelete: {
-      deletedCollectionId: string | null;
-      userErrors: Array<{ field: string[] | null; message: string }>;
-    };
-  }>({
-    integration: params.integration,
-    query: COLLECTION_DELETE,
-    variables: { input: { id } },
-    options: { estimatedCost: 10, tag: "collectionDelete" },
-  });
-  if (res.errors.length > 0) throw new Error(`collectionDelete: ${res.errors[0].message}`);
-  const payload = res.data?.collectionDelete;
-  if (!payload) throw new Error("collectionDelete returned no payload");
-  if (payload.userErrors.length > 0) {
-    const ue = payload.userErrors[0];
-    throw new Error(
-      `collectionDelete userError: ${ue.message}${
-        ue.field && ue.field.length ? ` (field: ${ue.field.join(".")})` : ""
-      }`
-    );
-  }
-  return { deletedId: payload.deletedCollectionId ?? id };
-}
-
 /** Add products to a collection (additive — does not remove existing). */
 export async function assignProductsToCollection(params: {
   integration: IntegrationRecord;
@@ -615,180 +521,6 @@ export async function assignProductsToCollection(params: {
     if (typeof count === "number") newTotal = count;
   }
   return { assignedCount: assigned, newTotal };
-}
-
-/**
- * Remove products from a manual collection.
- *
- * Shopify performs this in a background job, so a successful return means the
- * removal was accepted rather than completed. The job id is handed back so the
- * caller can say "removing" instead of overstating what it knows.
- */
-export async function removeProductsFromCollection(params: {
-  integration: IntegrationRecord;
-  collectionId: string;
-  productIds: string[];
-}): Promise<{ removedCount: number; pendingJobRef?: string }> {
-  if (params.productIds.length === 0) return { removedCount: 0 };
-
-  let removed = 0;
-  let lastJobId: string | undefined;
-  for (let i = 0; i < params.productIds.length; i += 250) {
-    const chunk = params.productIds.slice(i, i + 250);
-    const res = await shopifyGraphQL<{
-      collectionRemoveProducts: {
-        job: { id?: string; done?: boolean } | null;
-        userErrors: Array<{ field: string[] | null; message: string }>;
-      };
-    }>({
-      integration: params.integration,
-      query: COLLECTION_REMOVE_PRODUCTS,
-      variables: { id: params.collectionId, productIds: chunk },
-      options: {
-        estimatedCost: 10 + chunk.length * 0.2,
-        tag: "collectionRemoveProducts",
-      },
-    });
-    if (res.errors.length > 0) {
-      throw new Error(`collectionRemoveProducts: ${res.errors[0].message}`);
-    }
-    const payload = res.data?.collectionRemoveProducts;
-    if (!payload) throw new Error("collectionRemoveProducts returned no payload");
-    if (payload.userErrors.length > 0) {
-      throw new Error(
-        `collectionRemoveProducts userError: ${payload.userErrors[0].message}`
-      );
-    }
-    removed += chunk.length;
-    // A job that already reports done needs no follow-up.
-    if (payload.job?.id && !payload.job.done) lastJobId = String(payload.job.id);
-  }
-  return { removedCount: removed, pendingJobRef: lastJobId };
-}
-
-/**
- * Products created after `since` inside one collection, newest first.
- *
- * `Collection.products` accepts no `query` argument, so there is no
- * server-side date filter to lean on. Sorting by CREATED descending and
- * stopping at the first product older than the watermark makes this one page
- * in the steady state regardless of how large the collection is.
- *
- * Note that CREATED is the product's own creation time, not the moment it was
- * added to the collection: an old product filed into a watched collection
- * today will not surface here.
- */
-export async function detectNewCollectionProducts(params: {
-  integration: IntegrationRecord;
-  collectionId: string;
-  since: string | null;
-  maxPages?: number;
-  pageSize?: number;
-}): Promise<{
-  products: DetectedProduct[];
-  newestCreatedAt: string | null;
-  truncated?: boolean;
-}> {
-  // A null watermark means the rule was just created and is only responsible
-  // for what comes next. Walking the catalog here would classify the entire
-  // back catalogue on the first tick.
-  if (!params.since) return { products: [], newestCreatedAt: null };
-
-  const sinceMs = Date.parse(params.since);
-  if (!Number.isFinite(sinceMs)) {
-    throw new Error(`Invalid watermark timestamp: "${params.since}"`);
-  }
-
-  const pageSize = Math.min(Math.max(params.pageSize ?? 250, 1), 250);
-  // Generous on purpose. In the steady state the walk stops at the watermark on
-  // the first page; the ceiling only exists so a bulk import cannot turn one
-  // detection into an unbounded crawl. Reaching it is reported as truncated
-  // rather than treated as "nothing more to see".
-  const maxPages = Math.max(params.maxPages ?? 20, 1);
-
-  type Node = {
-    id?: string;
-    title?: string;
-    handle?: string;
-    createdAt?: string;
-    onlineStoreUrl?: string | null;
-    productType?: string | null;
-    vendor?: string | null;
-    tags?: string[] | null;
-    description?: string | null;
-    featuredImage?: { url?: string } | null;
-  };
-  type PageData = {
-    collection: {
-      products: {
-        edges: Array<{ cursor: string; node: Node }>;
-        pageInfo: { hasNextPage: boolean; endCursor: string | null };
-      };
-    } | null;
-  };
-
-  const products: DetectedProduct[] = [];
-  let newestCreatedAt: string | null = null;
-  let after: string | null = null;
-  let reachedWatermark = false;
-  let page = 0;
-
-  while (page < maxPages) {
-    const res: Awaited<ReturnType<typeof shopifyGraphQL<PageData>>> =
-      await shopifyGraphQL<PageData>({
-        integration: params.integration,
-        query: COLLECTION_PRODUCTS_BY_CREATED,
-        variables: { id: params.collectionId, first: pageSize, after },
-        options: {
-          estimatedCost: 2 + pageSize,
-          tag: "collectionProductsByCreated",
-        },
-      });
-    if (res.errors.length > 0) {
-      throw new Error(`collection products: ${res.errors[0].message}`);
-    }
-    const connection = res.data?.collection?.products;
-    if (!connection) {
-      throw new Error(`Collection not found: ${params.collectionId}`);
-    }
-
-    for (const edge of connection.edges) {
-      const node = edge.node;
-      const createdAt = String(node.createdAt ?? "");
-      const createdMs = Date.parse(createdAt);
-      if (!Number.isFinite(createdMs) || createdMs <= sinceMs) {
-        // Sorted newest first, so everything past this point is older too.
-        reachedWatermark = true;
-        break;
-      }
-      if (!node.id) continue;
-      if (!newestCreatedAt) newestCreatedAt = createdAt;
-      products.push({
-        id: String(node.id),
-        title: String(node.title ?? ""),
-        createdAt,
-        url: node.onlineStoreUrl ?? undefined,
-        imageUrl: node.featuredImage?.url ?? undefined,
-        productType: node.productType ?? undefined,
-        vendor: node.vendor ?? undefined,
-        tags: node.tags ?? undefined,
-        description: node.description ?? undefined,
-      });
-    }
-
-    page += 1;
-    if (reachedWatermark) break;
-    if (!connection.pageInfo.hasNextPage || !connection.pageInfo.endCursor) break;
-    after = connection.pageInfo.endCursor;
-  }
-
-  return {
-    products,
-    newestCreatedAt,
-    // Only a walk that ran out of pages while still finding new products is
-    // truncated; stopping at the watermark is the successful case.
-    truncated: !reachedWatermark && page >= maxPages ? true : undefined,
-  };
 }
 
 // ─── Apply path: push pending sheet edits back to Shopify collections ────────

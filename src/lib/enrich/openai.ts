@@ -436,7 +436,7 @@ export async function runEnrichOpenAiResponse(params: {
 
     /**
      * One request, answered when OpenAI finishes it. Responses background
-     * mode was tried (scripts/openai-background-lab.mts) and rejected: a
+     * mode was tried and rejected: a
      * response cancelled mid-run reports usage 0 even though it worked, so
      * it cannot recover the cost of a timed-out call. The row/tier budgets
      * are therefore sized so calls normally finish, and only a call cut off

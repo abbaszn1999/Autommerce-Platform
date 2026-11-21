@@ -5,7 +5,7 @@ import { MarketResearchShell } from "@/components/market-research/market-researc
 
 /**
  * Market research — Growth engine module (stages 1–3 frontend preview).
- * Full logic and Wallet billing land in later iterations.
+ * Full logic lands in later iterations.
  */
 export default function MarketResearchPage() {
   return (

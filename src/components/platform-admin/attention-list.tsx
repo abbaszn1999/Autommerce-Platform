@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ChevronRight, Coins, CreditCard, Store, Wallet } from "lucide-react";
+import { AlertTriangle, ChevronRight, Coins, CreditCard, Store } from "lucide-react";
 import { OverviewCard } from "@/components/platform-admin/overview-card";
 import type { AdminAttentionItem } from "@/lib/platform-admin/types";
 import { cn } from "@/lib/utils";
@@ -8,7 +8,6 @@ const KIND_LABEL: Record<AdminAttentionItem["kind"], string> = {
   past_due: "Billing",
   failed_job: "Jobs",
   low_credits: "Credits",
-  low_wallet: "Wallet",
   integration_error: "Store",
 };
 
@@ -16,7 +15,6 @@ const KIND_ICON = {
   past_due: CreditCard,
   failed_job: AlertTriangle,
   low_credits: Coins,
-  low_wallet: Wallet,
   integration_error: Store,
 } as const;
 
@@ -24,8 +22,6 @@ const KIND_TONE: Record<AdminAttentionItem["kind"], string> = {
   past_due: "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400",
   failed_job: "border-destructive/20 bg-destructive/10 text-destructive",
   low_credits:
-    "border-[#6B358D]/20 bg-[#400095]/10 text-[#6B358D] dark:border-[#F76D01]/25 dark:bg-[#F76D01]/10 dark:text-[#F76D01]",
-  low_wallet:
     "border-[#6B358D]/20 bg-[#400095]/10 text-[#6B358D] dark:border-[#F76D01]/25 dark:bg-[#F76D01]/10 dark:text-[#F76D01]",
   integration_error: "border-destructive/20 bg-destructive/10 text-destructive",
 };

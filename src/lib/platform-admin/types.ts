@@ -29,15 +29,6 @@ export type AdminCreditOperation =
   | "credit_topup"
   | "monthly_reset";
 
-export type AdminWalletTxKind = "topup" | "charge" | "refund";
-
-export type AdminWalletModule =
-  | "market-research"
-  | "growth-sync"
-  | "website-restructure"
-  | "topup"
-  | "Billing";
-
 export type AdminJobKind = "catalog" | "gallery" | "visualizer" | "mr_extract";
 
 export type AdminJobStatus =
@@ -56,7 +47,6 @@ export type AdminAttentionKind =
   | "past_due"
   | "failed_job"
   | "low_credits"
-  | "low_wallet"
   | "integration_error";
 
 export type AdminAttentionItem = {

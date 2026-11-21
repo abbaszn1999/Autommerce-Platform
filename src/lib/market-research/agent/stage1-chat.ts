@@ -169,7 +169,7 @@ Output strictly valid JSON with this schema:
 
   try {
     const result = await runGeminiMarketResearch<GeminiChatResponse>({
-      stage: Math.min(Math.max(currentStage, 1), 7),
+      stage: Math.min(Math.max(currentStage, 1), 6),
       systemInstruction,
       userPrompt,
       overrideThinking: "low",

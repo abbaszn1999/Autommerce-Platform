@@ -5,14 +5,11 @@ import {
   pushBodySchema,
   requireMrWrite,
 } from "@/lib/market-research/api-schema";
-import { COLLECTION_PUSH_USD, collectionPushCostUsd, roundUsd } from "@/lib/market-research/cost";
 import { getMrProject } from "@/lib/market-research/server-persist";
-import { chargeMrWallet, refundMrWallet } from "@/lib/market-research/wallet-ops";
 import {
   loadProjectSliceAdmin,
   saveProjectSliceAdmin,
 } from "@/lib/market-research/storage-admin";
-import { readWorkspaceWallet } from "@/lib/wallet/server";
 import {
   createShopifyCollection,
   resolveCollectionByName,
@@ -34,7 +31,7 @@ const SUPPORTED_PROVIDERS = new Set(["shopify", "woocommerce", "wordpress"]);
 /**
  * Store ids of collections created on the store, written right after each
  * create. If the request dies mid-push, the next push still knows what is
- * already live and neither creates a second copy nor charges again.
+ * already live and does not create a second copy.
  */
 type PushLedger = Record<string, { handle?: string; storeCollectionId?: string }>;
 
@@ -51,8 +48,8 @@ type StoreResult = {
 /**
  * A collection with this exact title is already on the store: made by a
  * concurrent push, or by an earlier one that died before recording it. It is
- * adopted without a charge instead of being created a second time. A failed
- * lookup never blocks the push.
+ * adopted instead of being created a second time. A failed lookup never blocks
+ * the push.
  */
 async function findOnStore(
   provider: string,
@@ -93,9 +90,8 @@ export async function POST(request: NextRequest) {
 
   const ids = [...parsed.data.collectionIds].sort();
 
-  // Load project collections and on-page content BEFORE any wallet write, so
-  // we can validate the request is actually publishable first. A charge must
-  // never happen for ids that don't exist or a store we can't publish to.
+  // Load project collections and on-page content first, so the request is
+  // validated as publishable before anything is created on the store.
   let collections: ProposedCollection[] = [];
   try {
     const loadedCols = await loadProjectSliceAdmin<ProposedCollection[]>(
@@ -186,7 +182,7 @@ export async function POST(request: NextRequest) {
   const integration = integrationRow as IntegrationRecord;
 
   // A collection that already has a store id was created on an earlier push.
-  // Creating it again would put a second copy on the store and charge again.
+  // Creating it again would put a second copy on the store.
   const alreadyPushedIds = ids.filter((id) => {
     const col = collectionById.get(id);
     return Boolean(
@@ -226,9 +222,6 @@ export async function POST(request: NextRequest) {
       {
         ok: true,
         duplicate: false,
-        chargedUsd: 0,
-        refundedUsd: 0,
-        remaining: undefined,
         pushedCount: 0,
         failedCount: 0,
         pushedIds: alreadyPushedIds,
@@ -239,59 +232,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Refuse up front when the wallet can't cover the whole push, so a
-  // merchant is never left with half a batch published.
-  const amountUsd = collectionPushCostUsd(toPush.length);
-  const wallet = await readWorkspaceWallet(auth.admin, workspaceId);
-  if (wallet.balance < amountUsd) {
-    return NextResponse.json(
-      { error: "Not enough wallet balance" },
-      { status: 402, headers: auth.headers }
-    );
-  }
-
-  // Each collection is charged right before it is created and refunded if the
-  // create fails, under keys unique to this push: a crash can cost at most
-  // one collection, and a retry after a refund is charged again.
-  const attemptId = crypto.randomUUID();
-  let chargedUsd = 0;
-  let refundedUsd = 0;
-  let remaining: number | undefined = wallet.balance;
   const createdStoreResults: StoreResult[] = [];
 
-  const refundOne = async (colId: string) => {
-    const refunded = await refundMrWallet(auth.admin, {
-      workspaceId,
-      userId: auth.user.id,
-      amountUsd: COLLECTION_PUSH_USD,
-      description: "Push refund · collection failed to create",
-      idempotencyKey: `collection_push:refund:${attemptId}:${colId}`,
-      details: { projectId, collectionId: colId },
-    });
-    if (refunded.ok) {
-      refundedUsd = roundUsd(refundedUsd + COLLECTION_PUSH_USD);
-      remaining = refunded.remaining;
-    } else {
-      console.error("[push] Failed to refund a failed collection create:", refunded.message);
-    }
-  };
-
-  let walletEmpty = false;
   for (let i = 0; i < toPush.length; i += 1) {
     const colId = toPush[i]!;
     const col = collectionById.get(colId);
     const colName = col?.name || colId;
     const storeTitle = `${prefix} - ${colName}`;
-    if (walletEmpty) {
-      createdStoreResults.push({
-        id: colId,
-        name: colName,
-        storeTitle,
-        success: false,
-        error: "Wallet balance ran out",
-      });
-      continue;
-    }
     if (i > 0) {
       await new Promise((resolve) => setTimeout(resolve, 400));
     }
@@ -306,28 +253,6 @@ export async function POST(request: NextRequest) {
       );
       continue;
     }
-
-    const paid = await chargeMrWallet(auth.admin, {
-      workspaceId,
-      userId: auth.user.id,
-      amountUsd: COLLECTION_PUSH_USD,
-      description: `Push collection · ${colName}`,
-      idempotencyKey: `collection_push:${attemptId}:${colId}`,
-      details: { projectId, collectionId: colId },
-    });
-    if (!paid.ok) {
-      walletEmpty = paid.reason === "insufficient_funds";
-      createdStoreResults.push({
-        id: colId,
-        name: colName,
-        storeTitle,
-        success: false,
-        error: walletEmpty ? "Wallet balance ran out" : "Could not charge the wallet",
-      });
-      continue;
-    }
-    chargedUsd = roundUsd(chargedUsd + COLLECTION_PUSH_USD);
-    remaining = paid.remaining;
 
     let created: StoreResult;
     if (provider === "shopify") {
@@ -395,8 +320,8 @@ export async function POST(request: NextRequest) {
             });
           } catch (assignErr) {
             // A category with none of its products is not a delivered
-            // collection: remove it and refund, so a retry starts clean
-            // instead of leaving an empty copy on the store.
+            // collection: remove it, so a retry starts clean instead of
+            // leaving an empty copy on the store.
             const msg =
               assignErr instanceof Error ? assignErr.message : "Product assignment failed";
             console.error(
@@ -409,7 +334,7 @@ export async function POST(request: NextRequest) {
             }).catch(() => ({ deletedIds: [] as string[] }));
             if (removed.deletedIds.length === 0) {
               // Still on the store: keep its id so a retry does not create
-              // (and charge for) a second copy.
+              // a second copy.
               ledger[colId] = { storeCollectionId: String(res.id) };
               await saveProjectSliceAdmin(auth.admin, workspaceId, projectId, "push-ledger", ledger).catch(
                 () => undefined
@@ -440,25 +365,18 @@ export async function POST(request: NextRequest) {
       await saveProjectSliceAdmin(auth.admin, workspaceId, projectId, "push-ledger", ledger).catch(
         (err) => console.error("[push] Failed to record a pushed collection:", err)
       );
-    } else {
-      await refundOne(colId);
     }
   }
 
   const successResults = createdStoreResults.filter((r) => r.success);
   const failedResults = createdStoreResults.filter((r) => !r.success);
 
-  // The widget embed API matches on these exact handles, so without them it
-  // cannot tell an AI collection page apart from a pre-existing store page.
   await persistHandles();
 
   return NextResponse.json(
     {
       ok: failedResults.length === 0,
       duplicate: false,
-      chargedUsd: roundUsd(chargedUsd - refundedUsd),
-      refundedUsd,
-      remaining,
       pushedCount: successResults.length,
       failedCount: failedResults.length,
       pushedIds: [...alreadyPushedIds, ...successResults.map((r) => r.id)],

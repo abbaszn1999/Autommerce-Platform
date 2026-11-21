@@ -18,7 +18,6 @@ import {
   ExternalLink,
   Infinity as InfinityIcon,
   ShieldCheck,
-  Wallet,
   Minus,
   Plus,
   AlertTriangle,
@@ -419,7 +418,7 @@ export default function SubscriptionPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2 mt-1">
                 {[
                   { icon: InfinityIcon, text: "Never expires while your subscription is active" },
-                  { icon: Wallet, text: "Flat $0.50 per credit — no hidden fees" },
+                  { icon: Coins, text: "Flat $0.50 per credit — no hidden fees" },
                   { icon: ShieldCheck, text: "Secure checkout, processed by Stripe" },
                   { icon: Sparkles, text: "Buy exactly what you need, any amount" },
                 ].map((item, i) => (

@@ -181,21 +181,18 @@ export async function loadLiveWorkspaces(): Promise<LiveWorkspaceListRow[]> {
   const [
     { data: profiles, error: profileError },
     { data: members, error: memberError },
-    { data: wallets, error: walletError },
     { data: integrations, error: integrationError },
     { data: subs, error: subError },
     usageByWorkspace,
   ] = await Promise.all([
     admin.from("profiles").select("id, full_name").in("id", ownerIds.length ? ownerIds : ["00000000-0000-0000-0000-000000000000"]),
     admin.from("workspace_members").select("workspace_id"),
-    admin.from("workspace_wallets").select("workspace_id, balance_usd"),
     admin.from("workspace_integrations").select("workspace_id, provider, status"),
     admin.from("user_subscriptions").select("user_id, status, billing_cycle, credits_used, bonus_credits, trial_end, subscription_plans(name, display_name, monthly_ai_credits)"),
     loadWorkspaceUsageMap(),
   ]);
   if (profileError) throw new Error(profileError.message);
   if (memberError) throw new Error(memberError.message);
-  if (walletError) throw new Error(walletError.message);
   if (integrationError) throw new Error(integrationError.message);
   if (subError) throw new Error(subError.message);
 
@@ -205,7 +202,6 @@ export async function loadLiveWorkspaces(): Promise<LiveWorkspaceListRow[]> {
     const id = row.workspace_id as string;
     memberCount.set(id, (memberCount.get(id) ?? 0) + 1);
   }
-  const walletByWs = new Map((wallets ?? []).map((row) => [row.workspace_id as string, Number(row.balance_usd ?? 0)]));
   const integrationByWs = new Map(
     (integrations ?? []).map((row) => [
       row.workspace_id as string,
@@ -261,7 +257,6 @@ export async function loadLiveWorkspaces(): Promise<LiveWorkspaceListRow[]> {
       planName: sub?.planName ?? null,
       planId: sub?.planId ?? null,
       creditsRemaining: sub?.remaining ?? null,
-      walletUsd: walletByWs.get(row.id as string) ?? 0,
       storageBytes: usage.storageBytes,
       objectCount: usage.objectCount,
       dbBytes: usage.dbBytes,

@@ -2,10 +2,10 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import {
   abortActiveMrExtractRuns,
   advanceMrExtract,
+  finishRunningExtract,
   isExtractTimedOut,
   loadMrExtractHeader,
   seedIsFinished,
-  settleHeldExtract,
 } from "@/lib/market-research/extract-advance";
 import { runJobWithFailureGuard } from "./guard";
 import { notifyJobEvent } from "./notify";
@@ -19,7 +19,6 @@ import {
 
 const PUMP_BUDGET_MS = 45_000;
 const TICK_MS = 800;
-const SETTLE_RETRY_MS = 2_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -34,9 +33,8 @@ async function abortAndSettle(
   extractId: string,
   workspaceId: string,
   projectId: string,
-  userId: string,
   status: "aborted" | "failed"
-): Promise<{ rowsReturned: number; settledUsd?: number }> {
+): Promise<{ rowsReturned: number }> {
   const extract = await loadMrExtractHeader(admin, {
     workspaceId,
     projectId,
@@ -49,14 +47,13 @@ async function abortAndSettle(
     (sum, run) => sum + (Number(run.rows_returned) || 0),
     0
   );
-  const settled = await settleHeldExtract(admin, {
+  await finishRunningExtract(admin, {
     extract,
-    userId,
     rowsReturned,
     status,
     runs,
   });
-  return { rowsReturned, settledUsd: settled.settledUsd };
+  return { rowsReturned };
 }
 
 async function runMrExtractSessionInner(runId: string): Promise<void> {
@@ -69,7 +66,6 @@ async function runMrExtractSessionInner(runId: string): Promise<void> {
   const extractId = job.session_id;
   const workspaceId = job.workspace_id;
   const projectId = String(job.settings.projectId || "");
-  const userId = job.created_by;
   if (!projectId) {
     const failed = await finishJobRun(admin, job.id, {
       status: "failed",
@@ -97,7 +93,7 @@ async function runMrExtractSessionInner(runId: string): Promise<void> {
     return;
   }
 
-  if (header.status !== "running" && header.billing_status !== "held") {
+  if (header.status !== "running") {
     const status =
       header.status === "aborted"
         ? "cancelled"
@@ -125,7 +121,6 @@ async function runMrExtractSessionInner(runId: string): Promise<void> {
       extractId,
       workspaceId,
       projectId,
-      userId,
       "failed"
     );
     const failed = await finishJobRun(admin, job.id, {
@@ -146,7 +141,6 @@ async function runMrExtractSessionInner(runId: string): Promise<void> {
         extractId,
         workspaceId,
         projectId,
-        userId,
         "aborted"
       );
       await finishJobRun(admin, job.id, {
@@ -162,7 +156,6 @@ async function runMrExtractSessionInner(runId: string): Promise<void> {
       workspaceId,
       projectId,
       extractId,
-      userId,
     });
 
     const stillRunning = await loadJobRun(admin, job.id);
@@ -172,7 +165,6 @@ async function runMrExtractSessionInner(runId: string): Promise<void> {
         extractId,
         workspaceId,
         projectId,
-        userId,
         "aborted"
       );
       return;
@@ -186,7 +178,6 @@ async function runMrExtractSessionInner(runId: string): Promise<void> {
         extractId,
         workspaceId,
         projectId,
-        userId,
         "aborted"
       );
       await finishJobRun(admin, job.id, {
@@ -205,7 +196,7 @@ async function runMrExtractSessionInner(runId: string): Promise<void> {
       failed: result.seeds.filter((seed) => seed.status === "failed").length,
     });
 
-    if (result.allDone && !result.billingPending) {
+    if (result.allDone) {
       const failedCount = result.seeds.filter(
         (seed) => seed.status === "failed"
       ).length;
@@ -235,7 +226,7 @@ async function runMrExtractSessionInner(runId: string): Promise<void> {
       return;
     }
 
-    await sleep(result.billingPending ? SETTLE_RETRY_MS : TICK_MS);
+    await sleep(TICK_MS);
   }
 
   const still = await loadJobRun(admin, job.id);
@@ -246,7 +237,6 @@ async function runMrExtractSessionInner(runId: string): Promise<void> {
       extractId,
       workspaceId,
       projectId,
-      userId,
       "aborted"
     );
     await finishJobRun(admin, job.id, {

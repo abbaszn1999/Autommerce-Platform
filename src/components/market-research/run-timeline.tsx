@@ -23,11 +23,11 @@ export type StageReceipt = {
   detail: string;
 };
 
-/** Compact "Step X of 7" indicator for the results header. */
+/** Compact "Step X of 6" indicator for the results header. */
 export function StageStepper({
   current,
   steps,
-  totalStages = 7,
+  totalStages = 6,
 }: {
   current: MarketResearchStage;
   steps: StageStep[];
@@ -64,7 +64,7 @@ export function RunTimeline({
 }) {
   const running = steps.find((s) => s.status === "running");
   const doneCount = steps.filter((s) => s.status === "done").length;
-  const total = steps.length > 0 ? steps.length : 7;
+  const total = steps.length > 0 ? steps.length : 6;
   const summary = running
     ? `Working on Stage ${running.stage} · ${STAGE_META[running.stage]?.shortLabel ?? `Stage ${running.stage}`}`
     : `Stage ${current} · ${doneCount} of ${total} complete`;

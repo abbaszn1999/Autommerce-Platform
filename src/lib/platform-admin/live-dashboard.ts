@@ -1,7 +1,7 @@
 import { CREDIT_TOPUP_USD_PER_CREDIT } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { adminCreditBalance, unwrapRelation } from "./credit-balance";
-import { creditOperationLabel, CREDIT_OPERATION_LABELS, JOB_KIND_LABELS, JOB_STATUS_LABELS, WALLET_KIND_LABELS, WALLET_MODULE_LABELS, walletModuleLabel, ACTIVITY_ENTITY_LABELS } from "./labels";
+import { creditOperationLabel, CREDIT_OPERATION_LABELS, JOB_KIND_LABELS, JOB_STATUS_LABELS, ACTIVITY_ENTITY_LABELS } from "./labels";
 import {
   dateWindowSinceIso,
   keysMatchingLabel,
@@ -25,7 +25,6 @@ import type {
   LiveJobRow,
   LiveOverviewPayload,
   LiveSubscriptionRow,
-  LiveWalletTxRow,
 } from "./live-types";
 import { adminRoutes } from "./paths";
 import { buildOverviewSeries } from "./overview-series";
@@ -40,7 +39,6 @@ import type {
   AdminOverviewRange,
   AdminSpendSlice,
   AdminSubscriptionStatus,
-  AdminWalletTxKind,
 } from "./types";
 
 const RANGE_DAYS: Record<AdminOverviewRange, number> = {
@@ -50,7 +48,6 @@ const RANGE_DAYS: Record<AdminOverviewRange, number> = {
 };
 
 const LOW_CREDIT_RATIO = 0.1;
-const LOW_WALLET_USD = 5;
 
 type PlanJoin = {
   name?: string;
@@ -82,18 +79,6 @@ type CreditRow = {
   credits_used: number;
 };
 
-type WalletRow = {
-  id: string;
-  created_at: string;
-  workspace_id: string;
-  user_id: string | null;
-  kind: string;
-  amount_usd: number | string;
-  description: string | null;
-  module: string | null;
-  status: string | null;
-};
-
 type JobRow = {
   id: string;
   created_at: string;
@@ -116,11 +101,6 @@ type IntegrationRow = {
   base_url: string;
   status: string;
   updated_at: string | null;
-};
-
-type WalletBalanceRow = {
-  workspace_id: string;
-  balance_usd: number | string | null;
 };
 
 type AuditRow = {
@@ -207,23 +187,6 @@ function mapCredit(row: CreditRow, nameById: Map<string, string>, workspaceNameB
   };
 }
 
-function mapWallet(row: WalletRow, nameById: Map<string, string>, workspaceNameById: Map<string, string>): LiveWalletTxRow {
-  const module = row.module || (row.kind === "topup" ? "topup" : "");
-  return {
-    id: row.id,
-    createdAt: row.created_at,
-    workspaceId: row.workspace_id,
-    workspaceName: workspaceNameById.get(row.workspace_id) || row.workspace_id,
-    userId: row.user_id,
-    userName: row.user_id ? nameById.get(row.user_id) || row.user_id : "—",
-    kind: row.kind as AdminWalletTxKind,
-    module,
-    amountUsd: Number(row.amount_usd ?? 0),
-    description: row.description || "",
-    status: row.status || "completed",
-  };
-}
-
 function jobDurationMs(row: JobRow): number | null {
   const start = new Date(row.created_at).getTime();
   if (!Number.isFinite(start)) return null;
@@ -293,18 +256,6 @@ async function loadCreditRows(sinceIso?: string) {
   });
 }
 
-async function loadWalletRows(sinceIso?: string) {
-  const admin = createAdminClient();
-  return fetchAllRows<WalletRow>((from, to) => {
-    let query = admin
-      .from("wallet_transactions")
-      .select("id, created_at, workspace_id, user_id, kind, amount_usd, description, module, status")
-      .order("created_at", { ascending: false });
-    if (sinceIso) query = query.gte("created_at", sinceIso);
-    return query.range(from, to);
-  });
-}
-
 async function loadJobRows(sinceIso?: string) {
   const admin = createAdminClient();
   return fetchAllRows<JobRow>((from, to) => {
@@ -325,15 +276,6 @@ const CREDIT_SORT: Record<string, string> = {
   workspace: "workspace_id",
   operation: "operation",
   credits: "credits_used",
-};
-
-const WALLET_SORT: Record<string, string> = {
-  when: "created_at",
-  workspace: "workspace_id",
-  kind: "kind",
-  module: "module",
-  description: "description",
-  amount: "amount_usd",
 };
 
 const JOB_SORT: Record<string, string> = {
@@ -358,11 +300,6 @@ const AUDIT_SORT: Record<string, string> = {
 export type CreditLedgerQuery = LedgerParams & {
   operation: string;
   direction: string;
-};
-
-export type WalletLedgerQuery = LedgerParams & {
-  kind: string;
-  module: string;
 };
 
 export type JobLedgerQuery = LedgerParams & {
@@ -422,54 +359,6 @@ export async function loadLiveCredits(input: CreditLedgerQuery): Promise<LedgerP
   );
   return {
     rows: rows.map((row) => mapCredit(row, names.nameById, names.workspaceNameById)),
-    total: count ?? rows.length,
-    page,
-    pageSize,
-  };
-}
-
-export async function loadLiveWalletTransactions(input: WalletLedgerQuery): Promise<LedgerPage<LiveWalletTxRow>> {
-  const { page, pageSize, q, dateWindow, sort, kind, module } = input;
-  const { from, to } = pageRange(page, pageSize);
-  const sinceIso = dateWindowSinceIso(dateWindow);
-  const admin = createAdminClient();
-
-  let searchOr: string | null = null;
-  if (q) {
-    const identities = await searchIdentityIds(q);
-    searchOr = postgrestOr([
-      postgrestIn("user_id", identities.userIds),
-      postgrestIn("workspace_id", identities.workspaceIds),
-      postgrestIn("kind", keysMatchingLabel(q, WALLET_KIND_LABELS)),
-      postgrestIn("module", keysMatchingLabel(q, WALLET_MODULE_LABELS)),
-      postgrestIlike("description", q),
-      looksLikeUuid(q) ? `user_id.eq.${q}` : null,
-    ]);
-    if (!searchOr) return { rows: [], total: 0, page, pageSize };
-  }
-
-  let query = admin
-    .from("wallet_transactions")
-    .select("id, created_at, workspace_id, user_id, kind, amount_usd, description, module, status", { count: "exact" });
-  if (kind !== "all") query = query.eq("kind", kind);
-  if (module !== "all") query = query.eq("module", module);
-  if (sinceIso) query = query.gte("created_at", sinceIso);
-  if (searchOr) query = query.or(searchOr);
-
-  const column = WALLET_SORT[sort.key] ?? "created_at";
-  const ascending = sort.dir === "asc";
-  const { data, error, count } = await query
-    .order(column, { ascending })
-    .order("id", { ascending })
-    .range(from, to);
-  if (error) throw new Error(error.message);
-  const rows = (data ?? []) as WalletRow[];
-  const names = await lookupNames(
-    rows.map((row) => row.user_id).filter((id): id is string => Boolean(id)),
-    rows.map((row) => row.workspace_id)
-  );
-  return {
-    rows: rows.map((row) => mapWallet(row, names.nameById, names.workspaceNameById)),
     total: count ?? rows.length,
     page,
     pageSize,
@@ -623,24 +512,9 @@ function creditSpendSlices(rows: LiveCreditTxRow[]): AdminSpendSlice[] {
     .sort((a, b) => b.value - a.value);
 }
 
-function walletSpendSlices(rows: LiveWalletTxRow[]): AdminSpendSlice[] {
-  const totals = new Map<string, number>();
-  for (const tx of rows) {
-    if (tx.status && tx.status !== "completed") continue;
-    if (tx.amountUsd >= 0) continue;
-    const label = walletModuleLabel(tx.module);
-    totals.set(label, (totals.get(label) ?? 0) + Math.abs(tx.amountUsd));
-  }
-  return [...totals.entries()]
-    .map(([label, value]) => ({ key: label, label, value }))
-    .sort((a, b) => b.value - a.value);
-}
-
 function attentionItems(input: {
   subscriptions: LiveSubscriptionRow[];
   jobs: LiveJobRow[];
-  wallets: WalletBalanceRow[];
-  walletTxWorkspaceIds: Set<string>;
   integrations: LiveIntegrationRow[];
   workspaceNameById: Map<string, string>;
 }): AdminAttentionItem[] {
@@ -680,20 +554,6 @@ function attentionItems(input: {
     });
   }
 
-  for (const wallet of input.wallets) {
-    const balance = Number(wallet.balance_usd ?? 0);
-    if (balance >= LOW_WALLET_USD) continue;
-    if (!input.walletTxWorkspaceIds.has(wallet.workspace_id)) continue;
-    const name = input.workspaceNameById.get(wallet.workspace_id) || wallet.workspace_id;
-    items.push({
-      id: `attn_wal_${wallet.workspace_id}`,
-      kind: "low_wallet",
-      title: `${name} wallet is low`,
-      detail: `$${balance.toFixed(2)} USD remaining`,
-      href: adminRoutes.workspace(wallet.workspace_id),
-    });
-  }
-
   for (const integration of input.integrations.filter((item) => item.status === "error")) {
     items.push({
       id: `attn_int_${integration.id}`,
@@ -715,23 +575,16 @@ export async function loadLiveOverview(range: AdminOverviewRange): Promise<LiveO
     directory,
     subscriptionsRaw,
     creditRows,
-    walletRows,
     jobRows,
-    wallets,
     integrationsRaw,
     purchases,
     runningJobs,
-    walletTxWorkspaceRows,
     failedJobRows,
   ] = await Promise.all([
     loadLiveDirectory(),
     loadSubscriptionsRaw(),
     loadCreditRows(since),
-    loadWalletRows(since),
     loadJobRows(since),
-    fetchAllRows<WalletBalanceRow>((from, to) =>
-      admin.from("workspace_wallets").select("workspace_id, balance_usd").range(from, to)
-    ),
     fetchAllRows<IntegrationRow>((from, to) =>
       admin
         .from("workspace_integrations")
@@ -747,9 +600,6 @@ export async function loadLiveOverview(range: AdminOverviewRange): Promise<LiveO
         .range(from, to)
     ),
     admin.from("job_runs").select("id", { count: "exact", head: true }).in("status", ["running", "queued"]),
-    fetchAllRows<{ workspace_id: string }>((from, to) =>
-      admin.from("wallet_transactions").select("workspace_id").range(from, to)
-    ),
     admin
       .from("job_runs")
       .select(
@@ -766,7 +616,6 @@ export async function loadLiveOverview(range: AdminOverviewRange): Promise<LiveO
     mapSubscription(row, directory.nameById, directory.emailById)
   );
   const credits = creditRows.map((row) => mapCredit(row, directory.nameById, directory.workspaceNameById));
-  const walletTxs = walletRows.map((row) => mapWallet(row, directory.nameById, directory.workspaceNameById));
   const jobs = jobRows.map((row) => mapJob(row, directory.nameById, directory.workspaceNameById));
   const failedJobsForAttention = (failedJobRows.data ?? []).map((row) =>
     mapJob(row as JobRow, directory.nameById, directory.workspaceNameById)
@@ -782,24 +631,16 @@ export async function loadLiveOverview(range: AdminOverviewRange): Promise<LiveO
     .filter((tx) => tx.operation === "credit_topup")
     .reduce((sum, tx) => sum + Math.abs(tx.credits) * CREDIT_TOPUP_USD_PER_CREDIT, 0);
   const creditTopupUsd = purchaseUsd > 0 ? purchaseUsd : estimatedTopupUsd;
-  const completedWallet = walletTxs.filter((tx) => tx.status === "completed");
-  const walletTopupUsd = completedWallet
-    .filter((tx) => tx.kind === "topup")
-    .reduce((sum, tx) => sum + tx.amountUsd, 0);
   const creditsSpent = credits.filter((tx) => tx.credits > 0).reduce((sum, tx) => sum + tx.credits, 0);
-  const walletSpent = completedWallet
-    .filter((tx) => tx.amountUsd < 0)
-    .reduce((sum, tx) => sum + Math.abs(tx.amountUsd), 0);
   const failedJobs = jobs.filter((job) => job.status === "failed").length;
   const runningCount = runningJobs.count ?? 0;
-  const walletsWithBalance = wallets.filter((row) => Number(row.balance_usd ?? 0) > 0).length;
 
   const kpis: AdminKpi[] = [
     { label: "Users", value: String(directory.authUsers.length), hint: `${newUsers} new in range` },
     {
       label: "Workspaces",
       value: String(directory.workspaceNameById.size),
-      hint: `${walletsWithBalance} with wallet balance`,
+      hint: "All workspaces",
     },
     {
       label: "Active plans",
@@ -809,9 +650,7 @@ export async function loadLiveOverview(range: AdminOverviewRange): Promise<LiveO
     },
     { label: "MRR (plans)", value: formatKpiUsd(mrr), hint: "Subscriptions only" },
     { label: "Credit top-up", value: formatKpiUsd(creditTopupUsd), hint: "$0.50 / credit" },
-    { label: "Wallet top-up", value: formatKpiUsd(walletTopupUsd), hint: "USD wallet in" },
     { label: "Credits spent", value: creditsSpent.toLocaleString("en-US"), hint: "AI credits out" },
-    { label: "Wallet spent", value: formatKpiUsd(walletSpent), hint: "USD wallet out" },
     {
       label: "Jobs failed",
       value: String(failedJobs),
@@ -820,23 +659,19 @@ export async function loadLiveOverview(range: AdminOverviewRange): Promise<LiveO
     },
   ];
 
-  const walletTxWorkspaceIds = new Set(walletTxWorkspaceRows.map((row) => row.workspace_id));
   const completedJobs = jobs.filter((job) => job.status === "completed").length;
 
   return {
     range,
     kpis,
     creditSlices: creditSpendSlices(credits),
-    walletSlices: walletSpendSlices(walletTxs),
     attention: attentionItems({
       subscriptions,
       jobs: failedJobsForAttention,
-      wallets,
-      walletTxWorkspaceIds,
       integrations,
       workspaceNameById: directory.workspaceNameById,
     }),
-    series: buildOverviewSeries(range, credits, walletTxs),
+    series: buildOverviewSeries(range, credits),
     jobHealth: {
       completed: completedJobs,
       failed: failedJobs,

@@ -8,40 +8,18 @@ import { isTerminalJobStatus } from "@/lib/jobs/types";
 import { CATALOG_WORKER_STALE_MS } from "@/lib/jobs/config";
 import { recoverStaleCatalogRun } from "@/lib/jobs/catalog-recovery";
 import { recoverStuckGrowthJobs } from "@/lib/jobs/growth-recovery";
-import { expireStaleHeldExtracts as expireStaleMrHeldExtracts } from "@/lib/market-research/extract-advance";
+import { expireStaleExtracts } from "@/lib/market-research/extract-advance";
 import { expireElapsedTrials } from "@/lib/trial-server";
 
-import { cronSecretFromEnv, cronSecretMatches } from "@/lib/auth/cron-secret";
+import { cronAuthorized } from "@/lib/auth/cron-secret";
 
 export const maxDuration = 60;
 
-/**
- * Accepts the app env secret when set; otherwise verifies the bearer against
- * the Vault secret pg_cron sends (verify_jobs_cron_secret, service_role only),
- * so a missing env var can no longer silently switch off job recovery.
- */
-async function authorized(request: NextRequest): Promise<boolean> {
-  const secret = cronSecretFromEnv();
-  if (secret) return cronSecretMatches(request, secret);
-  const presented =
-    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
-  if (!presented) return false;
-  const { data, error } = await createAdminClient().rpc("verify_jobs_cron_secret", {
-    p_secret: presented,
-  });
-  if (error) {
-    console.error("[jobs/sweep] secret verification failed", error.message);
-    return false;
-  }
-  return data === true;
-}
-
 export async function POST(request: NextRequest) {
-  if (!(await authorized(request))) {
+  const admin = createAdminClient();
+  if (!(await cronAuthorized(request, admin))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const admin = createAdminClient();
 
   // Catalog orchestrators ping every 30s, so they can be recovered well
   // before the generic 10-minute threshold — including runs stuck queued
@@ -108,7 +86,7 @@ export async function POST(request: NextRequest) {
 
   let expiredExtracts = 0;
   try {
-    expiredExtracts = await expireStaleMrHeldExtracts(admin);
+    expiredExtracts = await expireStaleExtracts(admin);
   } catch (error) {
     console.error(
       "[jobs/sweep] expire held mr extracts failed",

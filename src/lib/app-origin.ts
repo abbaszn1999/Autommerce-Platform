@@ -69,15 +69,3 @@ export function trustedOriginFromRequest(request: Request): string {
     return getAppOrigin();
   }
 }
-
-export function snippetOrigin(currentOrigin?: string): string {
-  const current = (currentOrigin || "").replace(/\/+$/, "");
-  if (
-    !current ||
-    current.includes("localhost") ||
-    current.includes("127.0.0.1")
-  ) {
-    return getAppOrigin();
-  }
-  return current;
-}

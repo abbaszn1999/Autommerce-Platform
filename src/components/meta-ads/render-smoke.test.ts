@@ -80,7 +80,8 @@ describe("meta render smoke", () => {
       expect(html, view).toContain("Ask anything about");
       expect(html, view).not.toMatch(/could not be (shown|displayed)|Something went wrong/i);
     }
-  });
+    // 36 full shell renders: about 3s alone, over the default 5s when the whole suite runs in parallel.
+  }, 30_000);
 
   // About 830 renders (every page at the account, each campaign and each ad set), so it gets more time than the default 5s.
   it("renders every page for every campaign and ad set without throwing", () => {

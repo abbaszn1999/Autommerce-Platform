@@ -680,7 +680,8 @@ describe("render smoke", () => {
       useGoogleAds.setState({ view, scope: {} });
       expect(() => renderToString(createElement(GoogleAdsShell))).not.toThrow();
     }
-  });
+    // One full shell render per view: over the default 5s when the whole suite runs in parallel.
+  }, 30_000);
 
   it("renders chat with agent replies and pending changes", () => {
     connect();

@@ -15,10 +15,6 @@ export type MrSliceName =
   | "keywords"
   | "collections"
   | "content"
-  | "strategy"
-  | "articles"
-  | "article-jobs"
-  | "internal-links"
   | "push-ledger"
   | "stage1-job";
 
@@ -362,7 +358,7 @@ const CHUNK_READ_CONCURRENCY = 6;
 export type ArchiveKeywordRow = KeywordRow & { seedId: string };
 
 /**
- * Rebuilds the complete paid keyword set from the chunk archive — every raw
+ * Rebuilds the complete extracted keyword set from the chunk archive — every raw
  * row exactly as pulled, per seed, with no cross-seed merging.
  *
  * `keywords.json` is the Extract-tab cache (full archive, capped at

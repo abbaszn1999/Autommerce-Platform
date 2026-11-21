@@ -9,7 +9,6 @@ import {
   Plug,
   ScrollText,
   Users,
-  Wallet,
 } from "lucide-react";
 import { adminRoutes } from "./paths";
 
@@ -26,7 +25,6 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: adminRoutes.workspaces(), label: "Workspaces", icon: Building2, group: "Customers" },
   { href: adminRoutes.subscriptions(), label: "Subscriptions", icon: CreditCard, group: "Money" },
   { href: adminRoutes.credits(), label: "Credits", icon: Coins, group: "Money" },
-  { href: adminRoutes.wallet(), label: "Wallet", icon: Wallet, group: "Money" },
   { href: adminRoutes.jobs(), label: "Jobs", icon: Activity, group: "Ops" },
   { href: adminRoutes.integrations(), label: "Integrations", icon: Plug, group: "Ops" },
   { href: adminRoutes.storeAgent(), label: "Store Agent", icon: Bot, group: "Ops" },

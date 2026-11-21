@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EvidenceLedger, imageFileKey, normalizeImageKey, normalizePageKey, pageShowsImage } from "./evidence";
+import { imageFileKey, normalizeImageKey } from "./evidence";
 
 describe("normalizeImageKey", () => {
   it("treats size/format variants of one image as the same image", () => {
@@ -24,29 +24,5 @@ describe("imageFileKey", () => {
 
   it("ignores generic filenames so unrelated sites never match", () => {
     expect(imageFileKey("https://a.test/image1.jpg")).toBeNull();
-  });
-});
-
-describe("EvidenceLedger", () => {
-  it("maps a product page's .json view onto the page and merges what both showed", () => {
-    const ledger = new EvidenceLedger();
-    ledger.recordPage({
-      url: "https://store.test/products/robot",
-      finalUrl: "https://store.test/products/robot",
-      status: 200,
-      identifiers: [],
-      imageUrls: ["https://cdn.test/robot-front-887291.jpg"],
-    });
-    ledger.recordPage({
-      url: "https://store.test/products/robot.json",
-      finalUrl: "https://store.test/products/robot.json",
-      status: 200,
-      identifiers: [{ value: "RCP887291", key: "RCP887291", strong: true }],
-      imageUrls: [],
-    });
-    const evidence = ledger.find("https://www.store.test/products/robot/");
-    expect(evidence?.identifierKeys.has("RCP887291")).toBe(true);
-    expect(pageShowsImage(evidence!, "https://cdn.test/robot-front-887291.jpg")).toBe(true);
-    expect(normalizePageKey("https://store.test/products/robot.js")).toBe("store.test/products/robot");
   });
 });

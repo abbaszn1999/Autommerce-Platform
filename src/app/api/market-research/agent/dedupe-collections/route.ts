@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAiWalletBilling } from "@/lib/billing/ai-wallet-billing";
 import {
   agentDedupeCollectionsBodySchema,
   jsonError,
@@ -15,7 +14,7 @@ export const maxDuration = 300;
 // collections job (see mr-collections-session.ts). Never removes anything
 // server-side — flagging is `status: "duplicate"`; the merchant removes
 // flagged rows with "Remove duplicates" in Tab 5.
-async function handlePost(request: NextRequest) {
+export async function POST(request: NextRequest) {
   let json: unknown;
   try {
     json = await request.json();
@@ -62,5 +61,3 @@ async function handlePost(request: NextRequest) {
     return jsonError(msg, 500);
   }
 }
-
-export const POST = withAiWalletBilling("mr_dedupe_collections", handlePost);

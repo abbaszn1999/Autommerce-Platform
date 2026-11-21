@@ -5,9 +5,6 @@ import {
   LayoutGrid,
   Boxes,
   Search,
-  Paintbrush,
-  RefreshCw,
-  Wallet,
   Bot,
   CreditCard,
   Users,
@@ -17,7 +14,7 @@ import {
 } from "lucide-react";
 
 /** How a tool is paid for. Drives the badge shown on its card. */
-export type ToolBilling = "credits" | "wallet" | "free";
+export type ToolBilling = "credits" | "free";
 
 export type ToolCategory = "agents" | "visual" | "growth" | "data" | "account";
 
@@ -50,7 +47,7 @@ export const TOOLS: ToolDefinition[] = [
       "Chat with an agent that can read and rewrite products and categories straight in your store.",
     icon: Bot,
     category: "agents",
-    billing: "wallet",
+    billing: "credits",
     needsIntegration: true,
     keywords: ["chat", "copilot", "assistant", "agent", "edit products"],
   },
@@ -58,25 +55,13 @@ export const TOOLS: ToolDefinition[] = [
     path: "/market-research",
     name: "Market research",
     blurb:
-      "A seven-stage SEO agent: finds niches and keywords, then writes collections and articles into your store.",
+      "A six-stage SEO agent: finds niches and keywords, then writes collection pages and their on-page SEO into your store.",
     icon: Search,
     category: "agents",
-    billing: "wallet",
+    billing: "free",
     needsIntegration: true,
-    keywords: ["seo", "keywords", "collections", "articles", "content", "niche"],
+    keywords: ["seo", "keywords", "collections", "on-page", "content", "niche"],
   },
-  {
-    path: "/growth-sync",
-    name: "Growth Sync",
-    blurb:
-      "Set a rule once and new store products get classified into the right categories automatically, every 24 hours.",
-    icon: RefreshCw,
-    category: "agents",
-    billing: "wallet",
-    needsIntegration: true,
-    keywords: ["automation", "rules", "classify", "schedule", "background"],
-  },
-
   // ── Visual AI ──
   {
     path: "/products-gallery",
@@ -131,26 +116,6 @@ export const TOOLS: ToolDefinition[] = [
   },
 
   // ── Growth extras ──
-  {
-    path: "/customize",
-    name: "Customize",
-    blurb:
-      "Style the FAQ and related-link blocks you embed on your storefront, and set your AI naming prefix.",
-    icon: Paintbrush,
-    category: "growth",
-    billing: "free",
-    needsIntegration: true,
-    keywords: ["widgets", "embed", "faq", "blocks", "branding", "prefix"],
-  },
-  {
-    path: "/wallet",
-    name: "Wallet",
-    blurb: "Prepaid balance for the wallet-billed agents, with a full transaction ledger.",
-    icon: Wallet,
-    category: "growth",
-    billing: "free",
-    keywords: ["balance", "top up", "money", "billing", "ledger", "stripe"],
-  },
   {
     path: "/usage",
     name: "Usage",

@@ -18,10 +18,9 @@ export interface LoaderStep {
 
 export function FuturisticAiLoader({
   title = "Pushing Collections to Storefront…",
-  subtitle = "Authorizing wallet transaction and deploying category taxonomy to your store.",
+  subtitle = "Deploying category taxonomy to your store.",
   steps = [
-    { label: "Authorizing transaction & deducting wallet funds", sublabel: "Instant balance hold confirmation" },
-    { label: "Deploying taxonomy structures & collection handles", sublabel: "Creating smart store collections" },
+        { label: "Deploying taxonomy structures & collection handles", sublabel: "Creating smart store collections" },
     { label: "Linking catalog products with AI confidence", sublabel: "Applying semantic threshold associations" },
     { label: "Initializing Stage 6 On-Page SEO Workspace", sublabel: "Preparing copy generation environment" },
   ],

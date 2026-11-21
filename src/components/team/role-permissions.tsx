@@ -12,7 +12,6 @@ import {
   Image as ImageIcon,
   Images,
   LayoutDashboard,
-  Paintbrush,
   Package,
   PenLine,
   RefreshCw,
@@ -21,7 +20,6 @@ import {
   ShieldCheck,
   Upload,
   Users,
-  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -116,13 +114,6 @@ const GROUPS: PermGroup[] = [
       { page: "Market research", action: "View projects", access: ALL },
       { page: "Market research", action: "New project / run analysis", access: EDITOR },
       { page: "Market research", action: "Delete projects", access: ADMIN },
-      { page: "Customize", action: "View widgets & prefix", access: ALL },
-      { page: "Customize", action: "Save styles & naming prefix", access: EDITOR },
-      { page: "Growth Sync", action: "View rules & activity", access: ALL },
-      { page: "Growth Sync", action: "New rule / run / undo", access: EDITOR },
-      { page: "Growth Sync", action: "Delete rules", access: ADMIN },
-      { page: "Wallet", action: "View balance & statement", access: ALL },
-      { page: "Wallet", action: "Add funds", access: EDITOR },
     ],
   },
   {
@@ -154,9 +145,7 @@ const PAGE_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   "Products Gallery": Images,
   "Products Visualizer": Boxes,
   "Market research": Search,
-  Customize: Paintbrush,
   Sync: RefreshCw,
-  Wallet: Wallet,
   "Store assistant": Bot,
   Usage: CreditCard,
   Team: Users,

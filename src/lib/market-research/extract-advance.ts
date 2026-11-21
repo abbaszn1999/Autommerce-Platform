@@ -24,7 +24,7 @@ import {
   toExtractedKeyword,
   type DisplayKeyword,
 } from "@/lib/market-research/map-keywords";
-import { settleExtractBilling } from "@/lib/market-research/wallet-ops";
+import { finalizeExtract } from "@/lib/market-research/extract-finalize";
 
 /** Released when each advance ends; must outlast the slowest advance (large settles build the sample). */
 export const EXTRACT_LEASE_MS = 120_000;
@@ -51,10 +51,7 @@ export type ExtractHeader = {
   workspace_id: string;
   project_id: string;
   created_by: string;
-  held_usd: number | string;
-  actual_usd: number | string;
   rows_returned: number;
-  billing_status: string;
   status: string;
   created_at: string;
   job_run_id: string | null;
@@ -77,8 +74,6 @@ export type ExtractAdvanceResult = {
   seeds: AdvancedSeed[];
   allDone: boolean;
   rowsReturned: number;
-  settledUsd?: number;
-  billingPending: boolean;
   leased: boolean;
   sample?: DisplayKeyword[];
 };
@@ -161,7 +156,7 @@ export async function loadMrExtractHeader(
   const { data, error } = await admin
     .from("mr_extracts")
     .select(
-      "id, workspace_id, project_id, created_by, held_usd, actual_usd, rows_returned, billing_status, status, created_at, job_run_id"
+      "id, workspace_id, project_id, created_by, rows_returned, status, created_at, job_run_id"
     )
     .eq("id", params.extractId)
     .eq("workspace_id", params.workspaceId)
@@ -172,7 +167,7 @@ export async function loadMrExtractHeader(
       const fallback = await admin
         .from("mr_extracts")
         .select(
-          "id, workspace_id, project_id, created_by, held_usd, actual_usd, rows_returned, billing_status, status, created_at"
+          "id, workspace_id, project_id, created_by, rows_returned, status, created_at"
         )
         .eq("id", params.extractId)
         .eq("workspace_id", params.workspaceId)
@@ -194,7 +189,7 @@ export async function loadLatestMrExtract(
   const { data, error } = await admin
     .from("mr_extracts")
     .select(
-      "id, workspace_id, project_id, created_by, held_usd, actual_usd, rows_returned, billing_status, status, created_at, job_run_id"
+      "id, workspace_id, project_id, created_by, rows_returned, status, created_at, job_run_id"
     )
     .eq("workspace_id", params.workspaceId)
     .eq("project_id", params.projectId)
@@ -206,7 +201,7 @@ export async function loadLatestMrExtract(
       const fallback = await admin
         .from("mr_extracts")
         .select(
-          "id, workspace_id, project_id, created_by, held_usd, actual_usd, rows_returned, billing_status, status, created_at"
+          "id, workspace_id, project_id, created_by, rows_returned, status, created_at"
         )
         .eq("workspace_id", params.workspaceId)
         .eq("project_id", params.projectId)
@@ -333,7 +328,7 @@ export async function persistExtractKeywordSample(
   }
 ): Promise<DisplayKeyword[]> {
   // Undeduped: every raw pulled row, including exact-text duplicates that
-  // surfaced under different seeds — the merchant paid for and should see
+  // surfaced under different seeds — the merchant should see
   // all of them, not a collapsed/sampled subset.
   const rows = await loadExtractRowsAdmin(
     admin,
@@ -515,36 +510,31 @@ export async function abortActiveMrExtractRuns(
   return loadExtractRuns(admin, extractId);
 }
 
-export async function settleHeldExtract(
+export async function finishRunningExtract(
   admin: Admin,
   params: {
     extract: ExtractHeader;
-    userId: string;
     rowsReturned: number;
     status: "succeeded" | "failed" | "aborted";
     runs: Array<{ seed_id: string; seed_term: string }>;
   }
-): Promise<{ settledUsd?: number; billingPending: boolean; sample?: DisplayKeyword[] }> {
-  if (params.extract.billing_status !== "held") {
-    return { billingPending: false };
-  }
-  const settled = await settleExtractBilling(admin, {
+): Promise<{ sample?: DisplayKeyword[] }> {
+  if (params.extract.status !== "running") return {};
+  await finalizeExtract(admin, {
     extract: params.extract,
-    userId: params.userId,
     rowsReturned: params.rowsReturned,
     status: params.status,
   });
-  if (settled.pending) return { billingPending: true };
   const sample = await persistExtractKeywordSample(admin, {
     workspaceId: params.extract.workspace_id,
     projectId: params.extract.project_id,
     extractId: params.extract.id,
     runs: params.runs,
   }).catch(() => undefined);
-  return { settledUsd: settled.actualUsd, billingPending: false, sample };
+  return { sample };
 }
 
-export async function expireStaleHeldExtracts(
+export async function expireStaleExtracts(
   admin: Admin,
   limit = 5
 ): Promise<number> {
@@ -552,9 +542,9 @@ export async function expireStaleHeldExtracts(
   const { data, error } = await admin
     .from("mr_extracts")
     .select(
-      "id, workspace_id, project_id, created_by, held_usd, actual_usd, rows_returned, billing_status, status, created_at, job_run_id"
+      "id, workspace_id, project_id, created_by, rows_returned, status, created_at, job_run_id"
     )
-    .eq("billing_status", "held")
+    .eq("status", "running")
     .lt("created_at", cutoff)
     .limit(limit);
   if (error) {
@@ -562,9 +552,9 @@ export async function expireStaleHeldExtracts(
       const fallback = await admin
         .from("mr_extracts")
         .select(
-          "id, workspace_id, project_id, created_by, held_usd, actual_usd, rows_returned, billing_status, status, created_at"
+          "id, workspace_id, project_id, created_by, rows_returned, status, created_at"
         )
-        .eq("billing_status", "held")
+        .eq("status", "running")
         .lt("created_at", cutoff)
         .limit(limit);
       if (fallback.error) throw fallback.error;
@@ -579,9 +569,8 @@ export async function expireStaleHeldExtracts(
           (sum, run) => sum + (Number(run.rows_returned) || 0),
           0
         );
-        await settleHeldExtract(admin, {
+        await finishRunningExtract(admin, {
           extract: row,
-          userId: row.created_by,
           rowsReturned,
           status: "failed",
           runs,
@@ -600,9 +589,8 @@ export async function expireStaleHeldExtracts(
       (sum, run) => sum + (Number(run.rows_returned) || 0),
       0
     );
-    await settleHeldExtract(admin, {
+    await finishRunningExtract(admin, {
       extract: row,
-      userId: row.created_by,
       rowsReturned,
       status: "failed",
       runs,
@@ -618,7 +606,6 @@ export async function advanceMrExtract(
     workspaceId: string;
     projectId: string;
     extractId: string;
-    userId: string;
     provider?: KeywordDataProvider;
     /** Used only when `mr_runs.next_cursor` is empty (migration not applied). */
     clientCursors?: Array<{ seedId: string; cursor?: string }>;
@@ -641,7 +628,6 @@ export async function advanceMrExtract(
       seeds,
       allDone,
       rowsReturned: seeds.reduce((sum, seed) => sum + seed.rowsReturned, 0),
-      billingPending: allDone && extract.billing_status === "held",
       leased: false,
     };
   }
@@ -754,25 +740,20 @@ export async function advanceMrExtract(
         .from("mr_extracts")
         .update({ rows_returned: rowsReturned })
         .eq("id", extract.id)
-        .eq("billing_status", "held");
+        .eq("status", "running");
     } catch {
       // Progress write is best-effort; settlement still uses seed totals.
     }
 
     const latest = (await loadMrExtractHeader(admin, params)) ?? extract;
-    let settledUsd: number | undefined;
-    let billingPending = false;
     let sample: DisplayKeyword[] | undefined;
-    if (allDone && latest.billing_status === "held") {
-      const settled = await settleHeldExtract(admin, {
+    if (allDone && latest.status === "running") {
+      const settled = await finishRunningExtract(admin, {
         extract: latest,
-        userId: params.userId,
         rowsReturned,
         status: settleStatusFromSeeds(seeds),
         runs: dbRuns,
       });
-      billingPending = settled.billingPending;
-      settledUsd = settled.settledUsd;
       sample = settled.sample;
     }
 
@@ -781,8 +762,6 @@ export async function advanceMrExtract(
       seeds,
       allDone,
       rowsReturned,
-      settledUsd,
-      billingPending,
       leased: true,
       sample,
     };

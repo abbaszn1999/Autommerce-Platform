@@ -16,11 +16,9 @@ import {
   normalizeSheetFilters,
   type CollectionContent,
   type ExtractedKeyword,
-  type GeneratedArticle,
   type OnPageInstructions,
   type ProposedCollection,
   type SheetKeywordFilters,
-  type StrategyArticle,
   type WorkspaceTab,
 } from "@/components/market-research/workspace-data";
 
@@ -42,22 +40,17 @@ export type MrProjectStateJson = {
   clusterSelection?: string[];
   proposedCollections?: ProposedCollection[];
   contentById?: Record<string, CollectionContent>;
-  /** @deprecated Legacy whole-project paid flag; paidCollectionIds is now authoritative. */
+  /** @deprecated Legacy whole-project pushed flag; paidCollectionIds is now authoritative. */
   paidCollections?: boolean;
-  /** Collection ids actually confirmed pushed and paid for. */
+  /** Collection ids confirmed pushed to the store. */
   paidCollectionIds?: string[];
   contentReady?: boolean;
   pushed?: boolean;
   analyzed?: boolean;
-  strategyReady?: boolean;
-  strategyApproved?: boolean;
   customInstruction?: OnPageInstructions;
-  extractCharge?: number;
   extractRows?: number;
   keywords?: ExtractedKeyword[];
   sheetFilters?: SheetKeywordFilters;
-  strategy?: StrategyArticle[];
-  articles?: Record<string, GeneratedArticle>;
   extractId?: string;
   /**
    * Minimum SKUs a category/subcategory/PLP needs to be selectable in Tab
@@ -84,7 +77,6 @@ export type MrProjectRow = {
   state: MrProjectStateJson | null;
   keywords_path: string | null;
   extract_rows: number;
-  extract_charged_usd: number;
 };
 
 const UUID_RE =
@@ -96,7 +88,8 @@ export function isUuid(value: string): boolean {
 
 function asStage(value: unknown, fallback: MarketResearchStage = 1): MarketResearchStage {
   const n = typeof value === "number" ? value : Number(value);
-  if (n >= 1 && n <= 7) return n as MarketResearchStage;
+  // The retired stage 7 (content strategy) folds into the last stage.
+  if (n >= 1) return Math.min(Math.floor(n), 6) as MarketResearchStage;
   return fallback;
 }
 
@@ -181,27 +174,18 @@ export function rowsToPersisted(
     if (Array.isArray(state.paidCollectionIds) && state.paidCollectionIds.length > 0) {
       next.paidCollectionIdsByProject[id] = state.paidCollectionIds;
     } else if (state.paidCollections && Array.isArray(state.proposedCollections)) {
-      // Legacy projects recorded "paid" as a whole-project boolean before
+      // Legacy projects recorded "pushed" as a whole-project boolean before
       // per-collection tracking existed. Preserve prior behavior for them by
-      // treating every collection proposed at that time as paid.
+      // treating every collection proposed at that time as pushed.
       next.paidCollectionIdsByProject[id] = state.proposedCollections.map((c) => c.id);
     }
     if (state.contentReady) next.contentReadyIds.push(id);
     if (state.pushed) next.pushedIds.push(id);
     if (state.analyzed) next.analyzedProjectIds.push(id);
-    if (state.strategyReady) next.strategyReadyIds.push(id);
-    if (state.strategyApproved) next.strategyApprovedIds.push(id);
     if (state.customInstruction) {
       next.customInstructionByProject[id] = normalizeOnPageInstructions(
         state.customInstruction
       );
-    }
-    const extractCharge =
-      typeof state.extractCharge === "number"
-        ? state.extractCharge
-        : Number(row.extract_charged_usd);
-    if (Number.isFinite(extractCharge) && extractCharge > 0) {
-      next.extractChargeByProject[id] = extractCharge;
     }
     const extractRows =
       typeof state.extractRows === "number"
@@ -218,12 +202,6 @@ export function rowsToPersisted(
     }
     if (typeof state.extractId === "string" && state.extractId) {
       next.extractIdByProject[id] = state.extractId;
-    }
-    if (Array.isArray(state.strategy)) {
-      next.strategyByProject[id] = state.strategy;
-    }
-    if (state.articles && typeof state.articles === "object") {
-      next.articlesByProject[id] = state.articles;
     }
   }
 
@@ -260,16 +238,11 @@ export function projectStateSlice(
     contentReady: persisted.contentReadyIds.includes(projectId),
     pushed: persisted.pushedIds.includes(projectId),
     analyzed: persisted.analyzedProjectIds.includes(projectId),
-    strategyReady: persisted.strategyReadyIds.includes(projectId),
-    strategyApproved: persisted.strategyApprovedIds.includes(projectId),
     customInstruction: persisted.customInstructionByProject[projectId],
-    extractCharge: persisted.extractChargeByProject[projectId] ?? 0,
     extractRows: persisted.extractRowsByProject[projectId] ?? 0,
     keywords: Array.isArray(keywords) ? keywords : [],
     sheetFilters: persisted.sheetFiltersByProject[projectId],
     extractId: persisted.extractIdByProject[projectId],
-    strategy: persisted.strategyByProject?.[projectId] ?? [],
-    articles: persisted.articlesByProject?.[projectId] ?? {},
     skuFloor: persisted.skuFloorByProject[projectId] ?? DEFAULT_SKU_FLOOR,
   };
 }
@@ -322,18 +295,10 @@ export function remapPersistedIds(
       persisted.customInstructionByProject
     ),
     analyzedProjectIds: remapIds(persisted.analyzedProjectIds),
-    strategyReadyIds: remapIds(persisted.strategyReadyIds),
-    strategyApprovedIds: remapIds(persisted.strategyApprovedIds),
-    extractChargeByProject: remapRecord(persisted.extractChargeByProject),
     extractRowsByProject: remapRecord(persisted.extractRowsByProject),
     extractIdByProject: remapRecord(persisted.extractIdByProject ?? {}),
     keywordsByProject: remapRecord(persisted.keywordsByProject),
     sheetFiltersByProject: remapRecord(persisted.sheetFiltersByProject ?? {}),
-    strategyByProject: remapRecord(persisted.strategyByProject ?? {}),
-    articlesByProject: remapRecord(persisted.articlesByProject ?? {}),
-    internalLinksByProject: remapRecord(
-      persisted.internalLinksByProject ?? {}
-    ),
   };
 }
 

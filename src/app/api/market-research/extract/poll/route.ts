@@ -7,9 +7,9 @@ import {
 import {
   abortActiveMrExtractRuns,
   advanceMrExtract,
+  finishRunningExtract,
   isExtractTimedOut,
   loadMrExtractHeader,
-  settleHeldExtract,
 } from "@/lib/market-research/extract-advance";
 import { requestJobCancel } from "@/lib/jobs/repo";
 
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     });
     if (!extract) return jsonError("Extract not found", 404);
 
-    if (isExtractTimedOut(extract.created_at) && extract.billing_status === "held") {
+    if (isExtractTimedOut(extract.created_at) && extract.status === "running") {
       if (extract.job_run_id) {
         await requestJobCancel(
           auth.admin,
@@ -52,9 +52,8 @@ export async function POST(request: NextRequest) {
         (sum, run) => sum + (Number(run.rows_returned) || 0),
         0
       );
-      const settled = await settleHeldExtract(auth.admin, {
+      const settled = await finishRunningExtract(auth.admin, {
         extract,
-        userId: auth.user.id,
         rowsReturned,
         status: "failed",
         runs,
@@ -72,8 +71,6 @@ export async function POST(request: NextRequest) {
           })),
           allDone: true,
           rowsReturned,
-          settledUsd: settled.settledUsd,
-          billingPending: settled.billingPending,
           sample: settled.sample,
         },
         { headers: auth.headers }
@@ -84,7 +81,6 @@ export async function POST(request: NextRequest) {
       workspaceId: parsed.data.workspaceId,
       projectId: parsed.data.projectId,
       extractId: parsed.data.extractId,
-      userId: auth.user.id,
       clientCursors: parsed.data.cursors,
     });
 
@@ -93,8 +89,6 @@ export async function POST(request: NextRequest) {
         seeds: result.seeds,
         allDone: result.allDone,
         rowsReturned: result.rowsReturned,
-        settledUsd: result.settledUsd,
-        billingPending: result.billingPending,
         sample: result.sample,
       },
       { headers: auth.headers }

@@ -19,12 +19,7 @@ export function recordStorageWriteBytes(
   emit("storage.write_bytes", bytes, tags);
 }
 
-/** Public embed latency — sits on the merchant's revenue path. */
-export function recordEmbedLatencyMs(ms: number) {
-  emit("embed.content.latency_ms", Math.round(ms));
-}
-
-/** Response payload size for gallery poll and wallet ledger. */
+/** Response payload size for gallery poll. */
 export function recordResponseBytes(route: string, bytes: number) {
   emit("http.response_bytes", bytes, { route });
 }

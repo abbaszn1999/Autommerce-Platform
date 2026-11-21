@@ -7,8 +7,6 @@ import type {
   AdminMemberRole,
   AdminSubscriptionStatus,
   AdminUserStatus,
-  AdminWalletModule,
-  AdminWalletTxKind,
 } from "./types";
 
 export const CREDIT_OPERATION_LABELS: Record<AdminCreditOperation, string> = {
@@ -27,21 +25,6 @@ export const CREDIT_OPERATION_LABELS: Record<AdminCreditOperation, string> = {
   competitor_ads: "Competitor ads",
   credit_topup: "Credit Top-up",
   monthly_reset: "Monthly Reset",
-};
-
-export const WALLET_MODULE_LABELS: Record<AdminWalletModule, string> = {
-  "market-research": "Market Research",
-  "growth-sync": "Growth Sync",
-  // The tool is gone; charges it made earlier still carry this module.
-  "website-restructure": "Website Restructure (retired)",
-  topup: "Wallet Top-up",
-  Billing: "Billing",
-};
-
-export const WALLET_KIND_LABELS: Record<AdminWalletTxKind, string> = {
-  topup: "Top-up",
-  charge: "Charge",
-  refund: "Refund",
 };
 
 export const JOB_KIND_LABELS: Record<AdminJobKind, string> = {
@@ -105,11 +88,6 @@ export const ACTIVITY_ENTITY_LABELS: Record<string, string> = {
 
 export function creditOperationLabel(operation: string): string {
   return CREDIT_OPERATION_LABELS[operation as AdminCreditOperation] ?? operation;
-}
-
-export function walletModuleLabel(module: string): string {
-  if (!module) return "—";
-  return WALLET_MODULE_LABELS[module as AdminWalletModule] ?? module;
 }
 
 export function activityEntityLabel(entityType: string | null | undefined): string {

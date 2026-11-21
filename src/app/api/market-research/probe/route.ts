@@ -4,12 +4,9 @@ import {
   probeBodySchema,
   requireMrWrite,
 } from "@/lib/market-research/api-schema";
-import { estimateProbeCostUsd } from "@/lib/market-research/cost";
 import { getKeywordProvider } from "@/lib/market-research/providers";
 import { marketToSemrushDb } from "@/lib/market-research/providers/keyword-provider";
 import { getMrProject, mergeProjectProbesAdmin } from "@/lib/market-research/server-persist";
-import { chargeMrWallet } from "@/lib/market-research/wallet-ops";
-import { readWorkspaceWallet } from "@/lib/wallet/server";
 
 export const maxDuration = 180;
 
@@ -36,17 +33,6 @@ export async function POST(request: NextRequest) {
   );
   if (!project) {
     return jsonError("Project not found", 404);
-  }
-
-  // Check the balance up front, but charge only after Apify answers. If the
-  // server restarts during the wait, nothing has been taken from the wallet.
-  const maxUsd = estimateProbeCostUsd(parsed.data.seeds.length);
-  const wallet = await readWorkspaceWallet(auth.admin, parsed.data.workspaceId);
-  if (wallet.balance < maxUsd) {
-    return NextResponse.json(
-      { error: "Not enough wallet balance" },
-      { status: 402, headers: auth.headers }
-    );
   }
 
   const database = marketToSemrushDb(parsed.data.market);
@@ -97,34 +83,9 @@ export async function POST(request: NextRequest) {
     // vendor's name, actor ids, or request paths in its message.
     console.error("[mr-probe] Demand probe failed:", error);
     return NextResponse.json(
-      { error: "Demand check failed. You have not been charged." },
+      { error: "Demand check failed." },
       { status: 502, headers: auth.headers }
     );
-  }
-
-  const succeeded = results.filter((row) => !row.failed).length;
-  const actualUsd = estimateProbeCostUsd(succeeded);
-  if (actualUsd > 0) {
-    const charged = await chargeMrWallet(auth.admin, {
-      workspaceId: parsed.data.workspaceId,
-      userId: auth.user.id,
-      amountUsd: actualUsd,
-      description: `Demand check · ${succeeded} seed${succeeded === 1 ? "" : "s"}`,
-      idempotencyKey: `apify_seed_probe:${parsed.data.attemptId}`,
-      details: {
-        projectId: parsed.data.projectId,
-        market: parsed.data.market,
-        seedCount: parsed.data.seeds.length,
-        succeeded,
-      },
-    });
-    if (!charged.ok) {
-      const status = charged.reason === "insufficient_funds" ? 402 : 500;
-      return NextResponse.json(
-        { error: charged.message || "Not enough wallet balance" },
-        { status, headers: auth.headers }
-      );
-    }
   }
 
   const checkedAt = Date.now();
@@ -160,8 +121,6 @@ export async function POST(request: NextRequest) {
     {
       market: parsed.data.market,
       database,
-      probeCostUsd: actualUsd,
-      chargedUsd: actualUsd,
       results,
     },
     { headers: auth.headers }

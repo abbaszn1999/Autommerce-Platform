@@ -3,10 +3,6 @@ import { createClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getProvider, isProviderSupported } from "@/lib/sync";
 import {
-  deleteWorkspaceDomains,
-  replaceWorkspaceDomains,
-} from "@/lib/embed/workspace-domains";
-import {
   encryptIntegrationConfig,
   encryptionConfigured,
   primaryCredentialFingerprint,
@@ -162,28 +158,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    try {
-      await replaceWorkspaceDomains(admin, workspaceId, [
-        baseUrl,
-        typeof savedConfig.store_domain === "string" ? savedConfig.store_domain : null,
-        typeof savedConfig.store_url === "string" ? savedConfig.store_url : null,
-        typeof savedConfig.shop === "string" ? savedConfig.shop : null,
-        typeof savedConfig.url === "string" ? savedConfig.url : null,
-        typeof testResult.metadata?.storeDomain === "string"
-          ? testResult.metadata.storeDomain
-          : null,
-        typeof testResult.metadata?.customDomain === "string"
-          ? testResult.metadata.customDomain
-          : null,
-      ]);
-    } catch (domainError) {
-      const message =
-        domainError instanceof Error
-          ? domainError.message
-          : "Failed to index store domain";
-      return NextResponse.json({ error: message }, { status: 409 });
-    }
-
     await writeSecurityAuditLog(admin, {
       workspaceId,
       actorId: user.id,
@@ -237,7 +211,6 @@ export async function DELETE(request: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    await deleteWorkspaceDomains(admin, workspaceId);
     clearWorkspaceContextCache(workspaceId);
     await writeSecurityAuditLog(admin, {
       workspaceId,

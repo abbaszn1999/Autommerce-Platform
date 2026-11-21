@@ -23,7 +23,7 @@ const PAGE_SIZE = 250;
  * `pnda/semrush-keyword` actor. We request `sources: ["broad"]` only (the
  * cheapest report, and the same match type the demand-check probe's raw
  * count already represents), plus `minVolume`/`maxDifficulty`, which
- * Semrush applies server-side *before* billing.
+ * Semrush applies server-side *before* rows are returned.
  */
 export const KEYWORD_EXPANDER_SOURCES = ["broad"] as const;
 

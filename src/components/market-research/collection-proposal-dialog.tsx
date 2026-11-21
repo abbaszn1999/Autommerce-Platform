@@ -7,7 +7,6 @@ import {
   LineChart,
   Percent,
   TrendingUp,
-  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatUsd } from "./mock-data";
-import { USD_PER_COLLECTION, type ProposedCollection } from "./workspace-data";
+import type { ProposedCollection } from "./workspace-data";
 import { cn } from "@/lib/utils";
 
 /** Share of selected monthly search volume modeled as organic sessions. */
@@ -77,43 +76,18 @@ export function projectHorizon(params: {
   return { sessions, orders, revenue };
 }
 
-export function proposalRoi(monthlySales: number, publishCost: number) {
-  if (!(publishCost > 0) || !Number.isFinite(monthlySales)) return null;
-  return {
-    multiple: monthlySales / publishCost,
-    pct: ((monthlySales - publishCost) / publishCost) * 100,
-  };
-}
-
-export function formatRoiMultiple(value: number) {
-  if (value >= 10) return value.toFixed(0);
-  if (value >= 1) return value.toFixed(1);
-  return value.toFixed(2);
-}
-
-export function formatProposalRoiBrief(params: {
+export function formatProposalBrief(params: {
   scenarios: Array<{
     capture: number;
     label: string;
     note: string;
     revenue: number;
   }>;
-  publishCost: number;
 }) {
-  const { scenarios, publishCost } = params;
+  const { scenarios } = params;
   const percents = scenarios.map((s) => s.label).join(", ").replace(/, ([^,]*)$/, ", or $1");
   const sales = scenarios.map((s) => formatUsd(s.revenue)).join(", ");
-  if (!(publishCost > 0)) {
-    return `If these collections capture ${percents} of their search volume, estimated monthly sales are ${sales}.`;
-  }
-  const multiples = scenarios
-    .map((s) => {
-      const roi = proposalRoi(s.revenue, publishCost);
-      return roi ? `${formatRoiMultiple(roi.multiple)}×` : "—";
-    })
-    .join(", ")
-    .replace(/, ([^,]*)$/, ", and $1");
-  return `Publishing this selection costs ${formatUsd(publishCost)}. If these collections capture ${percents} of their search volume, estimated monthly sales are ${sales} — about ${multiples} the one-time publish cost.`;
+  return `If these collections capture ${percents} of their search volume, estimated monthly sales are ${sales}.`;
 }
 
 function formatCount(value: number) {
@@ -147,7 +121,6 @@ export function CollectionProposalDialog({
   const croPct = clampNumber(parseDecimal(croInput), 0, 100);
 
   const stats = useMemo(() => summarizeSelection(collections), [collections]);
-  const publishCost = stats.count * USD_PER_COLLECTION;
 
   const scenarios = useMemo(
     () =>
@@ -209,28 +182,6 @@ export function CollectionProposalDialog({
               value={stats.avgKd.toFixed(0)}
               hint="Volume-weighted difficulty"
             />
-          </div>
-
-          <div className="relative overflow-hidden rounded-2xl border border-[#400095]/20 bg-gradient-to-r from-[#400095]/[0.08] via-card to-[#F76D01]/[0.07] px-5 py-4 dark:border-[#F76D01]/25">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#400095] text-white shadow-[0_8px_20px_rgba(64,0,149,.18)] dark:bg-[#F76D01]">
-                  <Wallet className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Cost to publish
-                  </p>
-                  <p className="mt-1 text-[1.65rem] font-black leading-none tracking-tight tabular-nums text-foreground">
-                    {formatUsd(publishCost)}
-                  </p>
-                </div>
-              </div>
-              <p className="text-xs leading-relaxed text-muted-foreground sm:max-w-[220px] sm:text-right">
-                {formatUsd(USD_PER_COLLECTION)} each · {stats.count.toLocaleString("en-US")} collection
-                {stats.count === 1 ? "" : "s"} · one-time
-              </p>
-            </div>
           </div>
 
           <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
@@ -352,7 +303,7 @@ export function CollectionProposalDialog({
           </div>
 
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            {formatProposalRoiBrief({ scenarios, publishCost })}
+            {formatProposalBrief({ scenarios })}
           </p>
         </div>
 

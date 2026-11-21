@@ -1,13 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import {
-  AlertCircle,
   ArrowRight,
   Check,
   CheckCircle2,
-  ExternalLink,
   FileText,
   Layers,
   Loader2,
@@ -17,7 +14,6 @@ import {
   Sparkles,
   Store,
   Trash2,
-  Wallet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,9 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatUsd } from "./mock-data";
 import {
-  USD_PER_COLLECTION,
   type MarketResearchProduct,
   type ProposedCollection,
 } from "./workspace-data";
@@ -74,8 +68,6 @@ export function StageCollectionSheet({
   paidCollectionIds,
   onStart,
   onPushToStore,
-  walletBalance = null,
-  walletHref,
   pushing = false,
   onRemoveDuplicates,
   onRecheckDuplicates,
@@ -92,12 +84,10 @@ export function StageCollectionSheet({
   termEmbedProgress?: { embedded: number; total: number; done: boolean } | null;
   selectedIds: string[];
   onChangeSelected: (ids: string[]) => void;
-  /** Collection ids already successfully pushed and paid for. */
+  /** Collection ids already successfully pushed to the store. */
   paidCollectionIds: string[];
   onStart: () => void;
   onPushToStore?: (selectedIds: string[]) => Promise<void> | void;
-  walletBalance?: number | null;
-  walletHref?: string;
   pushing?: boolean;
   /**
    * Stage 5 Phase 3 flagged these ids' shopper-intent as already covered by
@@ -478,10 +468,6 @@ export function StageCollectionSheet({
   }
 
   const selectedCollectionsList = visibleCollections.filter((c) => selected.has(c.id));
-  const pushTotalCost = selected.size * USD_PER_COLLECTION;
-  const canAffordPush = walletBalance == null || walletBalance >= pushTotalCost;
-  const remainingWalletBalance =
-    walletBalance != null ? walletBalance - pushTotalCost : null;
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col gap-3">
@@ -501,7 +487,7 @@ export function StageCollectionSheet({
           </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">
             {collections.length} commercial collection opportunities discovered ·{" "}
-            {products.length} products analyzed. Matching is free.
+            {products.length} products analyzed.
           </p>
         </div>
 
@@ -1081,14 +1067,6 @@ export function StageCollectionSheet({
             </strong>{" "}
             of {collections.length} collections selected
           </div>
-          <span>·</span>
-          <span className="font-medium text-foreground">
-            ${USD_PER_COLLECTION.toFixed(2)} / collection
-          </span>
-          <span>·</span>
-          <span className="font-bold text-primary">
-            Total: {formatUsd(pushTotalCost)}
-          </span>
           {paidIds.size > 0 ? (
             <>
               <span>·</span>
@@ -1127,9 +1105,6 @@ export function StageCollectionSheet({
           >
             <Store className="h-3.5 w-3.5" />
             <span>Push to Store</span>
-            <span className="opacity-90 font-mono">
-              ({formatUsd(pushTotalCost)})
-            </span>
             <ArrowRight className="h-3.5 w-3.5 ml-0.5" />
           </Button>
         </div>
@@ -1179,7 +1154,7 @@ export function StageCollectionSheet({
       </Dialog>
 
       {/* ========================================================================= */}
-      {/* MODAL POP-UP: CONFIRM STORE PUSH & WALLET DEDUCTION                      */}
+      {/* MODAL POP-UP: CONFIRM STORE PUSH                                         */}
       {/* ========================================================================= */}
       <Dialog open={confirmPushOpen} onOpenChange={setConfirmPushOpen}>
         <DialogContent className="max-w-lg p-0 overflow-hidden">
@@ -1194,7 +1169,6 @@ export function StageCollectionSheet({
             </div>
             <DialogDescription className="text-xs text-muted-foreground mt-1">
               Deploy {selected.size} verified category collections to your store catalog.
-              The amount is deducted directly from your workspace wallet.
             </DialogDescription>
           </DialogHeader>
 
@@ -1203,7 +1177,6 @@ export function StageCollectionSheet({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
                 <span>Selected Collections ({selected.size})</span>
-                <span>$5.00 each</span>
               </div>
               <div className="max-h-40 overflow-y-auto rounded-xl border border-border/70 bg-card p-2 space-y-1.5">
                 {selectedCollectionsList.map((col) => (
@@ -1218,71 +1191,12 @@ export function StageCollectionSheet({
                       <span className="text-[10px] text-muted-foreground">
                         {col.productCount} products
                       </span>
-                      <Badge variant="outline" className="text-[10px] font-mono py-0">
-                        $5.00
-                      </Badge>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Pricing & Wallet Calculation Card */}
-            <div className="rounded-xl border border-border/70 bg-muted/30 p-3.5 space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Current Wallet Balance</span>
-                <span className="font-semibold text-foreground tabular-nums">
-                  {walletBalance == null ? "—" : formatUsd(walletBalance)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between border-t border-border/50 pt-1.5">
-                <span className="text-muted-foreground">
-                  Total Push Cost ({selected.size} × $5.00)
-                </span>
-                <span className="font-bold text-destructive tabular-nums">
-                  -{formatUsd(pushTotalCost)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between border-t border-border/50 pt-1.5">
-                <span className="font-medium text-foreground">
-                  Estimated Remaining Balance
-                </span>
-                <span className="font-bold text-primary tabular-nums">
-                  {remainingWalletBalance != null
-                    ? formatUsd(remainingWalletBalance)
-                    : "—"}
-                </span>
-              </div>
-            </div>
-
-            {/* Insufficient Funds Warning Alert */}
-            {!canAffordPush && walletBalance != null ? (
-              <div className="flex flex-col gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-                <div className="flex items-center gap-2 font-semibold">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>Not enough wallet balance</span>
-                </div>
-                <p className="text-[11px] leading-relaxed opacity-90">
-                  You need {formatUsd(pushTotalCost)}, but your wallet currently has{" "}
-                  {formatUsd(walletBalance)}. Please top up your wallet or select fewer collections.
-                </p>
-                {walletHref ? (
-                  <div className="pt-1">
-                    <Link href={walletHref} target="_blank">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/15"
-                      >
-                        <Wallet className="h-3.5 w-3.5" />
-                        <span>Top Up Wallet</span>
-                        <ExternalLink className="h-3 w-3" />
-                      </Button>
-                    </Link>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
           </div>
 
           <DialogFooter className="p-4 border-t border-border/70 bg-muted/20 flex flex-row items-center justify-end gap-2">
@@ -1298,7 +1212,7 @@ export function StageCollectionSheet({
             <Button
               type="button"
               size="sm"
-              disabled={selected.size === 0 || !canAffordPush}
+              disabled={selected.size === 0}
               onClick={() => {
                 setConfirmPushOpen(false);
                 if (onPushToStore) {
@@ -1310,7 +1224,7 @@ export function StageCollectionSheet({
               className="text-xs font-semibold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs"
             >
               <ShieldCheck className="h-3.5 w-3.5" />
-              <span>Confirm & Push ({formatUsd(pushTotalCost)})</span>
+              <span>Confirm & Push</span>
             </Button>
           </DialogFooter>
         </DialogContent>

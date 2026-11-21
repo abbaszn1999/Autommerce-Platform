@@ -4,7 +4,6 @@ import type {
   VariationType,
 } from "@/components/market-research/mock-data";
 import { runGeminiMarketResearch } from "./gemini-runner";
-import { isWalletExhaustedError } from "@/lib/billing/ai-wallet-billing";
 
 export type SelectedScopeCollectionInput = {
   id: string;
@@ -392,7 +391,6 @@ ${formatSelectionForPrompt(missing)}`,
         });
         seedRows.push(...seedRowsFromReply(retry.data, missing));
       } catch (retryError) {
-        if (isWalletExhaustedError(retryError)) throw retryError;
         console.error("[runStage3SeedGeneration] Retry for missing PLPs failed:", retryError);
       }
     }
@@ -403,7 +401,6 @@ ${formatSelectionForPrompt(missing)}`,
       };
     }
   } catch (error) {
-    if (isWalletExhaustedError(error)) throw error;
     console.error("[runStage3SeedGeneration] Gemini 3.8 Flash seed call failed:", error);
   }
 

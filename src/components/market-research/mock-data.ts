@@ -4,7 +4,6 @@
  */
 
 import {
-  actualExtractCostUsd,
   cappedKeywordEstimate,
   EXTRACT_CAP_PER_SEED,
   formatUsd as formatUsdShared,
@@ -112,7 +111,7 @@ export type MockSeedRow = {
   manual?: boolean;
 };
 
-export type MarketResearchStage = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type MarketResearchStage = 1 | 2 | 3 | 4 | 5 | 6;
 
 export type MarketResearchProject = {
   id: string;
@@ -327,14 +326,6 @@ export function marketLabel(code: string): string {
 }
 
 /**
- * Wallet pricing — Stage 4 bills actual Apify keyword rows ($0.006 each / $6 per 1,000 keywords).
- * Stage 3 probe is $0.002 per seed. Agent stages are not billed.
- */
-export function usdForRawKeywords(rawKeywords: number): number {
-  return actualExtractCostUsd(cappedKeywordEstimate(rawKeywords));
-}
-
-/**
  * `keywordIdeasTotal` (the demand-check's "raw keywords" figure) is a
  * broad-match idea count — Semrush Keyword Magic Tool's combined "all
  * ideas" total for the seed, not a phrase-match-restricted count. Past the
@@ -371,15 +362,14 @@ export type SelectionEstimate = {
   rows: number;
   rawKeywords: number;
   /** Rows we expect Apify to return once the per-seed page cap is applied. */
-  billedKeywords: number;
+  cappedKeywords: number;
   searchVolume: number;
-  usd: number;
 };
 
 /**
- * Every selected seed is its own Apify run and every returned row is billed,
- * so overlapping synonyms are paid for twice. The estimate mirrors that: no
- * dedupe discount, only the per-seed page cap.
+ * Every selected seed is its own Apify run, so overlapping synonyms are pulled
+ * twice. The estimate mirrors that: no dedupe discount, only the per-seed page
+ * cap.
  */
 export function estimateSelection(
   rows: MockSeedRow[],
@@ -389,51 +379,21 @@ export function estimateSelection(
 
   let rawKeywords = 0;
   let searchVolume = 0;
-  let billedKeywords = 0;
+  let cappedKeywords = 0;
 
   for (const row of probed) {
     const probe = probes[row.id];
     rawKeywords += probe.rawKeywords;
-    billedKeywords += cappedKeywordEstimate(probe.rawKeywords);
+    cappedKeywords += cappedKeywordEstimate(probe.rawKeywords);
     searchVolume += probe.searchVolume;
   }
 
   return {
     rows: probed.length,
     rawKeywords,
-    billedKeywords,
+    cappedKeywords,
     searchVolume,
-    usd: actualExtractCostUsd(billedKeywords),
   };
-}
-
-/** Greedy "fit to budget": keep the cheapest seeds with the best volume/$ . */
-export function seedIdsWithinBudget(
-  rows: MockSeedRow[],
-  probes: Record<string, SeedProbe>,
-  usdBudget: number
-): string[] {
-  const scored = rows
-    .filter((row) => probes[row.id] && !probes[row.id].failed)
-    .map((row) => {
-      const price = usdForRawKeywords(probes[row.id].rawKeywords);
-      return {
-        row,
-        price,
-        volumePerDollar:
-          probes[row.id].searchVolume / Math.max(0.01, price),
-      };
-    })
-    .sort((a, b) => b.volumePerDollar - a.volumePerDollar);
-
-  const kept: string[] = [];
-  let spent = 0;
-  for (const item of scored) {
-    if (spent + item.price > usdBudget) continue;
-    kept.push(item.row.id);
-    spent += item.price;
-  }
-  return kept;
 }
 
 /** Customer-added broad seed (they know regional wording we may miss). */
@@ -485,7 +445,7 @@ export const STAGE_META: Record<
     shortLabel: "Extract",
     agentPrompt: "Extracted keywords classified into commercial categories, informational guides, and excluded SKUs.",
     agentDetail:
-      "Phrase match extraction with instant hold settlement and AI-powered search intent classification.",
+      "Phrase match extraction with AI-powered search intent classification.",
   },
   5: {
     label: "Collection clustering",
@@ -497,16 +457,9 @@ export const STAGE_META: Record<
   6: {
     label: "On-page SEO copywriting",
     shortLabel: "On-page",
-    agentPrompt: "Generated SEO titles, meta descriptions, collection copy, FAQs, and internal linking recommendations.",
+    agentPrompt: "Generated SEO titles, meta descriptions, and collection copy for the pushed collections.",
     agentDetail:
       "High-converting search-optimized collection page copy respecting your custom instructions.",
-  },
-  7: {
-    label: "Content strategy & push",
-    shortLabel: "Strategy",
-    agentPrompt: "Comprehensive strategy roadmap and live collection publishing to your store.",
-    agentDetail:
-      "Review publishing status and content rollout action plan.",
   },
 };
 
@@ -596,7 +549,7 @@ export const PROBE_BEATS: { at: number; text: string }[] = [
   },
   {
     at: 0.5,
-    text: "Pulling counts per term and a sample of what each seed actually returns, so you can spot noisy wording before we spend anything.",
+    text: "Pulling counts per term and a sample of what each seed actually returns, so you can spot noisy wording before the full extraction.",
   },
 ];
 
@@ -607,7 +560,7 @@ export function probeAgentReady(
 ): string {
   return `Demand check done for ${seedCount} seed${seedCount === 1 ? "" : "s"} in ${marketLabel(market)}.
 
-Raw keywords across those terms: ${estimate.rawKeywords.toLocaleString("en-US")}. Extract would pull about ${estimate.billedKeywords.toLocaleString("en-US")} rows after the per-seed cap — ${formatUsd(estimate.usd)} from your wallet, billed on rows actually returned.
+Raw keywords across those terms: ${estimate.rawKeywords.toLocaleString("en-US")}. Extract would pull about ${estimate.cappedKeywords.toLocaleString("en-US")} rows after the per-seed cap.
 
 Open a row to see sample keywords. If a broad term looks like noise, drop it here — that's the whole point of this stage.`;
 }

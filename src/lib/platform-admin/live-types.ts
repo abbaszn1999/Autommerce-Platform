@@ -10,7 +10,6 @@ import type {
   AdminOverviewRange,
   AdminSpendSlice,
   AdminSubscriptionStatus,
-  AdminWalletTxKind,
 } from "./types";
 
 export type LiveUserListRow = {
@@ -41,7 +40,6 @@ export type LiveWorkspaceListRow = {
   planName: string | null;
   planId: string | null;
   creditsRemaining: number | null;
-  walletUsd: number;
   storageBytes: number;
   objectCount: number;
   dbBytes: number;
@@ -87,7 +85,6 @@ export type LiveOverviewPayload = {
   range: AdminOverviewRange;
   kpis: AdminKpi[];
   creditSlices: AdminSpendSlice[];
-  walletSlices: AdminSpendSlice[];
   attention: AdminAttentionItem[];
   series: OverviewDayPoint[];
   jobHealth: OverviewJobHealth;
@@ -96,7 +93,6 @@ export type LiveOverviewPayload = {
 export type OverviewDayPoint = {
   date: string;
   creditUsd: number;
-  walletUsd: number;
   credits: number;
 };
 
@@ -137,19 +133,7 @@ export type LiveCreditTxRow = {
   credits: number;
 };
 
-export type LiveWalletTxRow = {
-  id: string;
-  createdAt: string;
-  workspaceId: string;
-  workspaceName: string;
-  userId: string | null;
-  userName: string;
-  kind: AdminWalletTxKind;
-  module: string;
-  amountUsd: number;
-  description: string;
-  status: string;
-};
+
 
 export type LiveJobRow = {
   id: string;

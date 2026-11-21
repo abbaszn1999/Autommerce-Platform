@@ -16,8 +16,6 @@ import { formatUsd } from "@/lib/platform-admin/format";
 import type { OverviewDayPoint } from "@/lib/platform-admin/live-types";
 
 const CREDIT = "#F76D01";
-const WALLET_LIGHT = "#400095";
-const WALLET_DARK = "#D4D4D8";
 
 function formatAxisUsd(value: number): string {
   if (value >= 1000) return `$${(value / 1000).toFixed(1)}k`;
@@ -34,24 +32,18 @@ function ChartTooltip({
   active,
   payload,
   label,
-  walletColor,
 }: {
   active?: boolean;
   payload?: { dataKey?: string; value?: number }[];
   label?: string;
-  walletColor: string;
 }) {
   if (!active || !payload?.length) return null;
   const credit = payload.find((item) => item.dataKey === "creditUsd")?.value ?? 0;
-  const wallet = payload.find((item) => item.dataKey === "walletUsd")?.value ?? 0;
   return (
     <div className="rounded-lg border bg-card px-3 py-2 text-xs shadow-sm">
       <p className="mb-1.5 font-medium text-muted-foreground">{label ? formatTickDate(label) : ""}</p>
       <p className="tabular-nums" style={{ color: CREDIT }}>
         AI credits ($0.50) {formatUsd(credit)}
-      </p>
-      <p className="tabular-nums" style={{ color: walletColor }}>
-        Wallet {formatUsd(wallet)}
       </p>
     </div>
   );
@@ -71,20 +63,18 @@ export function OverviewSpendChart({ series }: { series: OverviewDayPoint[] }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const dark = mounted && resolvedTheme === "dark";
-  const walletStroke = dark ? WALLET_DARK : WALLET_LIGHT;
   const grid = dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.08)";
   const tick = dark ? "#A1A1AA" : "#71717A";
-  const empty = series.every((point) => point.creditUsd === 0 && point.walletUsd === 0);
+  const empty = series.every((point) => point.creditUsd === 0);
 
   return (
     <OverviewCard className="h-full">
       <OverviewPanelHeader
         title="Spend over time"
-        hint="Wallet USD and AI credits at $0.50 each"
+        hint="AI credits at $0.50 each"
         action={
           <div className="flex gap-3">
             <LegendDot color={CREDIT} label="AI credits" />
-            <LegendDot color={walletStroke} label="Wallet USD" />
           </div>
         }
       />
@@ -100,10 +90,6 @@ export function OverviewSpendChart({ series }: { series: OverviewDayPoint[] }) {
                 <linearGradient id="overviewCreditFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={CREDIT} stopOpacity={dark ? 0.28 : 0.22} />
                   <stop offset="100%" stopColor={CREDIT} stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="overviewWalletFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={walletStroke} stopOpacity={dark ? 0.16 : 0.18} />
-                  <stop offset="100%" stopColor={walletStroke} stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid vertical={false} stroke={grid} strokeDasharray="4 8" />
@@ -124,17 +110,7 @@ export function OverviewSpendChart({ series }: { series: OverviewDayPoint[] }) {
               />
               <Tooltip
                 cursor={{ stroke: grid, strokeWidth: 1 }}
-                content={<ChartTooltip walletColor={walletStroke} />}
-              />
-              <Area
-                type="monotone"
-                dataKey="walletUsd"
-                name="Wallet USD"
-                stroke={walletStroke}
-                fill="url(#overviewWalletFill)"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4, strokeWidth: 0 }}
+                content={<ChartTooltip />}
               />
               <Area
                 type="monotone"

@@ -9,12 +9,9 @@ import type {
 } from "@/components/market-research/mock-data";
 import type {
   CollectionContent,
-  CollectionLink,
   ExtractedKeyword,
-  GeneratedArticle,
   MarketResearchProduct,
   ProposedCollection,
-  StrategyArticle,
 } from "@/components/market-research/workspace-data";
 import {
   projectStateSlice,
@@ -31,7 +28,6 @@ import {
   saveProjectSliceAdmin,
   type MrSliceName,
 } from "./storage-admin";
-import { reconcileStrategyArticles } from "./agent/article-reconcile";
 import {
   loadLatestMrExtract,
   overlayAndPersistKeywordClassifications,
@@ -166,7 +162,7 @@ export async function loadMrPersistedState(
     admin
       .from("mr_projects")
       .select(
-        "id, name, status, store_label, highlighted_collection_ids, market, current_stage, opened_max_stage, state, keywords_path, extract_rows, extract_charged_usd"
+        "id, name, status, store_label, highlighted_collection_ids, market, current_stage, opened_max_stage, state, keywords_path, extract_rows"
       )
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: true }),
@@ -188,7 +184,6 @@ export async function loadMrPersistedState(
     projectRows.map(async (row) => {
       const projectId = row.id;
       const state = (row.state && typeof row.state === "object" ? row.state : {}) as MrProjectStateJson;
-      let articleJobs: Record<string, { status: string; error?: string }> = {};
 
       await Promise.all([
         // 1. Niches slice
@@ -421,89 +416,8 @@ export async function loadMrPersistedState(
           }
         })(),
 
-        // 7. Stage 7 article plan slice
-        (async () => {
-          try {
-            const data = await loadProjectSliceAdmin<StrategyArticle[]>(
-              admin,
-              workspaceId,
-              projectId,
-              "strategy"
-            );
-            if (Array.isArray(data) && data.length > 0) {
-              persisted.strategyByProject[projectId] = data;
-            } else if (Array.isArray(state.strategy)) {
-              persisted.strategyByProject[projectId] = state.strategy;
-            }
-          } catch {
-            if (Array.isArray(state.strategy)) {
-              persisted.strategyByProject[projectId] = state.strategy;
-            }
-          }
-        })(),
-
-        // 8. Stage 7 generated article bodies slice
-        (async () => {
-          try {
-            const data = await loadProjectSliceAdmin<
-              Record<string, GeneratedArticle>
-            >(admin, workspaceId, projectId, "articles");
-            if (data && typeof data === "object") {
-              persisted.articlesByProject[projectId] = data;
-            } else if (state.articles && typeof state.articles === "object") {
-              persisted.articlesByProject[projectId] = state.articles;
-            }
-          } catch {
-            if (state.articles && typeof state.articles === "object") {
-              persisted.articlesByProject[projectId] = state.articles;
-            }
-          }
-        })(),
-
-        // 9. Internal-link graph slice — written by the background link-build
-        // job right after push (and by Stage 6/7 generation) but never read
-        // back before this, so the Links column in Tab 6 went blank on every
-        // refresh even though the graph was sitting in storage the whole time.
-        (async () => {
-          try {
-            const data = await loadProjectSliceAdmin<
-              Record<string, CollectionLink[]>
-            >(admin, workspaceId, projectId, "internal-links");
-            if (data && typeof data === "object") {
-              persisted.internalLinksByProject[projectId] = data;
-            }
-          } catch (err) {
-            console.error(
-              `[loadMrPersistedState] Failed to load internal-links slice for ${projectId}:`,
-              err
-            );
-          }
-        })(),
-
-        // 10. Stage 7 OpenAI write jobs — used only to rebuild `generating`
-        // after a refresh; the client never round-trips this slice.
-        (async () => {
-          try {
-            const data = await loadProjectSliceAdmin<
-              Record<string, { status: string; error?: string }>
-            >(admin, workspaceId, projectId, "article-jobs");
-            if (data && typeof data === "object") {
-              articleJobs = data;
-            }
-          } catch {
-            // No jobs file yet.
-          }
-        })(),
       ]);
 
-      const strategy = persisted.strategyByProject[projectId] ?? [];
-      if (strategy.length > 0) {
-        persisted.strategyByProject[projectId] = reconcileStrategyArticles(
-          strategy,
-          persisted.articlesByProject[projectId] ?? {},
-          articleJobs
-        );
-      }
     })
   );
 
@@ -518,7 +432,7 @@ export async function saveMrPersistedState(
 ): Promise<void> {
   const { data: existingRows } = await admin
     .from("mr_projects")
-    .select("id, extract_rows, extract_charged_usd, keywords_path, state")
+    .select("id, extract_rows, keywords_path, state")
     .eq("workspace_id", workspaceId);
   const existingById = new Map(
     (existingRows ?? []).map((row) => [row.id as string, row])
@@ -534,6 +448,10 @@ export async function saveMrPersistedState(
         : {};
     const previousHashes = existingState.sliceHashes ?? {};
     const nextHashes: Record<string, string> = { ...previousHashes };
+    // Slices of retired features must not linger in the stored fingerprints.
+    for (const retired of ["strategy", "articles", "article-jobs", "internal-links"]) {
+      delete nextHashes[retired];
+    }
 
     // Heavy, write-once slices live in object storage. Autosave fires on every UI
     // change, so a slice is only uploaded when its fingerprint actually moved.
@@ -579,17 +497,6 @@ export async function saveMrPersistedState(
         empty:
           Object.keys(persisted.contentByIdByProject[projectId] ?? {}).length === 0,
       },
-      {
-        name: "strategy",
-        payload: persisted.strategyByProject?.[projectId] ?? [],
-        empty: (persisted.strategyByProject?.[projectId] ?? []).length === 0,
-      },
-      {
-        name: "articles",
-        payload: persisted.articlesByProject?.[projectId] ?? {},
-        empty:
-          Object.keys(persisted.articlesByProject?.[projectId] ?? {}).length === 0,
-      },
     ];
 
     const uploads: Promise<unknown>[] = [];
@@ -611,7 +518,7 @@ export async function saveMrPersistedState(
     await Promise.all(uploads);
 
     // Lightweight control-plane data stays in Postgres: chat, selections, probes
-    // (incremental), billing counters and stage flags. Large arrays are omitted.
+    // (incremental) and stage flags. Large arrays are omitted.
     const stateForDb: MrProjectStateJson = {
       stage1Done: slice.stage1Done,
       openedMax: slice.openedMax,
@@ -629,10 +536,7 @@ export async function saveMrPersistedState(
       contentReady: slice.contentReady,
       pushed: slice.pushed,
       analyzed: slice.analyzed,
-      strategyReady: slice.strategyReady,
-      strategyApproved: slice.strategyApproved,
       customInstruction: slice.customInstruction,
-      extractCharge: slice.extractCharge,
       extractRows: slice.extractRows,
       // Previously omitted here: a refresh silently reset applied Extract
       // filters and lost track of the active extract id, even though both
@@ -650,10 +554,6 @@ export async function saveMrPersistedState(
       persisted.extractRowsByProject[projectId] ?? 0,
       Number(existing?.extract_rows) || 0
     );
-    const extractCharged = Math.max(
-      persisted.extractChargeByProject[projectId] ?? 0,
-      Number(existing?.extract_charged_usd) || 0
-    );
 
     const payload = {
       id: projectId,
@@ -668,7 +568,6 @@ export async function saveMrPersistedState(
       state: stateForDb,
       keywords_path: keywordsPath,
       extract_rows: extractRows,
-      extract_charged_usd: extractCharged,
     };
 
     const { id, ...updateFields } = payload;

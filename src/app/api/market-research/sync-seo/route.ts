@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
               results.push({ collectionId: colId, ok: true });
             }
           } else {
-            // Creating collections is the paid push step, never a side effect
+            // Creating collections is the push step, never a side effect
             // of syncing copy.
             results.push({ collectionId: colId, ok: false, error: NOT_ON_STORE });
           }

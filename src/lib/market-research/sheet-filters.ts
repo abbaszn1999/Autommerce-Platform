@@ -35,7 +35,7 @@ export function archiveRowsByPhrase(
 
 /**
  * Apply the Extract-tab sheet filters to the full classified archive, using
- * volume / KD / question flags from the paid extract rows.
+ * volume / KD / question flags from the extract rows.
  */
 export function filterClassifiedTerms<T extends ClassifiedShardItem>(
   terms: T[],

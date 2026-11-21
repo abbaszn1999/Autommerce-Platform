@@ -32,7 +32,6 @@ const STAGE_TO_FILE: Record<number, string> = {
   4: "04-extract.md",
   5: "05-collections.md",
   6: "06-on-page.md",
-  7: "07-strategy.md",
   8: "08-duplicate-collections.md",
   9: "09-same-intent.md",
 };

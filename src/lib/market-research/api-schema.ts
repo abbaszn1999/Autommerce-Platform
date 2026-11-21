@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
-import { requireGalleryAuth, type GalleryAuthOk } from "@/lib/gallery/auth";
-import { aiBillingActive, bindAiBilling } from "@/lib/billing/ai-wallet-billing";
+import { requireGalleryAuth } from "@/lib/gallery/auth";
 
 export const workspaceIdSchema = z.string().uuid();
 export const projectIdSchema = z.string().uuid();
@@ -16,7 +15,6 @@ export const probeBodySchema = z.object({
   projectId: projectIdSchema,
   market: z.string().min(2).max(16),
   seeds: z.array(seedInputSchema).min(1).max(100),
-  attemptId: z.string().uuid(),
 });
 
 export const extractStartBodySchema = z.object({
@@ -31,7 +29,7 @@ export const extractStartBodySchema = z.object({
     )
     .min(1)
     .max(100),
-  /** Applied by Semrush server-side, before billing — narrower filters cost less. */
+  /** Applied by Semrush server-side, before rows are returned — narrower filters give fewer rows. */
   minVolume: z.number().int().min(0).max(1_000_000).optional(),
   maxDifficulty: z.number().int().min(0).max(100).optional(),
 });
@@ -79,7 +77,7 @@ export const agentAnalyzeBodySchema = z.object({
 export const agentChatBodySchema = z.object({
   workspaceId: workspaceIdSchema,
   projectId: projectIdSchema.optional(),
-  stage: z.number().int().min(1).max(7).default(1),
+  stage: z.number().int().min(1).max(6).default(1),
   market: z.string().optional(),
   messages: z.array(
     z.object({
@@ -241,173 +239,14 @@ export const agentOnPageBodySchema = z.object({
       seoTitle: z.string().optional(),
       seoDescription: z.string().optional(),
       collectionDescription: z.string().optional(),
-      faq: z.string().optional(),
     })
     .optional(),
   collectionIds: z.array(z.string().min(1)).min(1).max(20000),
   offset: z.number().int().nonnegative().default(0),
 });
 
-const proposedCollectionSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  headKeyword: z.string().optional(),
-  parentNiche: z.string().optional(),
-  volume: z.number().optional(),
-  productCount: z.number().optional(),
-  storeHandle: z.string().optional(),
-});
-
-// Internal link graph build is likewise a cursor job — 10k pushed
-// collections is thousands of Gemini judgement batches, far past one
-// request. The route loads the full collection list from storage for the
-// registry, then only runs retrieval/judgement for this page's ids.
-export const agentInternalLinksBodySchema = z.object({
-  workspaceId: workspaceIdSchema,
-  projectId: projectIdSchema,
-  collectionIds: z.array(z.string().min(1)).min(1).max(20000),
-  offset: z.number().int().nonnegative().default(0),
-});
-
-export const agentStrategyBodySchema = z.object({
-  workspaceId: workspaceIdSchema,
-  projectId: projectIdSchema.optional(),
-  parentNiches: z.array(z.string()).optional(),
-  collections: z.array(proposedCollectionSchema).max(500).optional(),
-  keywords: z
-    .array(
-      z.object({
-        id: z.string(),
-        keyword: z.string().min(1),
-        sheet: z.string().optional(),
-        volume: z.number().optional(),
-        difficulty: z.number().optional(),
-        /** Needed so the article quota can be dealt across seeds, not by volume alone. */
-        seedId: z.string().optional(),
-        seed: z.string().optional(),
-      })
-    )
-    .min(1)
-    .max(5000),
-});
-
-const articleLinkSchema = z.object({
-  anchor: z.string(),
-  url: z.string(),
-  collectionName: z.string(),
-});
-
-const articleSkuLinkSchema = z.object({
-  anchor: z.string(),
-  url: z.string(),
-  productName: z.string(),
-});
-
-export const agentArticleBodySchema = z
-  .object({
-    workspaceId: workspaceIdSchema,
-    projectId: projectIdSchema,
-    mode: z.enum(["start", "poll"]).optional(),
-    article: z.object({
-      id: z.string().min(1),
-      title: z.string().optional(),
-      keyword: z.string().optional(),
-      type: z.enum(["guide", "comparison", "faq", "roundup"]).optional(),
-      volume: z.number().optional(),
-      difficulty: z.number().optional(),
-      linksOut: z.array(articleLinkSchema).max(12).optional(),
-      skuLinks: z.array(articleSkuLinkSchema).max(5).optional(),
-    }),
-    /** The storefront's real domain, so the writer knows what "our website" is. */
-    storeUrl: z.string().optional(),
-    blogs: z
-      .array(z.object({ id: z.string(), handle: z.string(), title: z.string() }))
-      .max(100)
-      .optional(),
-  })
-  .superRefine((value, ctx) => {
-    if ((value.mode ?? "start") === "poll") return;
-    if (!value.article.title?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "title is required",
-        path: ["article", "title"],
-      });
-    }
-    if (!value.article.keyword?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "keyword is required",
-        path: ["article", "keyword"],
-      });
-    }
-    if (!value.article.type) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "type is required",
-        path: ["article", "type"],
-      });
-    }
-  });
-
-export const articleSyncBodySchema = z.object({
-  workspaceId: workspaceIdSchema,
-  projectId: projectIdSchema,
-  articles: z
-    .array(
-      z.object({
-        articleId: z.string(),
-        title: z.string().min(1),
-        seoTitle: z.string().optional(),
-        seoDescription: z.string().optional(),
-        blogTitle: z.string().optional(),
-        bodyHtml: z.string().min(1),
-        featuredImage: z
-          .object({ url: z.string().min(1), alt: z.string().default("") })
-          .optional(),
-      })
-    )
-    .min(1)
-    .max(50),
-});
-
-/** Inside an AI route (billing scope) this also binds the wallet payer and
- *  refuses with 402 when the wallet is empty. */
 export async function requireMrWrite(workspaceId: string) {
-  const auth = await requireGalleryAuth({ workspaceId, requireWrite: true });
-  if (!auth.ok || !aiBillingActive()) return auth;
-  const blocked = await bindAiBilling({ admin: auth.admin, workspaceId, userId: auth.user.id });
-  if (!blocked) return auth;
-  return {
-    ok: false as const,
-    response: NextResponse.json(
-      { error: blocked, code: "WALLET_EMPTY" },
-      { status: 402, headers: auth.headers }
-    ),
-  };
-}
-
-/** Auth for AI routes the $5 push may already pay for; call billMrAiUnlessCovered once coverage is known. */
-export async function requireMrWriteUnbilled(workspaceId: string) {
   return requireGalleryAuth({ workspaceId, requireWrite: true });
-}
-
-/**
- * Covered work runs free. Otherwise the payer is bound as in requireMrWrite,
- * returning the 402 response when the wallet is empty.
- */
-export async function billMrAiUnlessCovered(
-  auth: GalleryAuthOk,
-  workspaceId: string,
-  covered: boolean
-): Promise<NextResponse | null> {
-  if (covered || !aiBillingActive()) return null;
-  const blocked = await bindAiBilling({ admin: auth.admin, workspaceId, userId: auth.user.id });
-  if (!blocked) return null;
-  return NextResponse.json(
-    { error: blocked, code: "WALLET_EMPTY" },
-    { status: 402, headers: auth.headers }
-  );
 }
 
 export async function requireMrAdmin(workspaceId: string) {

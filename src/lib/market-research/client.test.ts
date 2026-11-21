@@ -21,14 +21,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** A push endpoint that publishes every id it is sent, for $5 each. */
+/** A push endpoint that publishes every id it is sent. */
 function pushEndpoint() {
   return vi.fn(async (_url: string, init: RequestInit) => {
     const { collectionIds } = JSON.parse(String(init.body)) as { collectionIds: string[] };
     return json({
       ok: true,
-      chargedUsd: collectionIds.length * 5,
-      refundedUsd: 0,
       pushedCount: collectionIds.length,
       failedCount: 0,
       pushedIds: collectionIds,
@@ -60,21 +58,19 @@ describe("pushCollectionsApi", () => {
     }
     expect(result.pushedCount).toBe(total);
     expect(result.failedCount).toBe(0);
-    expect(result.chargedUsd).toBe(total * 5);
     expect(result.pushedIds).toEqual(ids(total));
     expect(result.storeResults).toHaveLength(total);
     expect(progress).toEqual([25, 50, 75, total]);
   });
 
-  it("keeps what was published and reports the rest when the wallet runs out", async () => {
+  it("keeps what was published and reports the rest when a later request fails", async () => {
     let calls = 0;
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
       calls += 1;
       const { collectionIds } = JSON.parse(String(init.body)) as { collectionIds: string[] };
-      if (calls === 3) return json({ error: "Not enough wallet balance" }, 402);
+      if (calls === 3) return json({ error: "Store is unavailable" }, 502);
       return json({
         ok: true,
-        chargedUsd: collectionIds.length * 5,
         pushedCount: collectionIds.length,
         failedCount: 0,
         pushedIds: collectionIds,
@@ -88,18 +84,17 @@ describe("pushCollectionsApi", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(result.pushedCount).toBe(PUSH_CHUNK_SIZE * 2);
     expect(result.failedCount).toBe(PUSH_CHUNK_SIZE * 2);
-    expect(result.chargedUsd).toBe(PUSH_CHUNK_SIZE * 2 * 5);
-    expect(result.stoppedReason).toBe("Not enough wallet balance");
+    expect(result.stoppedReason).toBe("Store is unavailable");
     expect(result.pushedIds).toHaveLength(PUSH_CHUNK_SIZE * 2);
   });
 
-  it("throws when the very first request is refused, as a single push does", async () => {
+  it("throws when the very first request fails, as a single push does", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json({ error: "Not enough wallet balance" }, 402))
+      vi.fn(async () => json({ error: "Store is unavailable" }, 502))
     );
     await expect(pushCollectionsApi("w", "p", ids(PUSH_CHUNK_SIZE * 2))).rejects.toThrow(
-      "Not enough wallet balance"
+      "Store is unavailable"
     );
   });
 });

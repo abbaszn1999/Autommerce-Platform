@@ -2,14 +2,6 @@ import type { SyncProvider } from "../../core/types";
 import { testWooCommerceConnection, normalizeWooCommerceStoreUrl } from "./auth";
 import { fetchWooCommerceProductsSheet } from "./fetch-products";
 import { applyWooCommerceChanges } from "./apply";
-import {
-  resolveWooCategoryByName,
-  assignProductsToWooCategory,
-  unassignProductsFromWooCategory,
-  deleteWooCategories,
-  listAllWooCategories,
-  detectNewWooCategoryProducts,
-} from "./categories";
 import { WOOCOMMERCE_CORE_PRODUCT_COLUMNS } from "./columns";
 import {
   WOOCOMMERCE_WRITABLE_COLUMNS,
@@ -35,24 +27,6 @@ export const WooCommerceProvider: SyncProvider = {
     serverFilterKeys: WOOCOMMERCE_SERVER_FILTER_KEYS,
     clientPredicateKinds: WOOCOMMERCE_CLIENT_PREDICATE_KINDS,
     taxonomyLabel: "Categories",
-  },
-  taxonomy: {
-    resolve: ({ integration, name }) => resolveWooCategoryByName({ integration, name }),
-    assign: ({ integration, taxonomyId, productIds }) =>
-      assignProductsToWooCategory({ integration, categoryId: taxonomyId, productIds }),
-    delete: ({ integration, ids }) => deleteWooCategories({ integration, ids }),
-    list: ({ integration, max }) => listAllWooCategories({ integration, max }),
-    unassign: ({ integration, taxonomyId, productIds }) =>
-      unassignProductsFromWooCategory({ integration, categoryId: taxonomyId, productIds }),
-  },
-  growthSync: {
-    detectNewProducts: ({ integration, taxonomyId, since, maxPages }) =>
-      detectNewWooCategoryProducts({
-        integration,
-        categoryId: taxonomyId,
-        since,
-        maxPages,
-      }),
   },
   configFields: [
     {

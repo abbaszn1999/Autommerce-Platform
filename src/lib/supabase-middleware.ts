@@ -49,11 +49,9 @@ export async function updateSession(request: NextRequest) {
     "/auth/callback",
     "/invite",
     "/share",
-    "/widget.js",
   ];
   const isPublicRoute =
     publicRoutes.some((r) => pathname.startsWith(r)) ||
-    pathname === "/widget.js" ||
     pathname.endsWith(".js") ||
     pathname.endsWith(".css");
   const isAdminRoute = isAdminPublicPath(pathname) || isAdminInternalPath(pathname);

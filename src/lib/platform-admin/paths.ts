@@ -37,7 +37,6 @@ export const adminRoutes = {
   workspace: (id: string) => adminPath(`/workspaces/${id}`),
   subscriptions: () => adminPath("/subscriptions"),
   credits: () => adminPath("/credits"),
-  wallet: () => adminPath("/wallet"),
   jobs: () => adminPath("/jobs"),
   integrations: () => adminPath("/integrations"),
   audit: () => adminPath("/audit"),

@@ -17,7 +17,6 @@ export const STORE_ACCESS_AREAS = [
   { id: "locations", name: "Locations", read: "read_locations", edit: "write_locations" },
   { id: "files", name: "Files and images", read: "read_files", edit: "write_files" },
   { id: "publications", name: "Sales channels", read: "read_publications", edit: "write_publications" },
-  { id: "content", name: "Blog articles", read: "read_content", edit: "write_content" },
   { id: "reports", name: "Sales totals", read: "read_reports", edit: null },
 ] as const;
 
@@ -37,15 +36,13 @@ const SCOPE_LABELS: Record<StoreScope, string> = {
   write_files: "upload and edit files",
   read_publications: "read sales channels",
   write_publications: "publish to sales channels",
-  read_content: "read blog articles",
-  write_content: "write blog articles",
   read_reports: "read sales totals",
 };
 
 /** A scope in words; a scope this file does not know reads as itself. */
 export const scopeLabel = (scope: string): string => SCOPE_LABELS[scope as StoreScope] ?? scope;
 
-export type StoreToolId = "store-assistant" | "growth-sync" | "market-research" | "google-ads-agent";
+export type StoreToolId = "store-assistant" | "market-research" | "google-ads-agent";
 
 export type ShopifyToolAccess = {
   id: StoreToolId;
@@ -109,16 +106,10 @@ export const SHOPIFY_TOOL_ACCESS: readonly ShopifyToolAccess[] = [
     ],
   },
   {
-    id: "growth-sync",
-    name: "Growth Sync",
-    summary: "Finds new products, creates collections, adds and removes products, and deletes collections it made.",
-    scopes: ["read_products", "write_products"],
-  },
-  {
     id: "market-research",
     name: "Market Research",
-    summary: "Reads products, collections and brands, creates collections with SEO and publishes them, and writes blog articles.",
-    scopes: ["read_products", "write_products", "read_publications", "write_publications", "read_content", "write_content"],
+    summary: "Reads products, collections and brands, creates collections with SEO and publishes them.",
+    scopes: ["read_products", "write_products", "read_publications", "write_publications"],
   },
 ];
 

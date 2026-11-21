@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, CreditCard, Plug, Wallet } from "lucide-react";
+import { Building2, CreditCard, Plug } from "lucide-react";
 import { PageLoader } from "@/components/brand/page-loader";
 import { AdminTable } from "@/components/platform-admin/admin-table";
 import { DataToolbar } from "@/components/platform-admin/data-toolbar";
@@ -13,7 +13,7 @@ import { pageCount, paginate } from "@/components/platform-admin/pagination-bar"
 import { PersonCell } from "@/components/platform-admin/person-cell";
 import { IntegrationStatusBadge, PlanBadge } from "@/components/platform-admin/status-badge";
 import { adminJson } from "@/lib/platform-admin/client-api";
-import { formatBytes, formatCredits, formatUsd, initials } from "@/lib/platform-admin/format";
+import { formatBytes, formatCredits, initials } from "@/lib/platform-admin/format";
 import { PLAN_FILTER_OPTIONS, sortRows, toggleSort, type SortState } from "@/lib/platform-admin/list-query";
 import type { LiveWorkspaceListRow } from "@/lib/platform-admin/live-types";
 import { adminRoutes } from "@/lib/platform-admin/paths";
@@ -27,7 +27,6 @@ export default function AdminWorkspacesPage() {
   const [query, setQuery] = useState("");
   const [store, setStore] = useState("all");
   const [plan, setPlan] = useState("all");
-  const [wallet, setWallet] = useState("all");
   const [credits, setCredits] = useState("all");
   const [members, setMembers] = useState("all");
   const [page, setPage] = useState(1);
@@ -52,9 +51,6 @@ export default function AdminWorkspacesPage() {
       }
       if (plan === "has" && !workspace.planId) return false;
       if (plan !== "all" && plan !== "has" && (workspace.planId || "none") !== plan) return false;
-      if (wallet === "empty" && workspace.walletUsd > 0) return false;
-      if (wallet === "funded" && workspace.walletUsd <= 0) return false;
-      if (wallet === "low" && (workspace.walletUsd <= 0 || workspace.walletUsd >= 10)) return false;
       if (credits === "none" && workspace.creditsRemaining != null) return false;
       if (credits === "empty" && workspace.creditsRemaining !== 0) return false;
       if (credits === "low" && (workspace.creditsRemaining == null || workspace.creditsRemaining <= 0 || workspace.creditsRemaining >= 200)) {
@@ -70,7 +66,7 @@ export default function AdminWorkspacesPage() {
         workspace.ownerName.toLowerCase().includes(q)
       );
     });
-  }, [workspaces, query, store, plan, wallet, credits, members]);
+  }, [workspaces, query, store, plan, credits, members]);
 
   const sorted = useMemo(
     () =>
@@ -80,7 +76,6 @@ export default function AdminWorkspacesPage() {
         plan: (row) => row.planName,
         members: (row) => row.memberCount,
         credits: (row) => row.creditsRemaining,
-        wallet: (row) => row.walletUsd,
         storage: (row) => row.storageBytes,
         store: (row) => row.integrationProvider,
       }),
@@ -90,8 +85,7 @@ export default function AdminWorkspacesPage() {
   const stats = useMemo(() => {
     const withPlan = workspaces.filter((row) => Boolean(row.planId)).length;
     const connected = workspaces.filter((row) => Boolean(row.integrationProvider)).length;
-    const funded = workspaces.filter((row) => row.walletUsd > 0).length;
-    return { withPlan, connected, funded };
+    return { withPlan, connected };
   }, [workspaces]);
 
   const rows = paginate(sorted, page);
@@ -99,7 +93,6 @@ export default function AdminWorkspacesPage() {
     query.trim() !== "" ||
     store !== "all" ||
     plan !== "all" ||
-    wallet !== "all" ||
     credits !== "all" ||
     members !== "all";
 
@@ -107,7 +100,6 @@ export default function AdminWorkspacesPage() {
     setQuery("");
     setStore("all");
     setPlan("all");
-    setWallet("all");
     setCredits("all");
     setMembers("all");
     setPage(1);
@@ -148,14 +140,6 @@ export default function AdminWorkspacesPage() {
               icon: Plug,
               active: store === "has",
               onClick: () => exclusiveFilter(store === "has", clearFilters, () => setStore("has")),
-            },
-            {
-              label: "Funded wallet",
-              value: String(stats.funded),
-              hint: `${workspaces.length - stats.funded} empty`,
-              icon: Wallet,
-              active: wallet === "funded",
-              onClick: () => exclusiveFilter(wallet === "funded", clearFilters, () => setWallet("funded")),
             },
           ]}
         />
@@ -211,21 +195,6 @@ export default function AdminWorkspacesPage() {
                       resetPage();
                     },
                     options: [...PLAN_FILTER_OPTIONS, { value: "has", label: "Has a plan" }, { value: "none", label: "No plan" }],
-                  },
-                  {
-                    id: "wallet",
-                    label: "Wallet",
-                    value: wallet,
-                    onChange: (value) => {
-                      setWallet(value);
-                      resetPage();
-                    },
-                    options: [
-                      { value: "all", label: "Any balance" },
-                      { value: "funded", label: "Has funds" },
-                      { value: "low", label: "Low (under $10)" },
-                      { value: "empty", label: "Empty" },
-                    ],
                   },
                   {
                     id: "credits",
@@ -306,14 +275,6 @@ export default function AdminWorkspacesPage() {
                 ) : (
                   formatCredits(row.creditsRemaining)
                 ),
-            },
-            {
-              header: "Wallet",
-              sortKey: "wallet",
-              numeric: true,
-              cell: (row) => (
-                <span className={cn(row.walletUsd <= 0 && "text-muted-foreground")}>{formatUsd(row.walletUsd)}</span>
-              ),
             },
             {
               header: "Storage",

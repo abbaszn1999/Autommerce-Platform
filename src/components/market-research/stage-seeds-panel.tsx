@@ -1,9 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import Link from "next/link";
 import {
-  AlertCircle,
   AlertTriangle,
   Check,
   ChevronRight,
@@ -13,13 +11,11 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { InsufficientFundsDialog } from "./insufficient-funds-dialog";
 import {
   Dialog,
   DialogContent,
@@ -47,22 +43,16 @@ import {
   estimateSelection,
   formatProductCount,
   formatRawKeywords,
-  formatUsd,
   groupSeedRowsByCanonical,
   isProbeStale,
   marketLabel,
-  seedIdsWithinBudget,
   seedRowsToCsv,
-  usdForRawKeywords,
   type MockSeedRow,
   type ScopeMatch,
   type SeedProbe,
 } from "./mock-data";
 import {
-  APIFY_KEYWORD_USD_PER_ROW,
-  APIFY_SEED_PROBE_USD_PER_SEED,
   cappedKeywordEstimate,
-  estimateProbeCostUsd,
   EXTRACT_CAP_PER_SEED,
   RAW_KEYWORD_SELECTION_CAP,
 } from "@/lib/market-research/cost";
@@ -84,7 +74,7 @@ function scopeMatchClass(match: ScopeMatch): string {
 }
 
 /** Capped raw keywords a probed seed would actually extract. Unprobed is unknown. */
-function billedRawKeywords(
+function cappedRawKeywords(
   rowId: string,
   probes: Record<string, SeedProbe>
 ): number | null {
@@ -93,14 +83,14 @@ function billedRawKeywords(
   return cappedKeywordEstimate(probe.rawKeywords);
 }
 
-function billedTotal(
+function cappedTotal(
   ids: Iterable<string>,
   probes: Record<string, SeedProbe>
 ): number {
   let total = 0;
   for (const id of ids) {
-    const billed = billedRawKeywords(id, probes);
-    if (billed != null) total += billed;
+    const counted = cappedRawKeywords(id, probes);
+    if (counted != null) total += counted;
   }
   return total;
 }
@@ -111,15 +101,15 @@ function idsThatFit(
   already: Set<string>,
   probes: Record<string, SeedProbe>
 ): string[] {
-  let running = billedTotal(already, probes);
+  let running = cappedTotal(already, probes);
   const added: string[] = [];
   if (running >= RAW_KEYWORD_SELECTION_CAP) return added;
   for (const row of candidates) {
     if (already.has(row.id)) continue;
-    const billed = billedRawKeywords(row.id, probes) ?? 0;
-    if (running + billed > RAW_KEYWORD_SELECTION_CAP) continue;
+    const counted = cappedRawKeywords(row.id, probes) ?? 0;
+    if (running + counted > RAW_KEYWORD_SELECTION_CAP) continue;
     added.push(row.id);
-    running += billed;
+    running += counted;
   }
   return added;
 }
@@ -146,8 +136,6 @@ type StageSeedsPanelProps = {
     maxDifficulty?: number;
   }) => void;
   committed?: boolean;
-  walletHref?: string;
-  walletBalance?: number | null;
   readOnly?: boolean;
   /**
    * Real fetched product counts per collectionId, from the paginated
@@ -160,7 +148,7 @@ type StageSeedsPanelProps = {
   productFetchProgress?: { fetched: number; done: boolean } | null;
 };
 
-/** Stage 3 — broad seed variations plus the demand/cost decision surface. */
+/** Stage 3 — broad seed variations plus the demand decision surface. */
 export function StageSeedsPanel({
   rows,
   preparing = false,
@@ -176,8 +164,6 @@ export function StageSeedsPanel({
   onAddManualSeed,
   onConfirmSpend,
   committed = false,
-  walletHref,
-  walletBalance = null,
   readOnly = false,
   productCountByCollectionId = {},
   productFetchProgress = null,
@@ -185,7 +171,6 @@ export function StageSeedsPanel({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [manualTerm, setManualTerm] = useState("");
   const [manualFamily, setManualFamily] = useState("");
-  const [budget, setBudget] = useState<number | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [minVolumeInput, setMinVolumeInput] = useState("1");
 
@@ -193,12 +178,12 @@ export function StageSeedsPanel({
   const probing = useMemo(() => new Set(probingIds), [probingIds]);
 
   const groups = useMemo(() => groupSeedRowsByCanonical(rows), [rows]);
-  const selectedBilled = useMemo(
-    () => billedTotal(selected, probes),
+  const selectedCapped = useMemo(
+    () => cappedTotal(selected, probes),
     [selected, probes]
   );
-  const overSelectionCap = selectedBilled > RAW_KEYWORD_SELECTION_CAP;
-  const atSelectionCap = selectedBilled >= RAW_KEYWORD_SELECTION_CAP;
+  const overSelectionCap = selectedCapped > RAW_KEYWORD_SELECTION_CAP;
+  const atSelectionCap = selectedCapped >= RAW_KEYWORD_SELECTION_CAP;
 
   const selectedRows = useMemo(
     () => rows.filter((row) => selected.has(row.id)),
@@ -208,15 +193,9 @@ export function StageSeedsPanel({
     () => estimateSelection(selectedRows, probes),
     [selectedRows, probes]
   );
-  const maxBudget = Math.max(0.01, estimate.usd);
-  const effectiveBudget = budget ?? maxBudget;
 
   const allRowsSelected =
     rows.length > 0 && rows.every((r) => selected.has(r.id));
-
-  const [insufficientFundsOpen, setInsufficientFundsOpen] = useState(false);
-  const [insufficientFundsAction, setInsufficientFundsAction] = useState("");
-  const [insufficientFundsAmount, setInsufficientFundsAmount] = useState(0);
 
   const targetSeedsToProbe = useMemo(
     () =>
@@ -233,24 +212,12 @@ export function StageSeedsPanel({
     () => selectedRows.filter((row) => !probes[row.id] && !probing.has(row.id)),
     [selectedRows, probes, probing]
   );
-  const probeCost = estimateProbeCostUsd(targetSeedsToProbe.length);
-  const canAffordExtract =
-    walletBalance == null || walletBalance >= estimate.usd;
   const staleSelected = selectedRows.filter(
     (row) => probes[row.id] && !probes[row.id].failed && isProbeStale(probes[row.id], market)
   );
 
   const handleCheckDemand = (rowIds: string[]) => {
     if (readOnly || rowIds.length === 0) return;
-    const cost = estimateProbeCostUsd(rowIds.length);
-    if (walletBalance != null && walletBalance < cost) {
-      setInsufficientFundsAction(
-        `Demand check for ${rowIds.length} seed${rowIds.length === 1 ? "" : "s"}`
-      );
-      setInsufficientFundsAmount(cost);
-      setInsufficientFundsOpen(true);
-      return;
-    }
     onProbe(rowIds);
   };
 
@@ -342,14 +309,6 @@ export function StageSeedsPanel({
     if (!term || !collectionId) return;
     onAddManualSeed(term, collectionId);
     setManualTerm("");
-  };
-
-  const applyBudget = () => {
-    const kept = seedIdsWithinBudget(selectedRows, probes, effectiveBudget);
-    const unprobedKept = selectedRows
-      .filter((row) => !probes[row.id])
-      .map((row) => row.id);
-    onChangeSelected([...kept, ...unprobedKept]);
   };
 
   return (
@@ -444,7 +403,6 @@ export function StageSeedsPanel({
                 )}
                 Check demand
                 {targetSeedsToProbe.length > 0 ? ` (${targetSeedsToProbe.length})` : ""}
-                {probeCost > 0 ? ` · ${formatUsd(probeCost)}` : ""}
               </Button>
             </div>
           )}
@@ -461,7 +419,7 @@ export function StageSeedsPanel({
                   : "border-border/70 text-muted-foreground"
             )}
           >
-            {selectedBilled.toLocaleString("en-US")} /{" "}
+            {selectedCapped.toLocaleString("en-US")} /{" "}
             {RAW_KEYWORD_SELECTION_CAP.toLocaleString("en-US")} raw keywords
             {overSelectionCap
               ? " — over the maximum. Deselect seeds before extracting."
@@ -563,11 +521,8 @@ export function StageSeedsPanel({
                 <TableHead className="min-w-[80px] text-xs font-semibold whitespace-nowrap text-right">
                   Volume
                 </TableHead>
-                <TableHead className="min-w-[70px] text-xs font-semibold whitespace-nowrap text-right">
-                  Price
-                </TableHead>
                 <TableHead className="min-w-[80px] text-xs font-semibold whitespace-nowrap text-right">
-                  Cost share
+                  Share
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -575,7 +530,7 @@ export function StageSeedsPanel({
               {groups.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={10}
+                    colSpan={9}
                     className="text-center text-xs text-muted-foreground py-8"
                   >
                     No seed rows for the current selection.
@@ -590,7 +545,7 @@ export function StageSeedsPanel({
                   const groupProbes = group.rows
                     .map((r) => probes[r.id])
                     .filter((p): p is SeedProbe => Boolean(p) && !p.failed);
-                  const groupBilled = groupProbes.reduce(
+                  const groupCapped = groupProbes.reduce(
                     (sum, probe) => sum + cappedKeywordEstimate(probe.rawKeywords),
                     0
                   );
@@ -598,11 +553,6 @@ export function StageSeedsPanel({
                     (sum, probe) => sum + probe.searchVolume,
                     0
                   );
-                  const groupPrice = group.rows.reduce((sum, row) => {
-                    const probe = probes[row.id];
-                    if (!probe || probe.failed) return sum;
-                    return sum + usdForRawKeywords(probe.rawKeywords);
-                  }, 0);
                   return (
                     <Fragment
                       key={`${group.collectionId}-${group.canonicalNicheSeed}`}
@@ -642,7 +592,7 @@ export function StageSeedsPanel({
                         <TableCell />
                         <TableCell className="text-xs tabular-nums text-right font-medium whitespace-nowrap">
                           {groupProbes.length > 0
-                            ? groupBilled.toLocaleString("en-US")
+                            ? groupCapped.toLocaleString("en-US")
                             : "—"}
                         </TableCell>
                         <TableCell className="text-xs tabular-nums text-right whitespace-nowrap">
@@ -650,18 +600,12 @@ export function StageSeedsPanel({
                             ? groupVolume.toLocaleString("en-US")
                             : "—"}
                         </TableCell>
-                        <TableCell className="text-xs tabular-nums text-right whitespace-nowrap">
-                          {groupProbes.length > 0 ? formatUsd(groupPrice) : "—"}
-                        </TableCell>
                         <TableCell />
                       </TableRow>
                   {group.rows.map((row) => {
                   const on = selected.has(row.id);
                   const probe = probes[row.id];
                   const isProbing = probing.has(row.id);
-                  const price = probe
-                    ? usdForRawKeywords(probe.rawKeywords)
-                    : 0;
                   const share =
                     probe && estimate.rawKeywords > 0 && on
                       ? (probe.rawKeywords / estimate.rawKeywords) * 100
@@ -753,9 +697,6 @@ export function StageSeedsPanel({
                             value={probe?.searchVolume}
                           />
                         </TableCell>
-                        <TableCell className="min-w-[70px] text-xs tabular-nums text-right whitespace-nowrap">
-                          {probe && !probe.failed ? formatUsd(price) : "—"}
-                        </TableCell>
                         <TableCell className="min-w-[80px] text-xs tabular-nums text-right whitespace-nowrap">
                           {share === null ? (
                             "—"
@@ -773,7 +714,7 @@ export function StageSeedsPanel({
                       </TableRow>
                       {expanded ? (
                         <TableRow className="hover:bg-transparent">
-                          <TableCell colSpan={10} className="bg-muted/20">
+                          <TableCell colSpan={9} className="bg-muted/20">
                             <SeedDetail
                               row={row}
                               probe={probe}
@@ -845,115 +786,53 @@ export function StageSeedsPanel({
               ? "No seeds selected yet"
               : `${selected.size} seed${selected.size === 1 ? "" : "s"} selected · ${estimate.rows} checked in ${marketLabel(market)}`}
           </p>
-          {walletHref ? (
-            <Button
-              asChild
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1.5 text-[11px]"
-            >
-              <Link href={walletHref}>
-                <Wallet className="h-3.5 w-3.5" />
-                Wallet
-              </Link>
-            </Button>
-          ) : null}
         </div>
 
         {estimate.rows === 0 ? (
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Stages 1–3 of the agent are free. Select seeds and run a demand
-            check ({formatUsd(APIFY_SEED_PROBE_USD_PER_SEED)} per seed, billed from your wallet) to see
-            raw keyword counts and what extract would cost —
-            {formatUsd(APIFY_KEYWORD_USD_PER_ROW)} per keyword row, billed on rows returned.
+            Select seeds and run a demand check to see raw keyword counts and
+            how many rows extract would pull.
           </p>
         ) : (
           <>
-            <div className="grid gap-2 sm:grid-cols-4">
+            <div className="grid gap-2 sm:grid-cols-3">
               <Metric
                 label="Raw keywords"
                 value={estimate.rawKeywords.toLocaleString("en-US")}
               />
               <Metric
-                label="Billed rows (capped)"
-                value={estimate.billedKeywords.toLocaleString("en-US")}
+                label="Rows to extract (capped)"
+                value={estimate.cappedKeywords.toLocaleString("en-US")}
                 highlight
               />
               <Metric
                 label="Search volume"
                 value={estimate.searchVolume.toLocaleString("en-US")}
               />
-              <Metric
-                label="Price"
-                value={formatUsd(estimate.usd)}
-                highlight
-              />
             </div>
 
-            {estimate.usd > 0 ? (
+            {estimate.rows > 0 ? (
               <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 Each selected seed starts its own extraction run. Overlapping
-                synonyms are billed separately — deselect broad or duplicate
-                wording to keep the bill down. Filters after extract do not
-                change what you pay.
+                synonyms are pulled separately — deselect broad or duplicate
+                wording to keep the pull small.
               </p>
             ) : null}
 
             {readOnly ? (
               <p className="text-[11px] text-muted-foreground leading-relaxed">
                 Locked after extract — this is the seed selection that was
-                charged.
+                extracted.
               </p>
             ) : (
             <>
             <div className="flex flex-wrap items-center gap-2">
-              <label
-                htmlFor="seed-budget"
-                className="text-[11px] text-muted-foreground"
-              >
-                Budget cap
-              </label>
-              <input
-                id="seed-budget"
-                type="range"
-                min={0}
-                max={maxBudget}
-                step={Math.max(0.5, Math.round((maxBudget / 50) * 100) / 100)}
-                value={effectiveBudget}
-                onChange={(e) => setBudget(Number(e.target.value))}
-                className="h-1 w-40 accent-primary"
-              />
-              <span className="text-[11px] tabular-nums text-muted-foreground">
-                {formatUsd(effectiveBudget)}
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 text-[11px]"
-                onClick={applyBudget}
-                disabled={effectiveBudget >= estimate.usd}
-              >
-                Fit selection to budget
-              </Button>
               <Button
                 type="button"
                 size="sm"
                 className="ml-auto h-8 text-xs bg-[#400095] hover:bg-[#6B358D] text-white dark:bg-[#F76D01] dark:hover:bg-[#F76D01]/90"
-                onClick={() => {
-                  if (walletBalance != null && !canAffordExtract) {
-                    setInsufficientFundsAction(
-                      `Keyword extraction for ${
-                        selectedRows.filter((r) => probes[r.id] && !probes[r.id].failed).length
-                      } seeds`
-                    );
-                    setInsufficientFundsAmount(estimate.usd);
-                    setInsufficientFundsOpen(true);
-                    return;
-                  }
-                  setConfirmOpen(true);
-                }}
+                onClick={() => setConfirmOpen(true)}
                 disabled={
                   estimate.rows === 0 ||
                   committed ||
@@ -961,22 +840,17 @@ export function StageSeedsPanel({
                   overSelectionCap
                 }
               >
-                {committed
-                  ? "Extracted"
-                  : `Extract · ${formatUsd(estimate.usd)}`}
+                {committed ? "Extracted" : "Extract"}
               </Button>
             </div>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Extract pulls up to {EXTRACT_CAP_PER_SEED.toLocaleString("en-US")} keywords per selected seed at{" "}
-              {formatUsd(APIFY_KEYWORD_USD_PER_ROW)} per row. Unused hold is refunded instantly. The figure above is an estimate from
-              the demand check; your wallet is charged for rows actually
-              returned. Agent work after this is free. Publishing collections
-              is {formatUsd(5)} each.
+              Extract pulls up to {EXTRACT_CAP_PER_SEED.toLocaleString("en-US")} keywords per selected seed. The figure above is an estimate from
+              the demand check; the pull returns the rows actually found.
             </p>
             {overSelectionCap ? (
               <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-destructive">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Selected seeds total {selectedBilled.toLocaleString("en-US")} raw
+                Selected seeds total {selectedCapped.toLocaleString("en-US")} raw
                 keywords, over the{" "}
                 {RAW_KEYWORD_SELECTION_CAP.toLocaleString("en-US")} maximum.
                 Deselect seeds before extracting. A term shown as 10,000+ counts
@@ -993,23 +867,6 @@ export function StageSeedsPanel({
                 you can extract. Unchecked seeds are never silently skipped.
               </p>
             ) : null}
-            {walletBalance != null && !canAffordExtract ? (
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
-                <span>
-                  Wallet balance {formatUsd(walletBalance)} is below the estimate ({formatUsd(estimate.usd)}).
-                </span>
-                <Link href={walletHref || "/wallet"} target="_blank">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-6 text-[11px] gap-1 border-destructive/40 text-destructive hover:bg-destructive/15 shrink-0"
-                  >
-                    <Wallet className="h-3 w-3" />
-                    Top up
-                  </Button>
-                </Link>
-              </div>
-            ) : null}
             </>
             )}
           </>
@@ -1021,11 +878,9 @@ export function StageSeedsPanel({
           <DialogHeader>
             <DialogTitle>Confirm keyword extract</DialogTitle>
             <DialogDescription>
-              Semrush applies your minimum search volume filter before
-              billing, so a higher floor costs less. Unused hold is
-              refunded instantly — you pay the actual row count returned
-              after the run. Difficulty and word count can be filtered for
-              free after the pull, in the Extract tab.
+              Semrush applies your minimum search volume filter before the
+              pull, so a higher floor returns fewer rows. Difficulty and word
+              count can be filtered after the pull, in the Extract tab.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1">
@@ -1054,7 +909,6 @@ export function StageSeedsPanel({
                   <th className="px-3 py-1.5 text-right font-medium">
                     Est. rows
                   </th>
-                  <th className="px-3 py-1.5 text-right font-medium">Est. $</th>
                 </tr>
               </thead>
               <tbody>
@@ -1066,41 +920,16 @@ export function StageSeedsPanel({
                       <td className="px-3 py-1.5 text-right tabular-nums">
                         {formatRawKeywords(probes[row.id].rawKeywords)}
                       </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">
-                        {formatUsd(usdForRawKeywords(probes[row.id].rawKeywords))}
-                      </td>
                     </tr>
                   ))}
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">
-              Wallet {walletBalance == null ? "—" : formatUsd(walletBalance)}
-            </span>
+          <div className="flex items-center justify-end text-xs">
             <span className="font-semibold tabular-nums">
-              Estimate {formatUsd(estimate.usd)}
+              {estimate.cappedKeywords.toLocaleString("en-US")} rows
             </span>
           </div>
-
-          {!canAffordExtract ? (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>Wallet balance is below the estimate</span>
-              </div>
-              <Link href={walletHref || "/wallet"} target="_blank">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs gap-1 border-destructive/40 text-destructive hover:bg-destructive/15 shrink-0"
-                >
-                  <Wallet className="h-3 w-3" />
-                  Top up
-                </Button>
-              </Link>
-            </div>
-          ) : null}
 
           <DialogFooter>
             <Button
@@ -1112,7 +941,6 @@ export function StageSeedsPanel({
             </Button>
             <Button
               type="button"
-              disabled={!canAffordExtract}
               onClick={() => {
                 setConfirmOpen(false);
                 const minVolume = Number(minVolumeInput);
@@ -1130,15 +958,6 @@ export function StageSeedsPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <InsufficientFundsDialog
-        open={insufficientFundsOpen}
-        onOpenChange={setInsufficientFundsOpen}
-        requiredAmount={insufficientFundsAmount}
-        currentBalance={walletBalance ?? 0}
-        actionName={insufficientFundsAction}
-        walletHref={walletHref}
-      />
     </div>
   );
 }
@@ -1269,8 +1088,7 @@ function SeedDetail({
       ) : probe?.failed ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-2.5">
           <p className="text-[11px] text-destructive leading-relaxed">
-            The demand check failed for this seed. Nothing was charged — try again
-            or drop the term.
+            The demand check failed for this seed. Try again or drop the term.
           </p>
           {!readOnly && (
             <Button

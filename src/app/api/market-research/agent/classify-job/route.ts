@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAiWalletBilling } from "@/lib/billing/ai-wallet-billing";
 import {
   jsonError,
   requireMrWrite,
@@ -49,7 +48,7 @@ export async function GET(request: NextRequest) {
   );
 }
 
-async function handlePost(request: NextRequest) {
+export async function POST(request: NextRequest) {
   let json: unknown;
   try {
     json = await request.json();
@@ -75,5 +74,3 @@ async function handlePost(request: NextRequest) {
   if (!reused) await dispatchJob(job.id, "mr_classify");
   return NextResponse.json({ jobId: job.id }, { headers: auth.headers });
 }
-
-export const POST = withAiWalletBilling("mr_classify_job", handlePost);

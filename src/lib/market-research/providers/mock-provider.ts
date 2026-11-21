@@ -238,7 +238,7 @@ export function createMockKeywordProvider(): KeywordDataProvider {
       );
       const filteredCap = Math.min(payload.limitPerSeed, EXTRACT_CAP_PER_SEED);
       // Server-side minVolume/maxDifficulty filters, applied the same way
-      // amassuo/semrush-keyword-expander applies them before billing.
+      // amassuo/semrush-keyword-expander applies them before rows are returned.
       const filtered: KeywordRow[] = [];
       for (let i = 0; i < arrivedRaw && filtered.length < filteredCap; i += 1) {
         const row = rowAt(payload.seed, payload.database, i);

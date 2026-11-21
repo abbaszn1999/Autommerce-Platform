@@ -16,7 +16,6 @@ import {
   Images,
   LayoutGrid,
   Lock,
-  Paintbrush,
   PlugZap,
   RefreshCw,
   Search,
@@ -25,17 +24,14 @@ import {
   Sparkles,
   Upload,
   Users,
-  Wallet,
   WandSparkles,
   Zap,
 } from "lucide-react";
 import { useWorkspaceContext } from "./workspace-context";
 import { useRole } from "@/hooks/use-role";
 import { useCredits } from "@/hooks/use-credits";
-import { useWallet } from "@/hooks/use-wallet";
 import { useDashboardSummary } from "@/hooks/use-dashboard";
 import { formatCredits } from "@/lib/format-credits";
-import { formatMoney } from "@/lib/wallet/format";
 import { matchesQuery, visibleTools } from "@/components/dashboard/tools-catalog";
 import { PageLoader } from "@/components/brand/page-loader";
 
@@ -351,7 +347,6 @@ export default function WorkspaceDashboardPage() {
   const { workspace, role, wsLoading, hasIntegration, toolLocks } = useWorkspaceContext();
   const permissions = useRole(role);
   const credits = useCredits(workspace?.id ?? null);
-  const { wallet } = useWallet(workspace?.id ?? null);
   const { data, isLoading } = useDashboardSummary(workspace?.id ?? null);
   const [command, setCommand] = useState("");
   const [greeting, setGreeting] = useState("Welcome");
@@ -369,7 +364,6 @@ export default function WorkspaceDashboardPage() {
   }, [command, permissions.canAdmin, permissions.isOwner]);
 
   const stats = data?.stats;
-  const locked = !hasIntegration;
   const missions: {
     id: string;
     eyebrow: string;
@@ -408,9 +402,7 @@ export default function WorkspaceDashboardPage() {
       className: "lg:col-span-5",
       surface: "from-[#F76D01]/15 via-card to-card",
       tools: [
-        { name: "Market Research", path: "/market-research", icon: Search, note: "7-stage SEO and content agent", locked: !!toolLocks["market-research"] },
-        { name: "Customize", path: "/customize", icon: Paintbrush, note: "Storefront blocks and AI naming", locked },
-      ],
+        { name: "Market Research", path: "/market-research", icon: Search, note: "6-stage collection SEO agent", locked: !!toolLocks["market-research"] },      ],
     },
     {
       id: "visual",
@@ -432,16 +424,14 @@ export default function WorkspaceDashboardPage() {
       id: "operate",
       eyebrow: "04 · Autonomous operations",
       title: "Put the store on autopilot",
-      description: "Talk to your store and classify new products every day.",
+      description: "Talk to your store and let an assistant operate it.",
       icon: Bot,
       href: "/store-assistant",
       action: "Talk to store assistant",
       className: "lg:col-span-7",
       surface: "from-[#C40000]/15 via-card to-card",
       tools: [
-        { name: "Store Assistant", path: "/store-assistant", icon: Bot, note: "A conversational store operator", locked: !!toolLocks["store-assistant"] },
-        { name: "24h Sync", path: "/growth-sync", icon: RefreshCw, note: "Classify every new product automatically", locked: !!toolLocks["growth-sync"] },
-      ],
+        { name: "Store Assistant", path: "/store-assistant", icon: Bot, note: "A conversational store operator", locked: !!toolLocks["store-assistant"] },      ],
     },
   ];
 
@@ -547,7 +537,6 @@ export default function WorkspaceDashboardPage() {
           {[
             { label: "Taxonomy", value: `${stats?.totalCategories ?? 0} categories`, icon: FolderTree, href: "/categories" },
             { label: "AI credits", value: `${formatCredits(credits.remaining)} available`, icon: Zap, href: "/usage" },
-            { label: "Agent wallet", value: wallet ? formatMoney(wallet.balance) : "—", icon: Wallet, href: "/wallet" },
             { label: "Collaborators", value: `${stats?.teamMembers ?? 0} people`, icon: Users, href: permissions.canAdmin ? "/team" : "" },
           ].map((item) => (
             <Link key={item.label} href={`${basePath}${item.href}`} className="group flex min-w-[220px] flex-1 items-center gap-4 px-6 py-5 transition-colors hover:bg-muted/50">
@@ -641,7 +630,6 @@ export default function WorkspaceDashboardPage() {
               {[
                 ["Store integration", hasIntegration ? "Connected" : "Action needed"],
                 ["AI credit capacity", `${formatCredits(credits.remaining)} left`],
-                ["Wallet capacity", wallet ? formatMoney(wallet.balance) : "Unavailable"],
                 ["Import intelligence", `${stats?.recentImports ?? 0} sessions`],
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between border-b border-border/60 pb-3 text-[10px] dark:border-white/[0.07]">
@@ -659,7 +647,7 @@ export default function WorkspaceDashboardPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {[
-                { name: "Wallet & costs", note: "Top up and inspect agent spend", icon: CircleDollarSign, path: "/wallet" },
+                { name: "Credits & usage", note: "Balance and spend per agent", icon: CircleDollarSign, path: "/usage" },
                 { name: "Team access", note: "People, roles and permissions", icon: Users, path: permissions.canAdmin ? "/team" : "" },
                 { name: "Integrations", note: "Store and workspace settings", icon: Settings, path: permissions.canAdmin ? "/settings" : "" },
                 ...(permissions.isOwner ? [{ name: "Subscription", note: "Plan and extra AI credits", icon: Crown, path: "/subscription" }] : []),

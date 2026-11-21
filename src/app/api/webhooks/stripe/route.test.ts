@@ -8,7 +8,7 @@ const db = {
   subRow: { credits_reset_at: "2026-09-01T00:00:05.000Z" } as Record<string, unknown> | null,
   updates: [] as Array<{ table: string; patch: Record<string, unknown> }>,
   rpcCalls: [] as Array<{ name: string; args: Record<string, unknown> }>,
-  walletOk: true,
+  rpcOk: true,
 };
 
 function from(table: string) {
@@ -57,6 +57,7 @@ const admin = {
   from,
   rpc: async (name: string, args: Record<string, unknown>) => {
     db.rpcCalls.push({ name, args });
+    if (!db.rpcOk) return { data: null, error: { message: "database unavailable" } };
     return { data: { success: true, duplicate: false }, error: null };
   },
 };
@@ -90,10 +91,6 @@ vi.mock("@/lib/stripe", () => ({
 vi.mock("@/lib/billing/plans", () => ({ isSelfServePlanName: () => true }));
 vi.mock("@/lib/billing/welcome-gift-server", () => ({ stampFirstPaidAtIfNull: async () => undefined }));
 vi.mock("@/lib/workspace-context", () => ({ clearWorkspaceContextCache: () => undefined }));
-vi.mock("@/lib/wallet/server", () => ({
-  creditWorkspaceWallet: async () =>
-    db.walletOk ? { ok: true } : { ok: false, message: "database unavailable" },
-}));
 
 import { POST } from "./route";
 
@@ -105,20 +102,6 @@ const deliver = (event: Record<string, unknown>) =>
       headers: { "stripe-signature": "sig" },
     })
   );
-
-const walletTopup = {
-  id: "evt_wallet",
-  type: "checkout.session.completed",
-  data: {
-    object: {
-      id: "cs_wallet",
-      mode: "payment",
-      payment_status: "paid",
-      amount_total: 5000,
-      metadata: { userId: "u1", walletTopup: "1", workspaceId: "w1" },
-    },
-  },
-};
 
 const creditTopup = (paymentStatus: string) => ({
   id: `evt_credits_${paymentStatus}`,
@@ -152,25 +135,25 @@ beforeEach(() => {
   db.subRow = { credits_reset_at: "2026-09-01T00:00:05.000Z" };
   db.updates = [];
   db.rpcCalls = [];
-  db.walletOk = true;
+  db.rpcOk = true;
 });
 
 describe("Stripe webhook", () => {
   it("releases the event when a handler fails so Stripe's retry is processed", async () => {
-    db.walletOk = false;
-    const failed = await deliver(walletTopup);
+    db.rpcOk = false;
+    const failed = await deliver(creditTopup("paid"));
     expect(failed.status).toBe(500);
-    expect(db.events.has("evt_wallet")).toBe(false);
+    expect(db.events.has("evt_credits_paid")).toBe(false);
 
-    db.walletOk = true;
-    const retried = await deliver(walletTopup);
+    db.rpcOk = true;
+    const retried = await deliver(creditTopup("paid"));
     expect(retried.status).toBe(200);
     expect(await retried.json()).toEqual({ received: true });
   });
 
   it("acknowledges an already processed event as a duplicate", async () => {
-    await deliver(walletTopup);
-    const again = await deliver(walletTopup);
+    await deliver(creditTopup("paid"));
+    const again = await deliver(creditTopup("paid"));
     expect(await again.json()).toEqual({ received: true, duplicate: true });
   });
 

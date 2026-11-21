@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAiWalletBilling } from "@/lib/billing/ai-wallet-billing";
 import {
   agentAnalyzeBodySchema,
   jsonError,
@@ -97,7 +96,7 @@ export async function GET(request: NextRequest) {
   );
 }
 
-async function handlePost(request: NextRequest) {
+export async function POST(request: NextRequest) {
   let json: unknown;
   try {
     json = await request.json();
@@ -170,7 +169,6 @@ async function handlePost(request: NextRequest) {
   }
 }
 
-export const POST = withAiWalletBilling("mr_analyze", handlePost);
 
 /** Stop: the job ends as cancelled at its next step, before the next AI call. */
 export async function DELETE(request: NextRequest) {

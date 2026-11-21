@@ -107,10 +107,7 @@ export async function GET(request: NextRequest) {
         extract: {
           id: extract.id,
           status: extract.status,
-          billingStatus: extract.billing_status,
           rowsReturned: Number(extract.rows_returned) || 0,
-          heldUsd: Number(extract.held_usd) || 0,
-          actualUsd: Number(extract.actual_usd) || 0,
           createdAt: extract.created_at,
         },
         seeds: runs.map((run) => ({

@@ -19,8 +19,7 @@ not_for:
 ## Goal
 
 You receive two lists: `newCollections`, the collections Stage 5 just proposed, and
-`existingCollections`, the merchant's PLPs that already exist on their store (or, for Free
-Assessment, on their uploaded sheet). Your only job is to flag which entries in `newCollections`
+`existingCollections`, the merchant's PLPs that already exist on their store. Your only job is to flag which entries in `newCollections`
 already have their exact shopper-intent coverage served by something in `existingCollections`, so
 the merchant is never offered a collection that is just a rename of one they already have. This is
 not a similarity score and not a string-match check — it is a binary duplicate/not-duplicate

@@ -54,14 +54,9 @@ export default function AdminOverviewPage() {
     () => halfPeriodDeltaPercent(series.map((point) => point.creditUsd)),
     [series]
   );
-  const walletDelta = useMemo(
-    () => halfPeriodDeltaPercent(series.map((point) => point.walletUsd)),
-    [series]
-  );
 
   const mrr = data ? kpiOf(data.kpis, "MRR (plans)") : undefined;
   const creditsSpent = data ? kpiOf(data.kpis, "Credits spent") : undefined;
-  const walletSpent = data ? kpiOf(data.kpis, "Wallet spent") : undefined;
   const strip = data
     ? data.kpis
         .filter((kpi) => ["Users", "Workspaces", "Active plans", "Jobs failed"].includes(kpi.label))
@@ -90,7 +85,7 @@ export default function AdminOverviewPage() {
             </span>
           </span>
         }
-        description="Credits, wallet USD, jobs, and alerts. Same live data as the rest of this console."
+        description="Credits, jobs, and alerts. Same live data as the rest of this console."
         actions={<RangePills value={range} onChange={setRange} />}
       />
 
@@ -108,12 +103,6 @@ export default function AdminOverviewPage() {
                 hint: `${formatUsd(creditUsdTotal)} at $0.50 / credit`,
                 delta: creditDelta,
               },
-              {
-                label: "Wallet spent",
-                value: walletSpent?.value ?? "—",
-                hint: walletSpent?.hint,
-                delta: walletDelta,
-              },
             ]}
           />
 
@@ -130,20 +119,12 @@ export default function AdminOverviewPage() {
             />
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-2">
-            <OverviewSpendMix
-              title="AI credit mix"
-              unit="credits"
-              slices={data.creditSlices}
-              formatValue={formatCredits}
-            />
-            <OverviewSpendMix
-              title="Wallet mix"
-              unit="USD"
-              slices={data.walletSlices}
-              formatValue={formatUsd}
-            />
-          </div>
+          <OverviewSpendMix
+            title="AI credit mix"
+            unit="credits"
+            slices={data.creditSlices}
+            formatValue={formatCredits}
+          />
 
           <AttentionList items={data.attention} />
         </div>

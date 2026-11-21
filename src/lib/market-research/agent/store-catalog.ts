@@ -92,12 +92,6 @@ export type StoreCollectionItem = {
   productCount: number;
   plpPath: string;
   /**
-   * False when the collection exists in the admin but is not on the storefront
-   * sales channel, in which case its URL answers 404 and it must never be used
-   * as an internal link target.
-   */
-  published?: boolean;
-  /**
    * WooCommerce only. The parent category id ("0" = top-level). Shopify
    * collections are flat and never set this field.
    */
@@ -187,7 +181,6 @@ export async function fetchStoreCatalog(
         const description = stripHtml(String(row.description ?? ""));
         const productCount = Number(row.products_count) || 0;
         const plpPath = handle ? `/collections/${handle}` : "";
-        const publishedLabel = String(row.published ?? "");
         return {
           id: id || handle || name,
           name: name || handle,
@@ -195,8 +188,6 @@ export async function fetchStoreCatalog(
           description,
           productCount,
           plpPath,
-          published:
-            publishedLabel.length > 0 && publishedLabel !== "Not published",
         };
       });
 
@@ -234,7 +225,6 @@ export async function fetchStoreCatalog(
           description,
           productCount,
           plpPath,
-          published: true,
           parentId,
         };
       });

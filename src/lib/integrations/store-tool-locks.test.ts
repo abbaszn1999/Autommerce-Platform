@@ -6,8 +6,8 @@ import { storeToolBlock, grantedScopesFromTest } from "./store-scopes";
 describe("store tool locks", () => {
   it("locks a tool whose scopes are missing, and opens the ones that have them", () => {
     const locks = storeToolLocks("shopify", ["read_products", "write_products"]);
-    expect(locks["growth-sync"]).toBeNull();
-    expect(locks["market-research"]).toMatchObject({ reason: "missing-scopes", missing: ["read_publications", "write_publications", "read_content", "write_content"] });
+    expect(locks["google-ads-agent"]).toBeNull();
+    expect(locks["market-research"]).toMatchObject({ reason: "missing-scopes", missing: ["read_publications", "write_publications"] });
   });
 
   it("always opens the Store Assistant: with any access, with none, with no store, on any platform", () => {
@@ -29,10 +29,10 @@ describe("store tool locks", () => {
   });
 
   it("handles no store, other platforms and unknown scopes", () => {
-    expect(storeToolLocks(null, null)["growth-sync"]).toEqual({ reason: "no-store" });
+    expect(storeToolLocks(null, null)["market-research"]).toEqual({ reason: "no-store" });
     expect(storeToolLocks("woocommerce", null)["store-assistant"]).toBeNull();
     // Shopify could not be asked: nothing is locked by a failed check.
-    expect(storeToolLocks("shopify", null)["growth-sync"]).toBeNull();
+    expect(storeToolLocks("shopify", null)["market-research"]).toBeNull();
   });
 });
 
@@ -47,9 +47,12 @@ describe("the server enforces the same locks", () => {
   const fresh = new Date().toISOString();
 
   it("refuses a tool whose scopes are missing, naming them", async () => {
-    const res = await storeToolBlock(dbWith({ provider: "shopify", base_url: "https://x.myshopify.com", config: {}, granted_scopes: ["read_products"], scopes_checked_at: fresh }), "w1", "growth-sync");
+    const res = await storeToolBlock(dbWith({ provider: "shopify", base_url: "https://x.myshopify.com", config: {}, granted_scopes: ["read_products"], scopes_checked_at: fresh }), "w1", "market-research");
     expect(res?.status).toBe(403);
-    expect(await res?.json()).toMatchObject({ code: "MISSING_SCOPES", missing: ["write_products"] });
+    expect(await res?.json()).toMatchObject({
+      code: "MISSING_SCOPES",
+      missing: ["write_products", "read_publications", "write_publications"],
+    });
   });
 
   it("lets a tool through when it has what it needs, or the platform has no scopes", async () => {

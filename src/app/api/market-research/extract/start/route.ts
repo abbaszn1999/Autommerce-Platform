@@ -7,15 +7,13 @@ import {
 } from "@/lib/market-research/api-schema";
 import {
   cappedKeywordEstimate,
-  estimateExtractCostUsd,
   EXTRACT_CAP_PER_SEED,
   RAW_KEYWORD_SELECTION_CAP,
-  roundUsd,
 } from "@/lib/market-research/cost";
 import { getKeywordProvider } from "@/lib/market-research/providers";
 import { marketToSemrushDb } from "@/lib/market-research/providers/keyword-provider";
 import { getMrProject, loadProjectProbesAdmin } from "@/lib/market-research/server-persist";
-import { chargeMrWallet, settleExtractBilling } from "@/lib/market-research/wallet-ops";
+import { finalizeExtract } from "@/lib/market-research/extract-finalize";
 
 export const maxDuration = 60;
 
@@ -44,9 +42,9 @@ export async function POST(request: NextRequest) {
   );
   if (!project) return jsonError("Project not found", 404);
 
-  // Price the hold from the demand check saved on the server, not the
-  // estimate in the request. A seed without a saved result holds the full
-  // per-seed cap; the unused part is refunded when the extract settles.
+  // Size the selection from the demand check saved on the server, not the
+  // estimate in the request. A seed without a saved result counts as the
+  // full per-seed cap.
   const savedProbes = await loadProjectProbesAdmin(auth.admin, parsed.data.projectId).catch(
     () => ({} as Record<string, { rawKeywords?: number; failed?: boolean }>)
   );
@@ -72,9 +70,6 @@ export async function POST(request: NextRequest) {
   const database = marketToSemrushDb(parsed.data.market);
   const provider = getKeywordProvider();
   const extractId = crypto.randomUUID();
-  const heldUsd = roundUsd(
-    seeds.reduce((sum, seed) => sum + estimateExtractCostUsd(seed.rawKeywordEstimate), 0)
-  );
 
   const { error: extractInsertError } = await auth.admin.from("mr_extracts").insert({
     id: extractId,
@@ -85,30 +80,11 @@ export async function POST(request: NextRequest) {
     database,
     status: "running",
     estimated_rows: estimatedRows,
-    held_usd: heldUsd,
-    billing_status: "held",
   });
   if (extractInsertError) {
     return NextResponse.json(
       { error: extractInsertError.message },
       { status: 500, headers: auth.headers }
-    );
-  }
-
-  const charged = await chargeMrWallet(auth.admin, {
-    workspaceId: parsed.data.workspaceId,
-    userId: auth.user.id,
-    amountUsd: heldUsd,
-    description: `Keyword extract hold · ${seeds.length} seeds`,
-    idempotencyKey: `apify_keyword_extract:hold:${extractId}`,
-    details: { extractId, projectId: parsed.data.projectId, estimatedRows },
-  });
-  if (!charged.ok) {
-    await auth.admin.from("mr_extracts").delete().eq("id", extractId);
-    const status = charged.reason === "insufficient_funds" ? 402 : 500;
-    return NextResponse.json(
-      { error: charged.message || "Not enough wallet balance" },
-      { status, headers: auth.headers }
     );
   }
 
@@ -119,7 +95,6 @@ export async function POST(request: NextRequest) {
     datasetId?: string;
     limitPerSeed: number;
     estimatedRows: number;
-    estimatedCostUsd: number;
   }> = [];
 
   try {
@@ -136,7 +111,6 @@ export async function POST(request: NextRequest) {
         datasetId: handle.datasetId,
         limitPerSeed: handle.limitPerSeed,
         estimatedRows: cappedKeywordEstimate(seed.rawKeywordEstimate),
-        estimatedCostUsd: estimateExtractCostUsd(seed.rawKeywordEstimate),
       });
       const { error: runError } = await auth.admin.from("mr_runs").insert({
         workspace_id: parsed.data.workspaceId,
@@ -150,7 +124,6 @@ export async function POST(request: NextRequest) {
         // `pages` column (unchanged) now stores `limitPerSeed`.
         pages: handle.limitPerSeed,
         status: "running",
-        estimated_usd: estimateExtractCostUsd(seed.rawKeywordEstimate),
       });
       if (runError) throw runError;
     }
@@ -160,21 +133,8 @@ export async function POST(request: NextRequest) {
         provider.abortKeywordIdeas(row.runId).catch(() => undefined)
       )
     );
-    // The normal settlement refunds the hold under the same key every later
-    // settle would use, and only closes the extract once the refund landed;
-    // a failed refund leaves it held for the sweep to settle.
-    await settleExtractBilling(auth.admin, {
-      extract: {
-        id: extractId,
-        workspace_id: parsed.data.workspaceId,
-        project_id: parsed.data.projectId,
-        held_usd: heldUsd,
-        actual_usd: 0,
-        rows_returned: 0,
-        billing_status: "held",
-        status: "running",
-      },
-      userId: auth.user.id,
+    await finalizeExtract(auth.admin, {
+      extract: { id: extractId, project_id: parsed.data.projectId },
       rowsReturned: 0,
       status: "failed",
     });
@@ -182,7 +142,7 @@ export async function POST(request: NextRequest) {
     // vendor's name, actor ids, or request paths in its message.
     console.error("[mr-extract] Failed to start extract:", error);
     return NextResponse.json(
-      { error: "Failed to start extraction. You have not been charged." },
+      { error: "Failed to start extraction." },
       { status: 502, headers: auth.headers }
     );
   }
@@ -223,7 +183,6 @@ export async function POST(request: NextRequest) {
     {
       extractId,
       database,
-      heldUsd,
       seeds: started,
     },
     { headers: auth.headers }

@@ -320,9 +320,8 @@ export function StageScopePanel({
             </p>
           ) : (
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Correcting a name or adding a missing niche here is instant and
-            free. Ask for a full re-read only when the crawl itself missed parts
-            of the site.
+            Correcting a name or adding a missing niche here is instant. Ask for
+            a full re-read only when the crawl itself missed parts of the site.
           </p>
           )}
         </div>

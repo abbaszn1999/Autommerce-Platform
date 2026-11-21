@@ -38,7 +38,7 @@ export type KeywordRow = {
   seed: string;
 };
 
-/** Filters amassuo/semrush-keyword-expander applies server-side, before billing. */
+/** Filters amassuo/semrush-keyword-expander applies server-side, before rows are returned. */
 export type KeywordExtractFilters = {
   limitPerSeed: number;
   minVolume?: number;

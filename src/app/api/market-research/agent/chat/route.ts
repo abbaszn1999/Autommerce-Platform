@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAiWalletBilling } from "@/lib/billing/ai-wallet-billing";
 import {
   agentChatBodySchema,
   jsonError,
@@ -10,7 +9,7 @@ import { runStage1AgentChat } from "@/lib/market-research/agent/stage1-chat";
 
 export const maxDuration = 60;
 
-async function handlePost(request: NextRequest) {
+export async function POST(request: NextRequest) {
   let json: unknown;
   try {
     json = await request.json();
@@ -56,5 +55,3 @@ async function handlePost(request: NextRequest) {
     return jsonError(msg, status);
   }
 }
-
-export const POST = withAiWalletBilling("mr_chat", handlePost);

@@ -8,8 +8,6 @@ import {
   Download,
   Eye,
   ExternalLink,
-  HelpCircle,
-  Link2,
   Loader2,
   MapPinned,
   Sparkles,
@@ -17,7 +15,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -27,13 +24,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
   Table,
   TableBody,
   TableCell,
@@ -42,8 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { sanitizeRichText, stripTags } from "@/lib/market-research/rich-text";
-import { OnPageShapePicker } from "@/components/customize/on-page-shape-picker";
+import { stripTags } from "@/lib/market-research/plain-text";
 import { TableSelectHeader } from "@/components/table-select-header";
 import { WorksheetPaginationBar } from "@/components/worksheet-pagination-bar";
 import {
@@ -56,7 +45,6 @@ import { buildCollectionsSitemapXml } from "@/lib/market-research/sitemap";
 import { buildStoreLinks } from "@/lib/market-research/store-links";
 import {
   type CollectionContent,
-  type CollectionLink,
   type OnPageInstructionField,
   type OnPageInstructions,
   type ProposedCollection,
@@ -94,19 +82,11 @@ const FIELD_META: {
     hint: "How the on-page description should be written.",
     placeholder: "e.g. Conversational, 80–120 words, no medical claims…",
   },
-  {
-    id: "faq",
-    label: "FAQ",
-    hint: "How questions and answers should be written.",
-    placeholder: "e.g. 4 questions, answer for shoppers not Google…",
-  },
 ];
 
 export function StageContentPanel({
   collections,
   contentById,
-  internalLinksById,
-  linksBuildProgress,
   instructions,
   onInstruction,
   generating,
@@ -117,21 +97,11 @@ export function StageContentPanel({
   onStart,
   onPush,
   onSyncSeo,
-  onNextStrategy,
   storeUrl,
   storeProvider,
 }: {
   collections: ProposedCollection[];
   contentById: Record<string, CollectionContent>;
-  /**
-   * Internal link graph, precomputed while pushing collections to the store
-   * (before "Generate" is clicked). Used as a fallback so the "Internal
-   * Links" column/dialog show data immediately, even before on-page copy has
-   * been generated.
-   */
-  internalLinksById?: Record<string, CollectionLink[]>;
-  /** Live progress across the background internal-link cursor job's pages. */
-  linksBuildProgress?: { processed: number; total: number } | null;
   instructions: OnPageInstructions;
   onInstruction: (field: OnPageInstructionField, value: string) => void;
   generating: boolean;
@@ -143,7 +113,6 @@ export function StageContentPanel({
   onStart: (ids: string[]) => void;
   onPush?: () => void;
   onSyncSeo?: () => void;
-  onNextStrategy: () => void;
   /** Storefront origin, used to build each collection's live URL and the
    *  sitemap export. */
   storeUrl?: string;
@@ -152,7 +121,6 @@ export function StageContentPanel({
    *  "/product-category/{handle}"). Defaults to Shopify's convention. */
   storeProvider?: string | null;
 }) {
-  const [previewId, setPreviewId] = useState<string | null>(null);
   const [openField, setOpenField] = useState<OnPageInstructionField | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>(() =>
     collections.map((c) => c.id)
@@ -160,9 +128,6 @@ export function StageContentPanel({
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(WORKSHEET_PAGE_SIZE);
 
-  // Active modal views for FAQs and Links
-  const [activeFaqColId, setActiveFaqColId] = useState<string | null>(null);
-  const [activeLinksColId, setActiveLinksColId] = useState<string | null>(null);
   // Hover-eye "view full text" modal for SEO title / description / collection description
   const [activeTextCell, setActiveTextCell] = useState<{
     colId: string;
@@ -171,8 +136,6 @@ export function StageContentPanel({
   const [sitemapDialogOpen, setSitemapDialogOpen] = useState(false);
   const [sitemapUrlCopied, setSitemapUrlCopied] = useState(false);
 
-  const preview = previewId ? contentById[previewId] : undefined;
-  const previewCol = collections.find((c) => c.id === previewId);
   const fieldMeta = FIELD_META.find((f) => f.id === openField);
   const locked = generating || ready;
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -221,11 +184,6 @@ export function StageContentPanel({
     else selectThisPage();
   };
 
-  const activeFaqContent = activeFaqColId ? contentById[activeFaqColId] : null;
-  const activeFaqCol = activeFaqColId ? collections.find((c) => c.id === activeFaqColId) : null;
-
-  const activeLinksCol = activeLinksColId ? collections.find((c) => c.id === activeLinksColId) : null;
-
   const activeTextCol = activeTextCell
     ? collections.find((c) => c.id === activeTextCell.colId)
     : null;
@@ -233,15 +191,6 @@ export function StageContentPanel({
     activeTextCell && contentById[activeTextCell.colId]
       ? contentById[activeTextCell.colId][activeTextCell.field]
       : "";
-
-  /**
-   * Links for a collection: prefer the ones baked into generated content, but
-   * fall back to the precomputed graph built during push, so the column and
-   * dialog are populated the moment Tab 6 opens — before "Generate" runs.
-   */
-  const linksFor = (id: string): CollectionLink[] =>
-    contentById[id]?.links ?? internalLinksById?.[id] ?? [];
-  const activeLinks = activeLinksColId ? linksFor(activeLinksColId) : [];
 
   // Real, absolute storefront links — built once from the connected store's
   // provider + origin, then filled in per row with that row's own handle.
@@ -295,21 +244,11 @@ export function StageContentPanel({
       <div className="shrink-0 space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h2 className="text-base font-semibold tracking-tight">On-page Copywriting & Internal Links</h2>
+            <h2 className="text-base font-semibold tracking-tight">On-page Copywriting</h2>
             <p className="text-[11px] text-muted-foreground">
               Click the sparkle on any column to customize AI generation rules before starting.
             </p>
           </div>
-          {linksBuildProgress ? (
-            <Badge
-              variant="outline"
-              className="h-6 shrink-0 gap-1.5 rounded-full border-emerald-500/30 bg-emerald-500/5 px-2.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400"
-            >
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Links {linksBuildProgress.processed.toLocaleString()}/
-              {linksBuildProgress.total.toLocaleString()}
-            </Badge>
-          ) : null}
           <div className="flex items-center gap-2">
             {ready ? (
               <>
@@ -327,16 +266,6 @@ export function StageContentPanel({
                 >
                   <MapPinned className="h-3.5 w-3.5" />
                   Sitemap
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 gap-1.5 text-xs"
-                  disabled={!previewId && collections.length === 0}
-                  onClick={() => setPreviewId(collections[0]?.id ?? null)}
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                  Customize Widgets
                 </Button>
                 <Button
                   size="sm"
@@ -381,7 +310,7 @@ export function StageContentPanel({
                   {generating
                     ? contentGenProgress
                       ? `Writing Copy… ${contentGenProgress.processed.toLocaleString()}/${contentGenProgress.total.toLocaleString()}`
-                      : "Writing Copy & Links…"
+                      : "Writing Copy…"
                     : "Start"}
                 </Button>
               </>
@@ -400,7 +329,7 @@ export function StageContentPanel({
                 {generating
                   ? contentGenProgress
                     ? `Writing Copy… ${contentGenProgress.processed.toLocaleString()}/${contentGenProgress.total.toLocaleString()}`
-                    : "Writing Copy & Links…"
+                    : "Writing Copy…"
                   : "Start"}
               </Button>
             )}
@@ -458,7 +387,6 @@ export function StageContentPanel({
                   </TableHead>
                 );
               })}
-              <TableHead className="text-xs min-w-[150px]">Internal Links</TableHead>
               <TableHead className="text-xs min-w-[120px]">Store</TableHead>
             </TableRow>
           </TableHeader>
@@ -466,7 +394,6 @@ export function StageContentPanel({
             {pagedCollections.map((row) => {
               const content = contentById[row.id];
               const filled = Boolean(content) && (ready || generating);
-              const rowLinks = linksFor(row.id);
               const rowGenerating = generating && selected.has(row.id) && !content;
               const on = selected.has(row.id);
               const liveUrl = liveUrlFor(row);
@@ -491,18 +418,14 @@ export function StageContentPanel({
                   </TableCell>
                   <TableCell className="text-sm font-medium whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        className="text-left hover:underline text-foreground flex items-center gap-1.5"
-                        onClick={() => content && setPreviewId(row.id)}
-                      >
+                      <span className="text-left text-foreground flex items-center gap-1.5">
                         <span>{row.name}</span>
                         {content?.ungenerated ? (
                           <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
                             Not generated
                           </span>
                         ) : null}
-                      </button>
+                      </span>
                       {liveUrl ? (
                         <a
                           href={liveUrl}
@@ -544,42 +467,6 @@ export function StageContentPanel({
                       })
                     }
                   />
-                  <TableCell className="text-[11px] text-muted-foreground whitespace-nowrap">
-                    {content && content.faqs && content.faqs.length > 0 ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setActiveFaqColId(row.id)}
-                        className="h-7 px-2 text-[11px] font-medium text-primary hover:text-primary hover:bg-primary/10 gap-1"
-                      >
-                        <HelpCircle className="h-3.5 w-3.5" />
-                        <span>{content.faqs.length} questions</span>
-                      </Button>
-                    ) : rowGenerating ? (
-                      <Pulse />
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[11px] text-muted-foreground whitespace-nowrap">
-                    {rowLinks.length > 0 ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setActiveLinksColId(row.id)}
-                        className="h-7 px-2 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 gap-1"
-                      >
-                        <Link2 className="h-3.5 w-3.5" />
-                        <span>{rowLinks.length} links</span>
-                      </Button>
-                    ) : rowGenerating ? (
-                      <Pulse />
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
                   <TableCell className="whitespace-nowrap text-[11px]">
                     <SyncStatusCell
                       content={content}
@@ -598,7 +485,7 @@ export function StageContentPanel({
           pageSize={pageSize}
           totalRows={collections.length}
           readyCount={0}
-          colCount={8}
+          colCount={6}
           itemLabel="collections"
           onPageChange={setPageIndex}
           onPageSizeChange={(size) => {
@@ -618,17 +505,10 @@ export function StageContentPanel({
               </span>
             ) : (
               <span>
-                Use &ldquo;Sync SEO to Store&rdquo; to update collection descriptions &amp; meta tags on your live storefront for free.
+                Use &ldquo;Sync SEO to Store&rdquo; to update collection descriptions &amp; meta tags on your live storefront.
               </span>
             )}
           </p>
-          <Button
-            size="sm"
-            className="h-8 shrink-0 text-xs"
-            onClick={onNextStrategy}
-          >
-            Next · Content strategy
-          </Button>
         </div>
       ) : null}
 
@@ -668,106 +548,6 @@ export function StageContentPanel({
         </DialogContent>
       </Dialog>
 
-      {/* FAQs View Modal */}
-      <Dialog
-        open={Boolean(activeFaqColId)}
-        onOpenChange={(open) => !open && setActiveFaqColId(null)}
-      >
-        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-base flex items-center gap-2">
-              <HelpCircle className="h-4 w-4 text-primary" />
-              <span>Generated FAQs · {activeFaqCol?.name}</span>
-            </DialogTitle>
-            <DialogDescription>
-              Frequently asked questions written for shoppers and optimized for search rich snippets.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            {activeFaqContent?.faqs && activeFaqContent.faqs.length > 0 ? (
-              activeFaqContent.faqs.map((faq, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-xl border border-border/70 bg-muted/30 p-3.5 space-y-1.5"
-                >
-                  <p className="text-xs font-semibold text-foreground flex items-start gap-1.5">
-                    <span className="text-primary font-bold">Q{idx + 1}:</span>
-                    <span>{stripTags(faq.q)}</span>
-                  </p>
-                  <p
-                    className="text-xs text-muted-foreground leading-relaxed pl-5 [&_a]:underline [&_a]:underline-offset-2 [&_a]:text-primary hover:[&_a]:text-primary/80"
-                    // The on-page agent may weave one verified internal link into
-                    // an answer; sanitizeRichText only lets that exact
-                    // <a href="/...">text</a> shape through, escaping the rest.
-                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(faq.a) }}
-                  />
-                </div>
-              ))
-            ) : (
-              <p className="text-xs text-muted-foreground">No FAQs generated yet.</p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 text-xs"
-              onClick={() => setActiveFaqColId(null)}
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Internal Links View Modal */}
-      <Dialog
-        open={Boolean(activeLinksColId)}
-        onOpenChange={(open) => !open && setActiveLinksColId(null)}
-      >
-        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-base flex items-center gap-2">
-              <Link2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              <span>Internal Links · {activeLinksCol?.name}</span>
-            </DialogTitle>
-            <DialogDescription>
-              Semantic links calculated by vector similarity to keep link juice within your category hub.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 py-2">
-            {activeLinks.length > 0 ? (
-              activeLinks.map((link, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-muted/30 p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-foreground truncate">{link.label}</p>
-                    <p className="text-[10px] font-mono text-muted-foreground truncate">{link.href}</p>
-                  </div>
-                  <Badge variant="outline" className="text-[10px] font-mono shrink-0">
-                    Linked
-                  </Badge>
-                </div>
-              ))
-            ) : (
-              <p className="text-xs text-muted-foreground">No internal links generated yet.</p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 text-xs"
-              onClick={() => setActiveLinksColId(null)}
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Full Text View Modal — hover-eye on SEO title / SEO description / collection description cells */}
       <Dialog
         open={Boolean(activeTextCell)}
@@ -786,16 +566,9 @@ export function StageContentPanel({
           </DialogHeader>
           <div className="py-2">
             {activeTextValue ? (
-              activeTextCell?.field === "collectionDescription" ? (
-                <p
-                  className="text-sm leading-relaxed text-foreground [&_a]:underline [&_a]:underline-offset-2 [&_a]:text-primary hover:[&_a]:text-primary/80"
-                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(activeTextValue) }}
-                />
-              ) : (
-                <p className="text-sm leading-relaxed text-foreground">
-                  {activeTextValue}
-                </p>
-              )
+              <p className="text-sm leading-relaxed text-foreground">
+                {stripTags(activeTextValue)}
+              </p>
             ) : (
               <p className="text-xs text-muted-foreground">Nothing generated yet.</p>
             )}
@@ -926,26 +699,6 @@ export function StageContentPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Customize Sheet */}
-      <Sheet open={Boolean(preview)} onOpenChange={(open) => !open && setPreviewId(null)}>
-        <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
-          {preview && previewCol ? (
-            <>
-              <SheetHeader>
-                <SheetTitle>{previewCol.name}</SheetTitle>
-                <SheetDescription>
-                  Pick the FAQ and links widget shapes. Placement is fixed: FAQ above products, links below.
-                </SheetDescription>
-              </SheetHeader>
-              <OnPageShapePicker
-                collection={previewCol}
-                content={preview}
-              />
-            </>
-          ) : null}
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }

@@ -14,22 +14,18 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/brand/page-loader";
 import { useAuth } from "@/hooks/use-auth";
-import { useWallet } from "@/hooks/use-wallet";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useRole } from "@/hooks/use-role";
-import { useWorkspaceStore } from "@/store/workspace-store";
-import { previewBalance } from "@/lib/market-research/billing";
-import { isPushedCollection } from "@/lib/market-research/push-coverage";
+import { isPushedCollection } from "@/lib/market-research/pushed-collection";
 import {
   activeStoreAnalysisApi,
   analyzeStoreApi,
-  buildContentPlanApi,
   cancelExtractApi,
   cancelStoreAnalysisApi,
   chatAgentApi,
   createMrProjectApi,
   deleteMrProjectApi,
-  fetchStoreBlogsApi,
+  fetchStoreInfoApi,
   generateSeedsApi,
   loadMrStateApi,
   loadProjectProductsApi,
@@ -38,24 +34,15 @@ import {
   probeSeedsApi,
   dedupeCollectionsApi,
   pushCollectionsApi,
-  runBuildInternalLinksLoop,
   runEmbedProductsLoop,
   runEmbedTermsLoop,
   runOnPageGenerationLoop,
   runProductsFetchLoop,
   saveMrStateApi,
   startExtractApi,
-  syncArticlesApi,
   syncSeoApi,
   watchStoreAnalysisApi,
-  writeArticleApi,
-  type ArticleSyncResponse,
 } from "@/lib/market-research/client";
-import {
-  actualExtractCostUsd,
-  collectionPushCostUsd,
-  estimateProbeCostUsd,
-} from "@/lib/market-research/cost";
 import {
   assignUuidProjectIds,
   DEFAULT_SKU_FLOOR,
@@ -67,7 +54,6 @@ import {
 } from "@/lib/market-research/map-keywords";
 import type {
   CollectionContent,
-  CollectionLink,
   ExtractedKeyword,
   MarketResearchProduct,
   ProposedCollection,
@@ -91,7 +77,6 @@ import { ProjectsSidebar } from "./projects-sidebar";
 import { StageScopePanel } from "./stage-scope-panel";
 import { StageSelectPanel } from "./stage-select-panel";
 import { StageSeedsPanel } from "./stage-seeds-panel";
-import { InsufficientFundsDialog } from "./insufficient-funds-dialog";
 import { DeepWorkspace } from "./deep-workspace";
 import { WorkspaceStepper } from "./workspace-stepper";
 import {
@@ -115,7 +100,6 @@ import {
   createManualSeedRow,
   estimateSelection,
   formatProductCount,
-  formatUsd,
   getSeedRowsForCollections,
   groupSeedRowsByCanonical,
   marketLabel,
@@ -142,16 +126,11 @@ import {
   filterKeywords,
   DEFAULT_SHEET_FILTERS,
   type FlowTab,
-  type GeneratedArticle,
   type KeywordFilters,
   type OnPageInstructions,
   type SeedExtractProgress,
   type SheetKeywordFilters,
-  type StoreBlog,
-  type StrategyArticle,
   type WorkspaceTab,
-  ARTICLE_GENERATION_CONCURRENCY,
-  ARTICLE_SYNC_BATCH_SIZE,
 } from "./workspace-data";
 
 const DEFAULT_STORE = "Demo Shopify store";
@@ -241,22 +220,9 @@ export function MarketResearchShell() {
   } = useWorkspace(slug, user);
   const { canEdit, canAdmin } = useRole(role);
   const workspaceId = workspace?.id ?? "";
-  const { wallet } = useWallet(workspaceId || null);
-  const invalidateWallet = useWorkspaceStore((s) => s.invalidateWallet);
   const persistReady = useRef(false);
   const persistRemote = useRef(false);
   const skipPersistSave = useRef(true);
-
-  const [insufficientFundsDialog, setInsufficientFundsDialog] = useState<{
-    open: boolean;
-    requiredAmount: number;
-    currentBalance: number | null;
-    actionName?: string;
-  }>({
-    open: false,
-    requiredAmount: 0,
-    currentBalance: 0,
-  });
 
   const [hydrated, setHydrated] = useState(false);
   const [projects, setProjects] = useState<MarketResearchProject[]>(() =>
@@ -377,12 +343,12 @@ export function MarketResearchShell() {
     Set<string>
   >(() => new Set());
   /**
-   * Which collection ids inside each project have actually been pushed and
-   * paid for. Per-collection, not per-project: a partial push failure must
+   * Which collection ids inside each project have actually been pushed to
+   * the store. Per-collection, not per-project: a partial push failure must
    * not lock out retrying the ones that failed, or publishing collections
    * added to the project afterward. `paidCollectionProjectIds` above is kept
    * only so already-migrated projects (pre-dating this field) still read as
-   * fully paid; new writes always go through this map.
+   * fully pushed; new writes always go through this map.
    */
   const [paidCollectionIdsByProject, setPaidCollectionIdsByProject] = useState<
     Record<string, string[]>
@@ -394,17 +360,8 @@ export function MarketResearchShell() {
   const [analyzedProjectIds, setAnalyzedProjectIds] = useState<Set<string>>(
     () => new Set()
   );
-  const [strategyReadyIds, setStrategyReadyIds] = useState<Set<string>>(
-    () => new Set()
-  );
-  const [strategyApprovedIds, setStrategyApprovedIds] = useState<Set<string>>(
-    () => new Set()
-  );
   const [customInstructionByProject, setCustomInstructionByProject] = useState<
     Record<string, OnPageInstructions>
-  >({});
-  const [extractChargeByProject, setExtractChargeByProject] = useState<
-    Record<string, number>
   >({});
   const [extractRowsByProject, setExtractRowsByProject] = useState<
     Record<string, number>
@@ -436,44 +393,18 @@ export function MarketResearchShell() {
     total: number;
   } | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [strategyLoading, setStrategyLoading] = useState(false);
   const [contentByIdByProject, setContentByIdByProject] = useState<
     Record<string, Record<string, CollectionContent>>
   >({});
-  /**
-   * Internal link graph, precomputed in the background right after collections
-   * are pushed to the store (see handlePushToStore) so the "Links" column in
-   * Tab 6 is already filled by the time the user opens it. Keyed by
-   * collectionId, per project.
-   */
-  const [internalLinksByProject, setInternalLinksByProject] = useState<
-    Record<string, Record<string, CollectionLink[]>>
-  >({});
-  /** Live progress across the background internal-link cursor job's pages. */
-  const [linksBuildProgressByProject, setLinksBuildProgressByProject] =
-    useState<Record<string, { processed: number; total: number } | null>>({});
   /** Live progress across the Stage 6 on-page copywriting cursor job's pages. */
   const [contentGenProgress, setContentGenProgress] = useState<{
     processed: number;
     total: number;
   } | null>(null);
-  const [strategyByProject, setStrategyByProject] = useState<
-    Record<string, StrategyArticle[]>
-  >({});
-  const [articlesByProject, setArticlesByProject] = useState<
-    Record<string, Record<string, GeneratedArticle>>
-  >({});
-  const [storeBlogs, setStoreBlogs] = useState<StoreBlog[]>([]);
   const [storeUrl, setStoreUrl] = useState("");
   /** Connected store's provider id ("shopify" | "woocommerce" | "wordpress"),
    *  used to build the correct live collection URL pattern in Stage 6. */
   const [storeProvider, setStoreProvider] = useState<string | null>(null);
-  const [blogScopeWarning, setBlogScopeWarning] = useState<string | null>(null);
-  const [articlesSyncing, setArticlesSyncing] = useState(false);
-  const [articlesSyncProgress, setArticlesSyncProgress] = useState<{
-    done: number;
-    total: number;
-  } | null>(null);
   const [pushingCollectionsByProject, setPushingCollectionsByProject] =
     useState<Record<string, boolean>>({});
   const [recheckingDuplicatesByProject, setRecheckingDuplicatesByProject] =
@@ -491,17 +422,10 @@ export function MarketResearchShell() {
   const extractRunIds = useRef<string[]>([]);
   const extractIdRef = useRef("");
   const resumedExtract = useRef(new Set<string>());
-  const resumedArticles = useRef(new Set<string>());
   const resumedJobs = useRef(new Set<string>());
-  const articleInFlight = useRef(new Set<string>());
-  const generateArticlesRef = useRef<(ids: string[]) => Promise<void>>(
-    async () => undefined
-  );
   const analyzeGen = useRef(0);
   const clusterGen = useRef(0);
   const contentGen = useRef(0);
-  const linksGen = useRef<Record<string, number>>({});
-  const strategyGen = useRef(0);
   const analysisGen = useRef(0);
   const stage2Gen = useRef(0);
   const stage3Gen = useRef(0);
@@ -541,18 +465,12 @@ export function MarketResearchShell() {
     setClusterSelectionByProject(saved.clusterSelectionByProject ?? {});
     setProposedCollectionsByProject(saved.proposedCollectionsByProject ?? {});
     setContentByIdByProject(saved.contentByIdByProject ?? {});
-    setStrategyByProject(saved.strategyByProject ?? {});
-    setArticlesByProject(saved.articlesByProject ?? {});
-    setInternalLinksByProject(saved.internalLinksByProject ?? {});
     setPaidCollectionProjectIds(new Set(saved.paidCollectionProjectIds ?? []));
     setPaidCollectionIdsByProject(saved.paidCollectionIdsByProject ?? {});
     setContentReadyIds(new Set(saved.contentReadyIds ?? []));
     setPushedIds(new Set(saved.pushedIds ?? []));
     setAnalyzedProjectIds(new Set(saved.analyzedProjectIds ?? []));
-    setStrategyReadyIds(new Set(saved.strategyReadyIds ?? []));
-    setStrategyApprovedIds(new Set(saved.strategyApprovedIds ?? []));
     setCustomInstructionByProject(saved.customInstructionByProject ?? {});
-    setExtractChargeByProject(saved.extractChargeByProject ?? {});
     setExtractRowsByProject(saved.extractRowsByProject ?? {});
     setKeywordsByProject(saved.keywordsByProject ?? {});
     setSheetFiltersByProject(saved.sheetFiltersByProject ?? {});
@@ -593,7 +511,6 @@ export function MarketResearchShell() {
     persistReady.current = false;
     persistRemote.current = false;
     skipPersistSave.current = true;
-    resumedArticles.current = new Set();
     setHydrated(false);
 
     const finish = (saved: MarketResearchPersisted | null) => {
@@ -675,22 +592,12 @@ export function MarketResearchShell() {
       clusterSelectionByProject,
       proposedCollectionsByProject,
       contentByIdByProject,
-      strategyByProject,
-      articlesByProject,
-      // Server-owned (written by the background link-build job and by
-      // Stage 6/7 generation, loaded fresh in loadMrPersistedState) — kept
-      // here only so it round-trips through the localStorage cache; never
-      // written back through saveMrPersistedState's heavySlices.
-      internalLinksByProject,
       paidCollectionProjectIds: Array.from(paidCollectionProjectIds),
       paidCollectionIdsByProject,
       contentReadyIds: Array.from(contentReadyIds),
       pushedIds: Array.from(pushedIds),
       analyzedProjectIds: Array.from(analyzedProjectIds),
-      strategyReadyIds: Array.from(strategyReadyIds),
-      strategyApprovedIds: Array.from(strategyApprovedIds),
       customInstructionByProject,
-      extractChargeByProject,
       extractRowsByProject,
       keywordsByProject,
       sheetFiltersByProject,
@@ -720,18 +627,12 @@ export function MarketResearchShell() {
       clusterSelectionByProject,
       proposedCollectionsByProject,
       contentByIdByProject,
-      strategyByProject,
-      articlesByProject,
-      internalLinksByProject,
       paidCollectionProjectIds,
       paidCollectionIdsByProject,
       contentReadyIds,
       pushedIds,
       analyzedProjectIds,
-      strategyReadyIds,
-      strategyApprovedIds,
       customInstructionByProject,
-      extractChargeByProject,
       extractRowsByProject,
       keywordsByProject,
       sheetFiltersByProject,
@@ -867,9 +768,9 @@ export function MarketResearchShell() {
       cancelAnimationFrame(inner);
     };
   }, [hydrated, showWorkspace]);
-  // Legacy projects recorded "paid" as a whole-project boolean before this
+  // Legacy projects recorded "pushed" as a whole-project boolean before this
   // field existed. Treat those as every collection currently proposed being
-  // paid so nothing regresses for existing customers; new pushes always
+  // pushed so nothing regresses for existing customers; new pushes always
   // write into paidCollectionIdsByProject directly.
   const paidCollectionIds = useMemo(() => {
     if (!activeProject) return [] as string[];
@@ -893,12 +794,6 @@ export function MarketResearchShell() {
   );
   const analyzed = Boolean(
     activeProject && analyzedProjectIds.has(activeProject.id)
-  );
-  const strategyReady = Boolean(
-    activeProject && strategyReadyIds.has(activeProject.id)
-  );
-  const strategyApproved = Boolean(
-    activeProject && strategyApprovedIds.has(activeProject.id)
   );
   const customInstructions = activeProject
     ? (customInstructionByProject[activeProject.id] ??
@@ -1021,33 +916,20 @@ export function MarketResearchShell() {
     proposedCollections.length,
     hydrateProjectProducts,
   ]);
-  const strategyArticles = useMemo(() => {
-    if (!activeProject) return [] as StrategyArticle[];
-    return strategyByProject[activeProject.id] ?? [];
-  }, [activeProject, strategyByProject]);
-  const generatedArticles = useMemo(() => {
-    if (!activeProject) return {} as Record<string, GeneratedArticle>;
-    return articlesByProject[activeProject.id] ?? {};
-  }, [activeProject, articlesByProject]);
 
-  // The storefront domain is also needed by Stage 6 (the live-collection link
-  // icon and the sitemap export), so this now fires as soon as Tab 6 unlocks
-  // rather than waiting for Stage 7's content plan. The blog list itself is
-  // still only used by Stage 7, but it's cheap to fetch alongside storeUrl.
+  // The storefront domain is needed by Stage 6 (the live-collection link icon
+  // and the sitemap export), so this fires as soon as Tab 6 unlocks.
   useEffect(() => {
-    const needsStoreUrl = openedWorkspace === "content" || openedWorkspace === "strategy";
-    if (!workspaceId || !needsStoreUrl || storeUrl) return;
+    if (!workspaceId || openedWorkspace !== "content" || storeUrl) return;
     let cancelled = false;
-    fetchStoreBlogsApi(workspaceId)
+    fetchStoreInfoApi(workspaceId)
       .then((res) => {
         if (cancelled) return;
-        setStoreBlogs(res.blogs ?? []);
         setStoreUrl(res.storeUrl ?? "");
         setStoreProvider(res.provider ?? null);
-        setBlogScopeWarning(res.scopeWarning ?? null);
       })
       .catch(() => {
-        // Article generation still works without a blog list.
+        // Live collection links simply stay hidden without a storefront URL.
       });
     return () => {
       cancelled = true;
@@ -1058,16 +940,6 @@ export function MarketResearchShell() {
     if (!activeProject) return {};
     return contentByIdByProject[activeProject.id] ?? {};
   }, [activeProject, contentByIdByProject]);
-
-  const internalLinksById = useMemo(() => {
-    if (!activeProject) return {};
-    return internalLinksByProject[activeProject.id] ?? {};
-  }, [activeProject, internalLinksByProject]);
-
-  const linksBuildProgress = useMemo(() => {
-    if (!activeProject) return null;
-    return linksBuildProgressByProject[activeProject.id] ?? null;
-  }, [activeProject, linksBuildProgressByProject]);
 
   // Read off the content itself rather than a session flag, so the button stays
   // off after a refresh and comes back on the moment copy is regenerated or a
@@ -1124,9 +996,7 @@ export function MarketResearchShell() {
       if (committedProjectIds.has(id)) {
         s = Math.max(s, 4) as MarketResearchStage;
         const wsTab = openedWorkspaceByProject[id];
-        if (strategyApprovedIds.has(id) || pushedIds.has(id) || wsTab === "strategy") {
-          s = 7;
-        } else if (contentReadyIds.has(id) || wsTab === "content") {
+        if (contentReadyIds.has(id) || pushedIds.has(id) || wsTab === "content") {
           s = 6;
         } else if ((proposedCollectionsByProject[id] ?? []).length > 0 || wsTab === "collections") {
           s = 5;
@@ -1140,7 +1010,6 @@ export function MarketResearchShell() {
     openedMaxByProject,
     committedProjectIds,
     openedWorkspaceByProject,
-    strategyApprovedIds,
     pushedIds,
     contentReadyIds,
     proposedCollectionsByProject,
@@ -1184,14 +1053,7 @@ export function MarketResearchShell() {
       ? "running"
       : contentReady
         ? "done"
-        : openedMax >= 6 || (inWorkspace && (openedWorkspace === "content" || openedWorkspace === "strategy"))
-          ? "pending"
-          : "locked";
-    const stage7Status: StageStepStatus = strategyLoading
-      ? "running"
-      : (strategyApproved || contentPushed)
-        ? "done"
-        : openedMax >= 7 || (inWorkspace && openedWorkspace === "strategy")
+        : openedMax >= 6 || (inWorkspace && openedWorkspace === "content")
           ? "pending"
           : "locked";
 
@@ -1259,26 +1121,12 @@ export function MarketResearchShell() {
         status: stage6Status,
         detail:
           generating
-            ? "Generating on-page SEO copy & FAQs…"
+            ? "Generating on-page SEO copy…"
             : contentReady
               ? "SEO titles, meta & collection copy ready"
               : stage6Status === "locked"
-                ? "On-page SEO copy, descriptions & FAQs"
+                ? "On-page SEO titles, meta & descriptions"
                 : "Ready to generate copy",
-      },
-      {
-        stage: 7,
-        status: stage7Status,
-        detail:
-          strategyLoading
-            ? "Building content strategy roadmap…"
-            : strategyApproved || contentPushed
-              ? "Content roadmap finalized & ready"
-              : strategyReady
-                ? "Content strategy roadmap ready for review"
-                : stage7Status === "locked"
-                  ? "Content roadmap & publishing"
-                  : "Ready for strategy roadmap",
       },
     ];
   }, [
@@ -1303,9 +1151,6 @@ export function MarketResearchShell() {
     stage3ReadyForActive,
     stage3Rows.length,
     stage3Stale,
-    strategyApproved,
-    strategyLoading,
-    strategyReady,
     extracting,
   ]);
 
@@ -1342,17 +1187,17 @@ export function MarketResearchShell() {
         id: "r4",
         stage: 3,
         title: `Demand checked · ${probedCount} seeds in ${marketLabel(activeMarket)}`,
-        detail: `${selectionEstimate.billedKeywords.toLocaleString("en-US")} billed rows on the current selection · ${formatUsd(selectionEstimate.usd)}`,
+        detail: `${selectionEstimate.cappedKeywords.toLocaleString("en-US")} rows on the current selection`,
       });
     }
     if (committedForActive) {
       list.push({
         id: "r5",
         stage: 4,
-        title: `Extracted · ${formatUsd(
-          extractChargeByProject[activeProject.id] ?? selectionEstimate.usd
-        )}`,
-        detail: `Wallet charge for keyword extraction in ${marketLabel(activeMarket)}`,
+        title: `Extracted · ${(
+          extractRowsByProject[activeProject.id] ?? selectionEstimate.cappedKeywords
+        ).toLocaleString("en-US")} keywords`,
+        detail: `Keyword extraction in ${marketLabel(activeMarket)}`,
       });
     }
     if (extractedKeywords.length > 0) {
@@ -1379,15 +1224,15 @@ export function MarketResearchShell() {
         id: "r8",
         stage: 6,
         title: "On-page content generated",
-        detail: "SEO titles, meta descriptions, collection descriptions & FAQs ready",
+        detail: "SEO titles, meta descriptions and collection descriptions ready",
       });
     }
-    if (strategyApproved || contentPushed) {
+    if (contentPushed) {
       list.push({
         id: "r9",
-        stage: 7,
-        title: contentPushed ? "Pushed to store catalog" : "Strategy roadmap approved",
-        detail: "Content strategy action plan finalized",
+        stage: 6,
+        title: "Pushed to store catalog",
+        detail: "On-page SEO is live on the store",
       });
     }
     return list;
@@ -1400,7 +1245,7 @@ export function MarketResearchShell() {
     contentPushed,
     contentReady,
     extractedKeywords,
-    extractChargeByProject,
+    extractRowsByProject,
     openedMax,
     proposedCollections,
     seedSelection.length,
@@ -1409,7 +1254,6 @@ export function MarketResearchShell() {
     stage3ReadyForActive,
     stage3Rows,
     stage3Scope,
-    strategyApproved,
   ]);
 
   const appendAgent = useCallback((projectId: string, text: string) => {
@@ -1608,7 +1452,7 @@ export function MarketResearchShell() {
           console.error("[startAnalysis] Failed to run agent:", err);
           // A failed analyze must never mark Stage 1 "done" on the
           // hard-coded demo eyewear niches — that would silently hand the
-          // customer someone else's catalog read and let them pay for
+          // customer someone else's catalog read and let them run
           // Stage 3+ against niches that were never actually theirs.
           // Surface the error and leave Stage 1 retryable instead.
           setAnalysisProgress(0);
@@ -1989,7 +1833,7 @@ export function MarketResearchShell() {
     startStage3Prep(projectId, collectionIds);
   };
 
-  /** Any change to what would be charged invalidates a prior confirmation. */
+  /** Any change to the selection invalidates a prior confirmation. */
   const clearCommitment = (projectId: string) => {
     setCommittedProjectIds((prev) => {
       if (!prev.has(projectId)) return prev;
@@ -1999,7 +1843,7 @@ export function MarketResearchShell() {
     });
   };
 
-  /** Stage 3b — Apify seed-term analysis. Billed per returned seed in chunks of 10 for instant live updates. */
+  /** Stage 3b — Apify seed-term analysis, run in chunks of 10 for instant live updates. */
   const runProbe = async (rowIds: string[]) => {
     if (!canEdit || !activeProject || rowIds.length === 0) return;
     if (!workspaceId) {
@@ -2010,18 +1854,6 @@ export function MarketResearchShell() {
     const market = activeMarket;
     const targets = stage3Rows.filter((row) => rowIds.includes(row.id));
     if (targets.length === 0) return;
-
-    const totalEstCost = estimateProbeCostUsd(targets.length);
-    const balance = await previewBalance(workspaceId);
-    if (balance < totalEstCost) {
-      setInsufficientFundsDialog({
-        open: true,
-        requiredAmount: totalEstCost,
-        currentBalance: balance,
-        actionName: `Demand check for ${targets.length} seed${targets.length === 1 ? "" : "s"}`,
-      });
-      return;
-    }
 
     const gen = ++probeGen.current;
     setProbingIds(targets.map((row) => row.id));
@@ -2047,8 +1879,7 @@ export function MarketResearchShell() {
           workspaceId,
           projectId,
           market,
-          chunk.map((row) => ({ id: row.id, term: row.broadSeedVariation })),
-          crypto.randomUUID()
+          chunk.map((row) => ({ id: row.id, term: row.broadSeedVariation }))
         );
         if (probeGen.current !== gen) return;
 
@@ -2089,26 +1920,11 @@ export function MarketResearchShell() {
 
         // Remove the processed batch from probingIds so its spinners disappear and results show instantly
         setProbingIds((prev) => prev.filter((id) => !chunkIds.has(id)));
-
-        // Live wallet balance update
-        invalidateWallet();
       } catch (error) {
         if (probeGen.current !== gen) return;
         failedChunks++;
         const msg = error instanceof Error ? error.message : "Could not retrieve seed metrics.";
         lastErrorMessage = msg;
-        if (
-          msg.toLowerCase().includes("balance") ||
-          msg.toLowerCase().includes("funds") ||
-          msg.includes("402")
-        ) {
-          setInsufficientFundsDialog({
-            open: true,
-            requiredAmount: totalEstCost,
-            currentBalance: wallet?.balance ?? 0,
-            actionName: `Demand check for ${targets.length} seed${targets.length === 1 ? "" : "s"}`,
-          });
-        }
         const failedResult: Record<string, SeedProbe> = {};
         for (const row of chunk) {
           failedResult[row.id] = {
@@ -2178,14 +1994,8 @@ export function MarketResearchShell() {
     );
   };
 
-  const settleExtractCharge = (
-    projectId: string,
-    rowsReturned: number,
-    amount = actualExtractCostUsd(rowsReturned)
-  ) => {
+  const recordExtractRows = (projectId: string, rowsReturned: number) => {
     setExtractRowsByProject((prev) => ({ ...prev, [projectId]: rowsReturned }));
-    setExtractChargeByProject((prev) => ({ ...prev, [projectId]: amount }));
-    invalidateWallet();
   };
 
   const rememberExtractId = (projectId: string, extractId: string) => {
@@ -2211,11 +2021,8 @@ export function MarketResearchShell() {
       pulled: 0,
     }));
     let sample: ExtractedKeyword[] = input.initialSample ?? [];
-    // Safety caps so a stuck billing settlement or a persistently unreachable
-    // poll endpoint can't spin this loop forever in an open tab — both used
-    // to retry indefinitely with no failure cap.
-    let billingPendingAttempts = 0;
-    const MAX_BILLING_PENDING_ATTEMPTS = 60; // 60 * 2s = 2 minutes
+    // Safety cap so a persistently unreachable poll endpoint can't spin this
+    // loop forever in an open tab.
     let consecutiveFailures = 0;
     const MAX_CONSECUTIVE_FAILURES = 20; // 20 * 800ms = 16s of unbroken failures
 
@@ -2278,19 +2085,6 @@ export function MarketResearchShell() {
         }
 
         if (poll.allDone) {
-          if (poll.billingPending) {
-            billingPendingAttempts += 1;
-            if (billingPendingAttempts >= MAX_BILLING_PENDING_ATTEMPTS) {
-              giveUp(
-                "Billing settlement is taking longer than expected. Your keywords are safe — refresh the page in a moment to see the final charge."
-              );
-              return;
-            }
-            window.setTimeout(() => {
-              void tick();
-            }, 2000);
-            return;
-          }
           const status = await extractStatusApi(
             input.workspaceId,
             input.projectId,
@@ -2310,11 +2104,7 @@ export function MarketResearchShell() {
           setExtractingProjectId((id) =>
             id === input.projectId ? null : id
           );
-          settleExtractCharge(
-            input.projectId,
-            poll.rowsReturned,
-            poll.settledUsd ?? actualExtractCostUsd(poll.rowsReturned)
-          );
+          recordExtractRows(input.projectId, poll.rowsReturned);
           return;
         }
       } catch (err) {
@@ -2346,16 +2136,6 @@ export function MarketResearchShell() {
       return;
     }
     const projectId = activeProject.id;
-    const balance = await previewBalance(workspaceId);
-    if (balance < selectionEstimate.usd) {
-      setInsufficientFundsDialog({
-        open: true,
-        requiredAmount: selectionEstimate.usd,
-        currentBalance: balance,
-        actionName: `Keyword extraction for ${selectedSeedRows.length} seed${selectedSeedRows.length === 1 ? "" : "s"}`,
-      });
-      return;
-    }
 
     const gen = ++extractGen.current;
     setCommittedProjectIds((prev) => {
@@ -2442,7 +2222,7 @@ export function MarketResearchShell() {
     }
 
     // Tracks whether the Apify job actually started on the server. Only
-    // then is committedProjectIds a durable fact (real billed work is now
+    // then is committedProjectIds a durable fact (the extraction is now
     // running) — if startExtractApi itself never succeeds, the catch below
     // rolls the speculative commitment back so the customer can retry.
     let started: Awaited<ReturnType<typeof startExtractApi>> | undefined;
@@ -2487,8 +2267,8 @@ export function MarketResearchShell() {
       if (extractGen.current !== gen) return;
       setExtractingProjectId((id) => (id === projectId ? null : id));
       if (!started) {
-        // The Apify job never actually started — no billed work is running,
-        // so the speculative commitment and stage-4 navigation above must
+        // The Apify job never actually started — nothing is running, so the
+        // speculative commitment and stage-4 navigation above must
         // be rolled back, or the customer is locked out of ever retrying
         // Extract for this project again.
         setCommittedProjectIds((prev) => {
@@ -2527,11 +2307,7 @@ export function MarketResearchShell() {
         projectId,
         extractId
       );
-      settleExtractCharge(
-        projectId,
-        cancelled.rowsReturned,
-        cancelled.settledUsd
-      );
+      recordExtractRows(projectId, cancelled.rowsReturned);
     } catch {
       // Polling already stopped via extractGen.
     }
@@ -2566,18 +2342,11 @@ export function MarketResearchShell() {
             };
           });
         }
-        const active =
-          status.extract.status === "running" ||
-          status.extract.billingStatus === "held";
+        const active = status.extract.status === "running";
         if (!active) {
           resumedExtract.current.add(projectId);
           if (status.extract.rowsReturned > 0) {
-            settleExtractCharge(
-              projectId,
-              status.extract.rowsReturned,
-              status.extract.actualUsd ||
-                actualExtractCostUsd(status.extract.rowsReturned)
-            );
+            recordExtractRows(projectId, status.extract.rowsReturned);
           }
           return;
         }
@@ -2640,7 +2409,7 @@ export function MarketResearchShell() {
     }));
     setWorkspaceTabByProject((prev) => ({ ...prev, [projectId]: tab }));
     const stageNum: MarketResearchStage =
-      tab === "strategy" ? 7 : tab === "content" ? 6 : tab === "collections" ? 5 : 4;
+      tab === "content" ? 6 : tab === "collections" ? 5 : 4;
     setOpenedMaxByProject((prev) => ({
       ...prev,
       [projectId]: Math.max(prev[projectId] ?? 1, stageNum) as MarketResearchStage,
@@ -3067,25 +2836,12 @@ export function MarketResearchShell() {
         : clusterSelectionByProject[projectId] ?? [];
     if (targetIds.length === 0) return;
 
-    const usd = collectionPushCostUsd(targetIds.length);
-    const balance = await previewBalance(workspaceId);
-    if (balance < usd) {
-      setInsufficientFundsDialog({
-        open: true,
-        requiredAmount: usd,
-        currentBalance: balance,
-        actionName: `Publishing ${targetIds.length} collection${targetIds.length === 1 ? "" : "s"} to store`,
-      });
-      return;
-    }
-
     setPushingCollectionsByProject((prev) => ({ ...prev, [projectId]: true }));
 
     try {
       const pushResult = await pushCollectionsApi(workspaceId, projectId, targetIds);
-      invalidateWallet();
 
-      // Only the collections the store actually confirmed creating are paid.
+      // Only the collections the store actually confirmed creating count as pushed.
       // A partial failure must not lock the failed ones out of a retry, and
       // must not falsely mark unrelated/never-attempted ids as pushed.
       const successfulIds =
@@ -3109,15 +2865,13 @@ export function MarketResearchShell() {
           {
             description:
               pushResult.stoppedReason ??
-              "You were not charged for the ones that failed. Select them again to retry.",
+              "Select the failed ones again to retry.",
           }
         );
       }
 
       // The server just assigned real store handles to these collections; mirror
-      // that into local state before using it, otherwise the link graph would
-      // treat every collection pushed in this batch as unresolved (no verified
-      // href) and none of them could link to each other.
+      // that into local state so the On-page tab can link to the live pages.
       const handleById = new Map(
         (pushResult.storeResults ?? [])
           .filter((r) => r.success && r.handle)
@@ -3135,48 +2889,6 @@ export function MarketResearchShell() {
                 : c
             ),
           };
-        });
-      }
-
-      // Kick off internal-link graph building in the background now that these
-      // collections have real store handles, so the "Links" column in Tab 6 is
-      // already filled by the time the tab unlocks. Fire-and-forget: a failure
-      // here just means on-page generation falls back to building it inline.
-      // A resumable cursor loop rather than one call, so a 10k-collection push
-      // keeps filling the Links column instead of dying at 60 seconds. A
-      // second push for the same project supersedes an in-flight build.
-      if (successfulIds.length > 0) {
-        const gen = (linksGen.current[projectId] = (linksGen.current[projectId] ?? 0) + 1);
-        setLinksBuildProgressByProject((prev) => ({
-          ...prev,
-          [projectId]: { processed: 0, total: successfulIds.length },
-        }));
-        runBuildInternalLinksLoop(
-          workspaceId,
-          projectId,
-          successfulIds,
-          (page) => {
-            if (linksGen.current[projectId] !== gen) return;
-            setInternalLinksByProject((prev) => ({
-              ...prev,
-              [projectId]: {
-                ...(prev[projectId] ?? {}),
-                ...page.linksByCollectionId,
-              },
-            }));
-            setLinksBuildProgressByProject((prev) => ({
-              ...prev,
-              [projectId]: page.done
-                ? null
-                : { processed: page.nextOffset, total: page.total },
-            }));
-          },
-          () => linksGen.current[projectId] !== gen
-        ).catch((err) => {
-          console.error("[handlePushToStore] Internal link build failed:", err);
-          if (linksGen.current[projectId] === gen) {
-            setLinksBuildProgressByProject((prev) => ({ ...prev, [projectId]: null }));
-          }
         });
       }
 
@@ -3204,21 +2916,8 @@ export function MarketResearchShell() {
         ...prev,
         [projectId]: false,
       }));
-      const msg = error instanceof Error ? error.message : `Publishing costs ${formatUsd(usd)}. Add funds or select fewer collections.`;
-      if (
-        msg.toLowerCase().includes("balance") ||
-        msg.toLowerCase().includes("funds") ||
-        msg.includes("402")
-      ) {
-        setInsufficientFundsDialog({
-          open: true,
-          requiredAmount: usd,
-          currentBalance: wallet?.balance ?? 0,
-          actionName: `Publishing ${targetIds.length} collection${targetIds.length === 1 ? "" : "s"} to store`,
-        });
-      } else {
-        toast.error("Publish failed", { description: msg });
-      }
+      const msg = error instanceof Error ? error.message : "Could not publish the collections.";
+      toast.error("Publish failed", { description: msg });
     }
   };
 
@@ -3288,7 +2987,6 @@ export function MarketResearchShell() {
             seoTitle: instructions.seoTitle || undefined,
             seoDescription: instructions.seoDescription || undefined,
             collectionDescription: instructions.collectionDescription || undefined,
-            faq: instructions.faq || undefined,
           },
         },
         (page) => {
@@ -3415,10 +3113,8 @@ export function MarketResearchShell() {
     const projectId = activeProject.id;
     const ids = [...clusterSelection].sort();
     if (ids.length === 0) return;
-    const usd = collectionPushCostUsd(ids.length);
     try {
       const pushResult = await pushCollectionsApi(workspaceId, projectId, ids);
-      invalidateWallet();
       const successfulIds =
         pushResult.pushedIds ??
         (pushResult.storeResults ?? []).filter((r) => r.success).map((r) => r.id);
@@ -3440,390 +3136,16 @@ export function MarketResearchShell() {
           {
             description:
               pushResult.stoppedReason ??
-              "You were not charged for the ones that failed. Select them again to retry.",
+              "Select the failed ones again to retry.",
           }
         );
       }
     } catch (error) {
-      toast.error("Not enough wallet balance", {
+      toast.error("Publish failed", {
         description:
-          error instanceof Error
-            ? error.message
-            : `Publishing costs ${formatUsd(usd)}. Add funds or select fewer collections.`,
+          error instanceof Error ? error.message : "Could not publish the collections.",
       });
     }
-  };
-
-  const runStrategyBuild = async (projectId: string) => {
-    if (!canEdit) return;
-    if (!workspaceId) {
-      toast.error("Workspace is still loading");
-      return;
-    }
-
-    const informational = filterKeywords(
-      extractedKeywords,
-      sheetFiltersByProject[projectId]?.informational ??
-        DEFAULT_SHEET_FILTERS.informational,
-      "informational"
-    );
-    if (informational.length === 0) {
-      toast.error("No informational keywords to plan articles from");
-      return;
-    }
-
-    const gen = ++strategyGen.current;
-    setStrategyLoading(true);
-
-    try {
-      const res = await buildContentPlanApi(
-        workspaceId,
-        projectId,
-        informational.map((row) => ({
-          id: row.id,
-          keyword: row.keyword,
-          sheet: row.sheet,
-          volume: row.volume,
-          difficulty: row.difficulty,
-          seedId: row.seedId,
-          seed: row.seed,
-        })),
-        {
-          parentNiches: (nichesByProject[projectId] ?? activeNiches).map(
-            (n) => n.name
-          ),
-          collections: proposedCollections.map((row) => ({
-            id: row.id,
-            name: row.name,
-            headKeyword: row.headKeyword,
-            parentNiche: row.parentNiche,
-            volume: row.volume,
-            productCount: row.productCount,
-            storeHandle: row.storeHandle,
-          })),
-        }
-      );
-
-      if (strategyGen.current !== gen) return;
-
-      setStrategyByProject((prev) => ({ ...prev, [projectId]: res.articles }));
-      setStrategyReadyIds((prev) => new Set(prev).add(projectId));
-
-      if (res.droppedByCap > 0 || res.mergedByIntent > 0) {
-        const notes: string[] = [];
-        if (res.mergedByIntent > 0) {
-          notes.push(
-            `${res.mergedByIntent} near-duplicate keyword${
-              res.mergedByIntent === 1 ? "" : "s"
-            } folded into an existing article`
-          );
-        }
-        if (res.droppedByCap > 0) {
-          notes.push(
-            `${res.droppedByCap} lower-volume keyword${
-              res.droppedByCap === 1 ? "" : "s"
-            } left out of this plan`
-          );
-        }
-        toast.info(`Planned ${res.articles.length} articles`, {
-          description: `${notes.join(" · ")}.`,
-        });
-      }
-
-      // Titles that fell back to the deterministic form because the Gemini
-      // titling batch failed must be called out — they're weaker than a real
-      // AI title and shouldn't be mistaken for one.
-      if (res.degradedCount > 0) {
-        toast.warning("Some article titles used a fallback", {
-          description: `${res.degradedCount} of ${res.articles.length} article title${res.degradedCount === 1 ? "" : "s"} couldn't be generated by AI and used a plain fallback title instead.`,
-        });
-      }
-    } catch (err) {
-      if (strategyGen.current !== gen) return;
-      console.error("[runStrategyBuild] Error:", err);
-      toast.error("Could not build the content plan", {
-        description: err instanceof Error ? err.message : undefined,
-      });
-    } finally {
-      if (strategyGen.current === gen) setStrategyLoading(false);
-    }
-  };
-
-  const handleNextStrategy = () => {
-    if (!activeProject) return;
-    const projectId = activeProject.id;
-    unlockWorkspaceTab(projectId, "strategy");
-    if (!strategyReadyIds.has(projectId)) {
-      void runStrategyBuild(projectId);
-    }
-  };
-
-  const handleBuildStrategy = () => {
-    if (!canEdit || !activeProject) return;
-    void runStrategyBuild(activeProject.id);
-  };
-
-  const patchStrategyRows = (
-    projectId: string,
-    ids: string[],
-    patch: Partial<StrategyArticle>
-  ) => {
-    const idSet = new Set(ids);
-    setStrategyByProject((prev) => ({
-      ...prev,
-      [projectId]: (prev[projectId] ?? []).map((row) =>
-        idSet.has(row.id) ? { ...row, ...patch } : row
-      ),
-    }));
-  };
-
-  const handleGenerateArticles = async (ids: string[]) => {
-    if (!canEdit || !activeProject || !workspaceId || ids.length === 0) return;
-    const projectId = activeProject.id;
-    const rows = (strategyByProject[projectId] ?? []).filter((row) =>
-      ids.includes(row.id)
-    );
-    if (rows.length === 0) return;
-
-    patchStrategyRows(projectId, ids, { status: "generating", error: undefined });
-
-    // A shared cursor over the queue gives us exactly three in flight at once:
-    // each finished article immediately pulls the next one.
-    let cursor = 0;
-    const workers = Array.from(
-      { length: Math.min(ARTICLE_GENERATION_CONCURRENCY, rows.length) },
-      async () => {
-        while (cursor < rows.length) {
-          const row = rows[cursor];
-          cursor += 1;
-          if (articleInFlight.current.has(row.id)) continue;
-          articleInFlight.current.add(row.id);
-
-          try {
-            const res = await writeArticleApi(
-              workspaceId,
-              projectId,
-              {
-                id: row.id,
-                title: row.title,
-                keyword: row.keyword,
-                type: row.type,
-                volume: row.volume,
-                difficulty: row.difficulty,
-                linksOut: row.linksOut,
-                skuLinks: row.skuLinks,
-              },
-              storeBlogs,
-              storeUrl
-            );
-
-            setArticlesByProject((prev) => ({
-              ...prev,
-              [projectId]: {
-                ...(prev[projectId] ?? {}),
-                [res.article.articleId]: res.article,
-              },
-            }));
-            patchStrategyRows(projectId, [row.id], {
-              status: "ready",
-              category: res.article.blogTitle,
-              error: undefined,
-            });
-          } catch (err) {
-            console.error("[handleGenerateArticles] Error:", err);
-            patchStrategyRows(projectId, [row.id], {
-              status: "failed",
-              error: err instanceof Error ? err.message : "Writing failed",
-            });
-          } finally {
-            articleInFlight.current.delete(row.id);
-          }
-        }
-      }
-    );
-
-    await Promise.all(workers);
-  };
-
-  generateArticlesRef.current = handleGenerateArticles;
-
-  useEffect(() => {
-    if (!hydrated || !canEdit || !workspaceId || !activeProject) return;
-    const projectId = activeProject.id;
-    if (resumedArticles.current.has(projectId)) return;
-    const rows = strategyByProject[projectId] ?? [];
-    if (rows.length === 0) return;
-    const generated = articlesByProject[projectId] ?? {};
-    const pendingIds = rows
-      .filter((row) => row.status === "generating" && !generated[row.id])
-      .map((row) => row.id);
-    resumedArticles.current.add(projectId);
-    if (pendingIds.length === 0) return;
-    void generateArticlesRef.current(pendingIds);
-  }, [
-    hydrated,
-    canEdit,
-    workspaceId,
-    activeProject,
-    strategyByProject,
-    articlesByProject,
-  ]);
-
-  const handleSyncArticles = async (ids: string[]) => {
-    if (!canEdit || !activeProject || !workspaceId || ids.length === 0) return;
-    const projectId = activeProject.id;
-    const generated = articlesByProject[projectId] ?? {};
-    const rows = (strategyByProject[projectId] ?? []).filter(
-      (row) => ids.includes(row.id) && generated[row.id]
-    );
-    if (rows.length === 0) return;
-
-    setArticlesSyncing(true);
-    patchStrategyRows(projectId, rows.map((row) => row.id), {
-      status: "syncing",
-    });
-
-    // Declared outside the try so a batch that fails halfway does not roll back
-    // the rows that already reached the store.
-    const scheduledIds: string[] = [];
-
-    try {
-      // The endpoint accepts 50 articles per call and creates them one by one,
-      // so a large plan is sent in sequential batches: parallel calls would
-      // trip Shopify's rate limit and one giant call would hit the function
-      // timeout. Batches run in order so the publishing calendar stays dense.
-      const batches: (typeof rows)[] = [];
-      for (let i = 0; i < rows.length; i += ARTICLE_SYNC_BATCH_SIZE) {
-        batches.push(rows.slice(i, i + ARTICLE_SYNC_BATCH_SIZE));
-      }
-
-      const failedById = new Map<string, string>();
-      let syncedCount = 0;
-      let timeZone = "UTC";
-      const results: ArticleSyncResponse["results"] = [];
-
-      for (const [index, batch] of batches.entries()) {
-        if (batches.length > 1) {
-          setArticlesSyncProgress({ done: index, total: batches.length });
-        }
-        const res = await syncArticlesApi(
-          workspaceId,
-          projectId,
-          batch.map((row) => {
-            const article = generated[row.id];
-            return {
-              articleId: row.id,
-              title: row.title,
-              seoTitle: article.seoTitle,
-              seoDescription: article.seoDescription,
-              blogTitle: article.blogTitle,
-              bodyHtml: article.bodyHtml,
-              featuredImage: article.featuredImage,
-            };
-          })
-        );
-        results.push(...res.results);
-        syncedCount += res.syncedCount;
-        timeZone = res.timeZone;
-      }
-
-      for (const result of results) {
-        if (result.ok) {
-          scheduledIds.push(result.articleId);
-          // Keep the store ids in client state: this snapshot is written back
-          // over the stored slice, so dropping them would lose the record that
-          // the article is already on the store's calendar.
-          setArticlesByProject((prev) => {
-            const current = prev[projectId]?.[result.articleId];
-            if (!current) return prev;
-            return {
-              ...prev,
-              [projectId]: {
-                ...prev[projectId],
-                [result.articleId]: {
-                  ...current,
-                  scheduledAt: result.scheduledAt ?? current.scheduledAt,
-                  storeArticleId: result.storeArticleId ?? current.storeArticleId,
-                  storeHandle: result.storeHandle ?? current.storeHandle,
-                },
-              },
-            };
-          });
-        } else {
-          failedById.set(result.articleId, result.error ?? "Upload failed");
-        }
-      }
-
-      if (scheduledIds.length > 0) {
-        patchStrategyRows(projectId, scheduledIds, {
-          status: "scheduled",
-          error: undefined,
-        });
-        // Anything reaching the store's calendar completes Stage 7.
-        setStrategyApprovedIds((prev) => new Set(prev).add(projectId));
-      }
-      for (const [articleId, message] of failedById) {
-        patchStrategyRows(projectId, [articleId], {
-          status: "ready",
-          error: message,
-        });
-      }
-
-      if (syncedCount > 0) {
-        toast.success(
-          `${syncedCount} article${syncedCount === 1 ? "" : "s"} scheduled`,
-          {
-            description: `One per day in ${timeZone}, at a different time each day.`,
-          }
-        );
-      }
-      if (failedById.size > 0) {
-        toast.error(`${failedById.size} article(s) could not be uploaded`, {
-          description: [...failedById.values()][0],
-        });
-      }
-    } catch (err) {
-      console.error("[handleSyncArticles] Error:", err);
-      const scheduled = new Set(scheduledIds);
-      patchStrategyRows(
-        projectId,
-        rows.map((row) => row.id).filter((id) => !scheduled.has(id)),
-        {
-          status: "ready",
-          error: err instanceof Error ? err.message : "Sync failed",
-        }
-      );
-      toast.error("Could not sync articles to the store", {
-        description: err instanceof Error ? err.message : undefined,
-      });
-    } finally {
-      setArticlesSyncing(false);
-      setArticlesSyncProgress(null);
-    }
-  };
-
-  const handleArticleChange = (
-    articleId: string,
-    patch: Partial<GeneratedArticle>
-  ) => {
-    if (!activeProject) return;
-    const projectId = activeProject.id;
-    setArticlesByProject((prev) => {
-      const current = prev[projectId]?.[articleId];
-      if (!current) return prev;
-      return {
-        ...prev,
-        [projectId]: {
-          ...prev[projectId],
-          [articleId]: { ...current, ...patch },
-        },
-      };
-    });
-  };
-
-  const handleArticleTitleChange = (articleId: string, title: string) => {
-    if (!activeProject) return;
-    patchStrategyRows(activeProject.id, [articleId], { title });
   };
 
   const handleConfirmSpend = handleExtract;
@@ -4213,12 +3535,10 @@ export function MarketResearchShell() {
     analyzeGen.current += 1;
     clusterGen.current += 1;
     contentGen.current += 1;
-    strategyGen.current += 1;
     setProbingIds([]);
     setAnalyzeLoading(false);
     setClustering(false);
     setGenerating(false);
-    setStrategyLoading(false);
     setReviewFlow(null);
     setAnalyzing(false);
     setPreparingStage2(false);
@@ -4628,8 +3948,6 @@ export function MarketResearchShell() {
                         onAddManualSeed={handleAddManualSeed}
                         onConfirmSpend={handleConfirmSpend}
                         committed={committedForActive}
-                        walletHref={`/w/${slug}/wallet`}
-                        walletBalance={wallet?.balance ?? null}
                         readOnly={reviewingBrief || !canEdit}
                         productCountByCollectionId={
                           productCountByCollectionIdByProject[activeProject.id] ?? {}
@@ -4656,10 +3974,6 @@ export function MarketResearchShell() {
                     extracting={extracting}
                     extractProgress={extractProgress}
                     seedProgress={seedProgress}
-                    chargedUsd={
-                      extractChargeByProject[activeProject.id] ??
-                      selectionEstimate.usd
-                    }
                     onAnalyze={handleAnalyze}
                     analyzeLoading={analyzeLoading}
                     analyzeProgress={analyzeProgress}
@@ -4718,8 +4032,6 @@ export function MarketResearchShell() {
                     pushingCollections={Boolean(
                       pushingCollectionsByProject[activeProject.id]
                     )}
-                    walletBalance={wallet?.balance ?? null}
-                    walletHref={`/w/${slug}/wallet`}
                     instructions={customInstructions}
                     onInstruction={(field, value) =>
                       setCustomInstructionByProject((prev) => ({
@@ -4732,8 +4044,6 @@ export function MarketResearchShell() {
                       }))
                     }
                     contentById={contentById}
-                    internalLinksById={internalLinksById}
-                    linksBuildProgress={linksBuildProgress}
                     generating={generating}
                     contentGenProgress={contentGenProgress}
                     contentReady={contentReady}
@@ -4750,22 +4060,8 @@ export function MarketResearchShell() {
                     onStartContent={handleStartContent}
                     onPush={handlePush}
                     onSyncSeo={handleSyncSeo}
-                    onNextStrategy={handleNextStrategy}
-                    strategyArticles={strategyArticles}
-                    generatedArticles={generatedArticles}
-                    storeBlogs={storeBlogs}
                     storeUrl={storeUrl}
                     storeProvider={storeProvider}
-                    blogScopeWarning={blogScopeWarning}
-                    strategyLoading={strategyLoading}
-                    strategyReady={strategyReady}
-                    articlesSyncing={articlesSyncing}
-                    articlesSyncProgress={articlesSyncProgress}
-                    onBuildStrategy={handleBuildStrategy}
-                    onGenerateArticles={(ids) => void handleGenerateArticles(ids)}
-                    onSyncArticles={(ids) => void handleSyncArticles(ids)}
-                    onArticleChange={handleArticleChange}
-                    onArticleTitleChange={handleArticleTitleChange}
                     readOnly={!canEdit}
                   />
                 </div>
@@ -4797,17 +4093,6 @@ export function MarketResearchShell() {
           canAdmin={canAdmin}
         />
       ) : null}
-
-      <InsufficientFundsDialog
-        open={insufficientFundsDialog.open}
-        onOpenChange={(open) =>
-          setInsufficientFundsDialog((prev) => ({ ...prev, open }))
-        }
-        requiredAmount={insufficientFundsDialog.requiredAmount}
-        currentBalance={insufficientFundsDialog.currentBalance}
-        actionName={insufficientFundsDialog.actionName}
-        walletHref={`/w/${slug}/wallet`}
-      />
     </div>
   );
 }

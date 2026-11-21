@@ -154,7 +154,7 @@ export function runHeuristicStage4Classification(input: {
         keyword: kw.keyword,
         sheet: "informational",
         confidence: 0.9,
-        reason: "Informational guide or query suitable for blog/FAQ content",
+        reason: "Informational guide or question, not a category page",
         isAiGenerated: false,
       };
     }

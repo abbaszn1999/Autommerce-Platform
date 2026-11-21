@@ -1,11 +1,10 @@
 import type { LucideIcon } from "lucide-react";
-import { Coins, DollarSign, Wallet } from "lucide-react";
+import { Coins, DollarSign } from "lucide-react";
 import { DeltaBadge, OverviewCard } from "@/components/platform-admin/overview-card";
 
 const ICONS: Record<string, LucideIcon> = {
   MRR: DollarSign,
   "Credits spent": Coins,
-  "Wallet spent": Wallet,
 };
 
 export function OverviewHeroBand({
@@ -15,7 +14,7 @@ export function OverviewHeroBand({
 }) {
   return (
     <OverviewCard accent>
-      <div className="grid lg:grid-cols-3 lg:divide-x lg:divide-border">
+      <div className="grid lg:grid-cols-2 lg:divide-x lg:divide-border">
         {items.map((item) => {
           const Icon = ICONS[item.label] ?? DollarSign;
           return (

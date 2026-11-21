@@ -1,38 +1,13 @@
 import type {
   CollectionContent,
-  CollectionFaq,
-  CollectionLink,
   OnPageInstructions,
   ProposedCollection,
 } from "@/components/market-research/workspace-data";
 import { normalizeOnPageInstructions } from "@/components/market-research/workspace-data";
-import type { StoreCollectionItem } from "./store-catalog";
 import { runGeminiMarketResearch } from "./gemini-runner";
-import {
-  buildInternalLinkGraph,
-  stripCollectionPrefix,
-  type InternalLinkGraph,
-} from "./internal-links";
 import { runWithConcurrency } from "@/lib/sync/core/batch-executor";
 
 const CHUNK_CONCURRENCY = 5;
-
-/**
- * The SEO agent has to write `<a href="...">` inline, unlike the internal
- * linking engine which only ever emits an index (see internal-links.ts:24-27).
- * Prompt-only trust is not enough, so every anchor Gemini writes is checked
- * against that collection's verified link hrefs here — anything else
- * collapses to its plain anchor text rather than shipping a hallucinated or
- * stale href.
- */
-function sanitizeAnchors(html: string, verifiedHrefs: Set<string>): string {
-  if (!html) return html;
-  return html.replace(
-    /<a\s+href="([^"<>]*)"[^>]*>([\s\S]*?)<\/a>/gi,
-    (_match, href: string, label: string) =>
-      verifiedHrefs.has(href) ? `<a href="${href}">${label}</a>` : label
-  );
-}
 
 /** SEO title/description are pushed as plain store meta fields — strip any HTML. */
 function stripHtml(value: string): string {
@@ -40,17 +15,28 @@ function stripHtml(value: string): string {
   return value.replace(/<[^>]*>/g, "");
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** The store title the push step created ("AI - Name") back to the plain collection name. */
+export function stripCollectionPrefix(title: string, prefix?: string): string {
+  const clean = (title || "").trim();
+  const p = (prefix || "").trim();
+  if (!p) return clean;
+  return clean
+    .replace(new RegExp(`^${escapeRegex(p)}\\s*[-–—:|]\\s*`, "i"), "")
+    .replace(new RegExp(`^${escapeRegex(p)}\\s+`, "i"), "")
+    .trim();
+}
+
 export interface Stage6OnPageInput {
   storeName?: string;
   parentNiches?: string[];
   collections: ProposedCollection[];
-  allStoreCollections?: StoreCollectionItem[];
   customInstructions?: Partial<OnPageInstructions>;
   /** Prefix the push step prepends to store collection titles, e.g. "AI". */
   collectionPrefix?: string;
-  provider?: string;
-  /** Precomputed link graph, so batches share one embedding + judgement pass. */
-  internalLinks?: InternalLinkGraph;
 }
 
 export interface Stage6OnPageResult {
@@ -66,31 +52,10 @@ interface GeminiCollectionContentItem {
   seoTitle: string;
   seoDescription: string;
   collectionDescription: string;
-  faqs: Array<{ q: string; a: string }>;
-  links?: Array<{ label: string; href: string }>;
 }
 
 interface GeminiOnPageResponse {
   contents: GeminiCollectionContentItem[];
-}
-
-/**
- * Link targets that are guaranteed to resolve on the storefront. Used only when
- * the engine found nothing verifiable to link to — an invented "guide" URL would
- * be worse than a generic one that actually loads.
- */
-function safeStoreLinks(provider?: string): CollectionLink[] {
-  const isWoo = provider === "woocommerce" || provider === "wordpress";
-  if (isWoo) {
-    return [
-      { label: "Browse all products", href: "/shop" },
-      { label: "Shop by category", href: "/shop" },
-    ];
-  }
-  return [
-    { label: "Browse all collections", href: "/collections" },
-    { label: "Shop all products", href: "/collections/all" },
-  ];
 }
 
 /**
@@ -104,7 +69,6 @@ export function runHeuristicStage6OnPage(
     val.trim() ? ` (Follows custom instruction: “${val.trim().slice(0, 80)}”)` : "";
 
   const contentById: Record<string, CollectionContent> = {};
-  const fallbackLinks = safeStoreLinks(input.provider);
 
   for (const col of input.collections) {
     const name = stripCollectionPrefix(col.name, input.collectionPrefix) || col.name;
@@ -123,32 +87,11 @@ export function runHeuristicStage6OnPage(
       ? `Explore our curated selection of ${name.toLowerCase()}. Designed for shoppers looking for premium ${head}, this collection brings together verified options for every budget and style.${clip(instructions.collectionDescription)}`
       : `Explore our curated selection of ${name.toLowerCase()}. Designed for shoppers looking for premium ${head}, this collection brings together verified options for every budget and style.`;
 
-    const faqs: CollectionFaq[] = [
-      {
-        q: `What should I consider when buying ${name.toLowerCase()}?`,
-        a: instructions.faq.trim()
-          ? `Focus on quality, compatibility, and key features that match your needs. Our ${name.toLowerCase()} collection provides tested choices.${clip(instructions.faq)}`
-          : `Focus on quality, compatibility, and key features that match your needs. Our ${name.toLowerCase()} collection provides tested choices.`,
-      },
-      {
-        q: `Are these ${head} suitable for daily use?`,
-        a: `Yes, all items featured in our ${name} collection are selected for reliable performance, durability, and customer satisfaction.`,
-      },
-      {
-        q: `How fast is shipping for ${name.toLowerCase()}?`,
-        a: `Orders are processed promptly with reliable tracking and express delivery options available at checkout.`,
-      },
-    ];
-
-    const links = input.internalLinks?.[col.id] ?? fallbackLinks;
-
     contentById[col.id] = {
       collectionId: col.id,
       seoTitle,
       seoDescription,
       collectionDescription,
-      faqs,
-      links,
     };
   }
 
@@ -167,13 +110,11 @@ async function generateBatchStage6(
   batchCollections: ProposedCollection[]
 ): Promise<Record<string, CollectionContent>> {
   const instructions = normalizeOnPageInstructions(input.customInstructions);
-  const fallbackLinks = safeStoreLinks(input.provider);
 
   const customInstructionsContext = {
     seoTitle: instructions.seoTitle.trim() || undefined,
     seoDescription: instructions.seoDescription.trim() || undefined,
     collectionDescription: instructions.collectionDescription.trim() || undefined,
-    faq: instructions.faq.trim() || undefined,
   };
 
   const userPrompt = JSON.stringify({
@@ -191,12 +132,6 @@ async function generateBatchStage6(
       keywordCount: c.keywordCount,
       status: c.status,
       existingName: c.existingName,
-      // Verified internal link targets for this page, precomputed by the
-      // internal linking engine. Only these hrefs may be used as anchors.
-      linkedCollections: (input.internalLinks?.[c.id] ?? []).map((link) => ({
-        label: link.label,
-        href: link.href,
-      })),
     })),
   });
 
@@ -204,25 +139,15 @@ async function generateBatchStage6(
 Your task is Stage 6 of Market Research:
 Generate compelling, high-converting, and SEO-optimized collection page copy for each collection provided.
 
-### Specific Instructions For The 4 Customizable Fields:
+### Specific Instructions For The 3 Customizable Fields:
 1. "seoTitle":
    ${instructions.seoTitle.trim() ? `CRITICAL USER INSTRUCTION FOR SEO TITLE: "${instructions.seoTitle.trim()}". Follow this strictly.` : "Write a concise, high-CTR title tag containing the head keyword and collection name (~50-60 characters)."}
 2. "seoDescription":
    ${instructions.seoDescription.trim() ? `CRITICAL USER INSTRUCTION FOR META DESCRIPTION: "${instructions.seoDescription.trim()}". Follow this strictly.` : "Write a compelling meta description (~140-160 characters) with a clear value proposition and call to action."}
 3. "collectionDescription":
    ${instructions.collectionDescription.trim() ? `CRITICAL USER INSTRUCTION FOR COLLECTION DESCRIPTION: "${instructions.collectionDescription.trim()}". Follow this strictly.` : "Write 1-2 engaging, natural paragraphs (80-140 words) describing the collection, its benefits, and shopper use cases."}
-4. "faqs":
-   ${instructions.faq.trim() ? `CRITICAL USER INSTRUCTION FOR FAQS: "${instructions.faq.trim()}". Follow this strictly.` : "Write 3-4 structured, informative FAQ questions and helpful answers that shoppers genuinely ask before buying."}
 
-### Contextual Internal Links
-Each collection may include a "linkedCollections" array of verified navigation targets: [{ "label": "...", "href": "/collections/..." }].
-- If "linkedCollections" is non-empty, naturally weave 1-2 of them into "collectionDescription" as inline HTML anchors: <a href="EXACT_HREF">anchor text</a>. Pick anchor text that reads naturally in the sentence — it does not need to match "label" verbatim, just describe the same page.
-- You MAY also weave in exactly one such anchor inside a single FAQ answer, only where it fits naturally (e.g. "see our <a href=\"/collections/...\">wireless chargers</a> for..."). Do not force it if none fits.
-- You MUST use "href" values exactly as given, byte for byte. NEVER invent, guess, modify, or shorten a URL, and never link to a page not listed in "linkedCollections" for that collection.
-- NEVER use the same href twice on the same page.
-- If "linkedCollections" is empty for a collection, write "collectionDescription" and "faqs" as plain text with no anchors.
-- Links must feel editorial, not stuffed — most collections should only need 1 anchor total.
-- "seoTitle" and "seoDescription" MUST be plain text with absolutely no HTML tags — they are pushed directly as store meta fields.
+All three fields are plain text with absolutely no HTML tags and no links — they are pushed directly to the store.
 
 Output strictly valid JSON with this exact schema:
 {
@@ -231,13 +156,7 @@ Output strictly valid JSON with this exact schema:
       "collectionId": "col-id-matching-input",
       "seoTitle": "Collection Title | Shop Head Keyword",
       "seoDescription": "Meta description...",
-      "collectionDescription": "Collection description...",
-      "faqs": [
-        {
-          "q": "Question here?",
-          "a": "Answer here."
-        }
-      ]
+      "collectionDescription": "Collection description..."
     }
   ]
 }`;
@@ -255,29 +174,26 @@ Output strictly valid JSON with this exact schema:
     for (const item of parsed.contents) {
       if (!item.collectionId) continue;
 
-      const verifiedHrefs = new Set(
-        (input.internalLinks?.[item.collectionId] ?? []).map((link) => link.href)
-      );
-      const faqs = Array.isArray(item.faqs) ? item.faqs : [];
-
       batchContent[item.collectionId] = {
         collectionId: item.collectionId,
         seoTitle: stripHtml(item.seoTitle) || `${item.collectionId} | Shop Now`,
         seoDescription: stripHtml(item.seoDescription) || "",
-        collectionDescription: sanitizeAnchors(
-          item.collectionDescription || "",
-          verifiedHrefs
-        ),
-        faqs: faqs.map((faq) => ({
-          q: stripHtml(faq.q) || "",
-          a: sanitizeAnchors(faq.a || "", verifiedHrefs),
-        })),
-        links: input.internalLinks?.[item.collectionId] ?? fallbackLinks,
+        collectionDescription: stripHtml(item.collectionDescription || ""),
       };
     }
   }
 
   return batchContent;
+}
+
+function ungenerated(collectionId: string): CollectionContent {
+  return {
+    collectionId,
+    seoTitle: "",
+    seoDescription: "",
+    collectionDescription: "",
+    ungenerated: true,
+  };
 }
 
 /**
@@ -290,29 +206,8 @@ export async function runStage6OnPageGeneration(
 ): Promise<Stage6OnPageResult> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
 
-  // The link graph is built once for the whole store so every batch shares the
-  // same embeddings, in-degree budget and orphan pass. Doing it per batch would
-  // let each chunk pile links onto the same few pages.
-  let internalLinks: InternalLinkGraph = input.internalLinks ?? {};
-  if (!input.internalLinks && input.collections.length > 0) {
-    try {
-      internalLinks = await buildInternalLinkGraph({
-        proposed: input.collections,
-        storeCollections: input.allStoreCollections,
-        collectionPrefix: input.collectionPrefix,
-        provider: input.provider,
-        disableAi: !apiKey,
-      });
-    } catch (err) {
-      console.error("[runStage6OnPageGeneration] Internal link graph failed:", err);
-      internalLinks = {};
-    }
-  }
-
-  const enrichedInput: Stage6OnPageInput = { ...input, internalLinks };
-
   if (!apiKey || input.collections.length === 0) {
-    return runHeuristicStage6OnPage(enrichedInput);
+    return runHeuristicStage6OnPage(input);
   }
 
   // Split collections into chunks of up to 10
@@ -330,14 +225,14 @@ export async function runStage6OnPageGeneration(
       let lastError: unknown;
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         try {
-          const batchResult = await generateBatchStage6(enrichedInput, chunk);
+          const batchResult = await generateBatchStage6(input, chunk);
           // A reply can succeed and still leave collections out. Ask once
           // more for those, then mark anything still missing as not
           // generated instead of leaving a silent gap in the sheet.
           let omitted = chunk.filter((collection) => !batchResult[collection.id]);
           if (omitted.length > 0) {
             try {
-              Object.assign(batchResult, await generateBatchStage6(enrichedInput, omitted));
+              Object.assign(batchResult, await generateBatchStage6(input, omitted));
             } catch (retryErr) {
               console.error(
                 `[runStage6OnPageGeneration] Re-request for ${omitted.length} omitted collection(s) failed:`,
@@ -346,15 +241,7 @@ export async function runStage6OnPageGeneration(
             }
             omitted = chunk.filter((collection) => !batchResult[collection.id]);
             for (const collection of omitted) {
-              batchResult[collection.id] = {
-                collectionId: collection.id,
-                seoTitle: "",
-                seoDescription: "",
-                collectionDescription: "",
-                faqs: [],
-                links: [],
-                ungenerated: true,
-              };
+              batchResult[collection.id] = ungenerated(collection.id);
             }
           }
           return { contentById: batchResult, degraded: omitted.length };
@@ -375,15 +262,7 @@ export async function runStage6OnPageGeneration(
       );
       const contentById: Record<string, CollectionContent> = {};
       for (const collection of chunk) {
-        contentById[collection.id] = {
-          collectionId: collection.id,
-          seoTitle: "",
-          seoDescription: "",
-          collectionDescription: "",
-          faqs: [],
-          links: [],
-          ungenerated: true,
-        };
+        contentById[collection.id] = ungenerated(collection.id);
       }
       return { contentById, degraded: chunk.length };
     },

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAiWalletBilling } from "@/lib/billing/ai-wallet-billing";
 import {
   agentSeedsBodySchema,
   jsonError,
@@ -12,7 +11,7 @@ import { markSliceSavedAdmin } from "@/lib/market-research/server-persist";
 
 export const maxDuration = 300;
 
-async function handlePost(request: NextRequest) {
+export async function POST(request: NextRequest) {
   let json: unknown;
   try {
     json = await request.json();
@@ -73,5 +72,3 @@ async function handlePost(request: NextRequest) {
     return jsonError(msg, status);
   }
 }
-
-export const POST = withAiWalletBilling("mr_seeds", handlePost);

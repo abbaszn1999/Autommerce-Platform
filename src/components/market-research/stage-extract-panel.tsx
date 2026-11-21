@@ -43,7 +43,6 @@ import {
   type SheetKeywordFilters,
 } from "./workspace-data";
 import type { MockSeedRow, SeedProbe } from "./mock-data";
-import { formatUsd } from "./mock-data";
 import { cn } from "@/lib/utils";
 
 type ExtractSheet = "all" | KeywordSheet;
@@ -211,7 +210,6 @@ export function StageExtractPanel({
   extracting,
   progress,
   seedProgress,
-  chargedUsd,
   onAnalyze,
   analyzeLoading,
   analyzeProgress,
@@ -230,7 +228,6 @@ export function StageExtractPanel({
   extracting: boolean;
   progress: number;
   seedProgress: SeedExtractProgress[];
-  chargedUsd: number;
   onAnalyze: () => void;
   analyzeLoading: boolean;
   /** Live progress across the chunked classification requests (Layer 1). */
@@ -382,8 +379,7 @@ export function StageExtractPanel({
           </h2>
           <p className="text-xs text-muted-foreground">
             Up to {EXTRACT_CAP_PER_SEED.toLocaleString("en-US")} keywords per
-            seed · you can leave this page; the pull continues on the server
-            and the unused wallet hold is settled when it finishes.
+            seed · you can leave this page; the pull continues on the server.
           </p>
         </div>
         <Progress value={Math.round(progress * 100)} className="h-1.5" />
@@ -439,10 +435,9 @@ export function StageExtractPanel({
         <div>
           <h2 className="text-base font-semibold tracking-tight">Extract</h2>
           <p className="text-[11px] text-muted-foreground">
-            {totalPulled.toLocaleString("en-US")} keywords pulled ·{" "}
-            {formatUsd(chargedUsd)} charged from wallet.
+            {totalPulled.toLocaleString("en-US")} keywords pulled.
             {analyzed
-              ? " Filters below narrow the classified terms and do not change that bill."
+              ? " Filters below narrow the classified terms."
               : ""}
             {analyzed && removedSameIntent > 0
               ? ` ${removedSameIntent.toLocaleString("en-US")} same-intent terms removed. The highest-volume wording was kept.`
@@ -501,11 +496,11 @@ export function StageExtractPanel({
               ? `Apply to update this sheet. ${
                   activeSheet === "category"
                     ? "Next will send the applied category terms to collection matching."
-                    : "Applied informational terms are the ones that move to content strategy."
+                    : "Informational terms are for reference only; they are not used by a later stage."
                 }`
               : activeSheet === "category"
                 ? `Showing ${filteredCategoryKeywords.length.toLocaleString("en-US")} of ${categoryTotal.toLocaleString("en-US")} category terms. Next uses this applied set for collection matching.`
-                : `Showing ${filteredInformationalKeywords.length.toLocaleString("en-US")} of ${informationalTotal.toLocaleString("en-US")} informational terms. Content strategy uses this applied set.`
+                : `Showing ${filteredInformationalKeywords.length.toLocaleString("en-US")} of ${informationalTotal.toLocaleString("en-US")} informational terms. They are for reference only.`
           }
         />
       ) : analyzed ? (

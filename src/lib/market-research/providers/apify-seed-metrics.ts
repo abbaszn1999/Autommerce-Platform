@@ -81,7 +81,7 @@ export async function fetchApifySeedMetrics(
   }
 
   // A seed Apify returned no row for is left out, so the caller reports it
-  // as failed and does not charge for it, instead of a zero-demand result.
+  // as failed, instead of a zero-demand result.
   const found: SeedMetrics[] = [];
   for (const seed of unique) {
     const existing = bySeed.get(seed.toLowerCase());

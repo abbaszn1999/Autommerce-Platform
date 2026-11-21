@@ -4,24 +4,19 @@ import type { ReactNode } from "react";
 import { StageCollectionSheet } from "./stage-collection-sheet";
 import { StageContentPanel } from "./stage-content-panel";
 import { StageExtractPanel } from "./stage-extract-panel";
-import { StageStrategyPanel } from "./stage-strategy-panel";
 import { WorkspaceStepper } from "./workspace-stepper";
 import { cn } from "@/lib/utils";
 import type {
   CollectionContent,
-  CollectionLink,
   ExtractedKeyword,
   FlowTab,
   KeywordFilters,
   MarketResearchProduct,
   OnPageInstructionField,
   OnPageInstructions,
-  GeneratedArticle,
   ProposedCollection,
   SeedExtractProgress,
   SheetKeywordFilters,
-  StoreBlog,
-  StrategyArticle,
   WorkspaceTab,
 } from "./workspace-data";
 import { isWorkspaceTab } from "./workspace-data";
@@ -40,7 +35,6 @@ export function DeepWorkspace({
   extracting,
   extractProgress,
   seedProgress,
-  chargedUsd,
   onAnalyze,
   analyzeLoading,
   analyzeProgress,
@@ -67,13 +61,9 @@ export function DeepWorkspace({
   onRecheckDuplicates,
   recheckingDuplicates = false,
   pushingCollections = false,
-  walletBalance = null,
-  walletHref,
   instructions,
   onInstruction,
   contentById,
-  internalLinksById,
-  linksBuildProgress,
   generating,
   contentGenProgress,
   contentReady,
@@ -82,22 +72,8 @@ export function DeepWorkspace({
   onStartContent,
   onPush,
   onSyncSeo,
-  onNextStrategy,
-  strategyArticles,
-  generatedArticles,
-  storeBlogs = [],
   storeUrl = "",
   storeProvider = null,
-  blogScopeWarning = null,
-  strategyLoading,
-  strategyReady,
-  articlesSyncing = false,
-  articlesSyncProgress = null,
-  onBuildStrategy,
-  onGenerateArticles,
-  onSyncArticles,
-  onArticleChange,
-  onArticleTitleChange,
   readOnly = false,
 }: {
   projectName: string;
@@ -112,7 +88,6 @@ export function DeepWorkspace({
   extracting: boolean;
   extractProgress: number;
   seedProgress: SeedExtractProgress[];
-  chargedUsd: number;
   onAnalyze: () => void;
   analyzeLoading: boolean;
   /** Live progress across the chunked classification requests (Layer 1). */
@@ -139,7 +114,7 @@ export function DeepWorkspace({
   termEmbedProgress?: { embedded: number; total: number; done: boolean } | null;
   selectedCollectionIds: string[];
   onChangeSelected: (ids: string[]) => void;
-  /** Collection ids already successfully pushed and paid for in this project. */
+  /** Collection ids already successfully pushed to the store in this project. */
   paidCollectionIds: string[];
   onStartWorking: () => void;
   onPushToStore?: (selectedIds: string[]) => Promise<void> | void;
@@ -147,14 +122,9 @@ export function DeepWorkspace({
   onRecheckDuplicates?: () => void;
   recheckingDuplicates?: boolean;
   pushingCollections?: boolean;
-  walletBalance?: number | null;
-  walletHref?: string;
   instructions: OnPageInstructions;
   onInstruction: (field: OnPageInstructionField, value: string) => void;
   contentById: Record<string, CollectionContent>;
-  internalLinksById?: Record<string, CollectionLink[]>;
-  /** Live progress across the background internal-link cursor job's pages. */
-  linksBuildProgress?: { processed: number; total: number } | null;
   generating: boolean;
   /** Live progress across the Stage 6 on-page copywriting cursor job's pages. */
   contentGenProgress?: { processed: number; total: number } | null;
@@ -164,24 +134,10 @@ export function DeepWorkspace({
   onStartContent: (ids: string[]) => void;
   onPush: () => void;
   onSyncSeo?: () => void;
-  onNextStrategy: () => void;
-  strategyArticles: StrategyArticle[];
-  generatedArticles: Record<string, GeneratedArticle>;
-  storeBlogs?: StoreBlog[];
   storeUrl?: string;
   /** Connected store's provider id, used to build the correct live
    *  collection URL pattern (Shopify vs WooCommerce/WordPress paths). */
   storeProvider?: string | null;
-  blogScopeWarning?: string | null;
-  strategyLoading: boolean;
-  strategyReady: boolean;
-  articlesSyncing?: boolean;
-  articlesSyncProgress?: { done: number; total: number } | null;
-  onBuildStrategy: () => void;
-  onGenerateArticles: (ids: string[]) => void;
-  onSyncArticles: (ids: string[]) => void;
-  onArticleChange: (articleId: string, patch: Partial<GeneratedArticle>) => void;
-  onArticleTitleChange: (articleId: string, title: string) => void;
   readOnly?: boolean;
 }) {
   return (
@@ -224,7 +180,6 @@ export function DeepWorkspace({
             extracting={extracting}
             progress={extractProgress}
             seedProgress={seedProgress}
-            chargedUsd={chargedUsd}
             onAnalyze={onAnalyze}
             analyzeLoading={analyzeLoading}
             analyzeProgress={analyzeProgress}
@@ -256,8 +211,6 @@ export function DeepWorkspace({
             onRecheckDuplicates={onRecheckDuplicates}
             recheckingDuplicates={recheckingDuplicates}
             pushing={pushingCollections}
-            walletBalance={walletBalance}
-            walletHref={walletHref}
           />
         ) : null}
         {tab === "content" ? (
@@ -265,17 +218,15 @@ export function DeepWorkspace({
             // Stage 6 must show every collection that's actually live on the
             // store, not whatever is still checked in Stage 5's sheet —
             // handlePushToStore clears successfully-pushed ids out of that
-            // selection (so the sheet doesn't show paid collections as
+            // selection (so the sheet doesn't show pushed collections as
             // "still selected to push"), which previously emptied this tab
             // the instant a push succeeded.
             collections={collections.filter((c) =>
               paidCollectionIds.includes(c.id)
             )}
             contentById={contentById}
-            internalLinksById={internalLinksById}
             storeUrl={storeUrl}
             storeProvider={storeProvider}
-            linksBuildProgress={linksBuildProgress}
             instructions={instructions}
             onInstruction={onInstruction}
             generating={generating}
@@ -286,25 +237,6 @@ export function DeepWorkspace({
             onStart={onStartContent}
             onPush={onPush}
             onSyncSeo={onSyncSeo}
-            onNextStrategy={onNextStrategy}
-          />
-        ) : null}
-        {tab === "strategy" ? (
-          <StageStrategyPanel
-            articles={strategyArticles}
-            generatedById={generatedArticles}
-            blogs={storeBlogs}
-            storeUrl={storeUrl}
-            scopeWarning={blogScopeWarning}
-            loading={strategyLoading}
-            ready={strategyReady}
-            syncing={articlesSyncing}
-            syncProgress={articlesSyncProgress}
-            onBuild={onBuildStrategy}
-            onGenerate={onGenerateArticles}
-            onSync={onSyncArticles}
-            onArticleChange={onArticleChange}
-            onTitleChange={onArticleTitleChange}
           />
         ) : null}
         </div>

@@ -4,14 +4,9 @@ import type { MarketResearchPersisted } from "@/components/market-research/persi
 import type { MarketResearchProject } from "@/components/market-research/mock-data";
 import type {
   CollectionContent,
-  CollectionLink,
-  GeneratedArticle,
   MarketResearchProduct,
   ProposedCollection,
-  StoreBlog,
-  StrategyArticle,
 } from "@/components/market-research/workspace-data";
-import { useWorkspaceStore } from "@/store/workspace-store";
 
 export type ProbeSeedInput = { id: string; term: string };
 
@@ -32,8 +27,6 @@ export type ProbeSeedResult =
 export type ProbeResponse = {
   market: string;
   database: string;
-  probeCostUsd: number;
-  chargedUsd?: number;
   results: ProbeSeedResult[];
 };
 
@@ -44,13 +37,11 @@ export type ExtractSeedStart = {
   datasetId?: string;
   limitPerSeed: number;
   estimatedRows: number;
-  estimatedCostUsd: number;
 };
 
 export type ExtractStartResponse = {
   extractId: string;
   database: string;
-  heldUsd?: number;
   seeds: ExtractSeedStart[];
 };
 
@@ -66,19 +57,7 @@ export type ExtractPollSeed = {
   rowsReturned?: number;
 };
 
-let walletRefreshTimer: ReturnType<typeof setTimeout> | null = null;
-
-/** Most calls here can charge the wallet, so the balance shown is refreshed at most every few seconds. */
-function scheduleWalletRefresh() {
-  if (walletRefreshTimer || typeof window === "undefined") return;
-  walletRefreshTimer = setTimeout(() => {
-    walletRefreshTimer = null;
-    useWorkspaceStore.getState().invalidateWallet();
-  }, 4000);
-}
-
 async function readJson<T>(response: Response): Promise<T> {
-  scheduleWalletRefresh();
   const data = (await response.json().catch(() => ({}))) as T & { error?: string };
   if (!response.ok) {
     throw new Error(data.error || `Request failed (${response.status})`);
@@ -145,13 +124,12 @@ export async function probeSeedsApi(
   workspaceId: string,
   projectId: string,
   market: string,
-  seeds: ProbeSeedInput[],
-  attemptId: string
+  seeds: ProbeSeedInput[]
 ): Promise<ProbeResponse> {
   const response = await fetch("/api/market-research/probe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workspaceId, projectId, market, seeds, attemptId }),
+    body: JSON.stringify({ workspaceId, projectId, market, seeds }),
   });
   return readJson<ProbeResponse>(response);
 }
@@ -161,7 +139,7 @@ export async function startExtractApi(
   projectId: string,
   market: string,
   seeds: Array<ProbeSeedInput & { rawKeywordEstimate: number }>,
-  /** Applied by Semrush server-side, before billing — narrower filters cost less. */
+  /** Applied by Semrush server-side, so narrower filters return fewer rows. */
   filters?: { minVolume?: number; maxDifficulty?: number }
 ): Promise<ExtractStartResponse> {
   const response = await fetch("/api/market-research/extract/start", {
@@ -192,8 +170,6 @@ export async function pollExtractApi(
   seeds: ExtractPollSeed[];
   allDone: boolean;
   rowsReturned: number;
-  settledUsd?: number;
-  billingPending?: boolean;
   sample?: import("./map-keywords").DisplayKeyword[];
 }> {
   const response = await fetch("/api/market-research/extract/poll", {
@@ -208,10 +184,7 @@ export type ExtractStatusResponse = {
   extract: {
     id: string;
     status: string;
-    billingStatus: string;
     rowsReturned: number;
-    heldUsd: number;
-    actualUsd: number;
     createdAt: string;
   } | null;
   seeds: Array<{
@@ -241,7 +214,7 @@ export async function cancelExtractApi(
   workspaceId: string,
   projectId: string,
   extractId: string
-): Promise<{ rowsReturned: number; settledUsd: number }> {
+): Promise<{ rowsReturned: number }> {
   const response = await fetch("/api/market-research/extract/cancel", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -262,14 +235,12 @@ export type PushCollectionsStoreResult = {
 
 export type PushCollectionsResponse = {
   ok?: boolean;
-  chargedUsd: number;
-  refundedUsd?: number;
   duplicate?: boolean;
   pushedCount?: number;
   failedCount?: number;
   pushedIds?: string[];
   storeResults?: PushCollectionsStoreResult[];
-  /** Set when a later chunk was refused (for example the wallet ran out) and the rest were not attempted. */
+  /** Set when a later chunk failed and the rest were not attempted. */
   stoppedReason?: string;
 };
 
@@ -300,8 +271,6 @@ export async function pushCollectionsApi(
 
   const merged: PushCollectionsResponse = {
     ok: true,
-    chargedUsd: 0,
-    refundedUsd: 0,
     pushedCount: 0,
     failedCount: 0,
     pushedIds: [],
@@ -322,8 +291,6 @@ export async function pushCollectionsApi(
       merged.ok = false;
       break;
     }
-    merged.chargedUsd += part.chargedUsd ?? 0;
-    merged.refundedUsd = (merged.refundedUsd ?? 0) + (part.refundedUsd ?? 0);
     merged.pushedCount = (merged.pushedCount ?? 0) + (part.pushedCount ?? 0);
     merged.failedCount = (merged.failedCount ?? 0) + (part.failedCount ?? 0);
     merged.pushedIds!.push(...(part.pushedIds ?? []));
@@ -331,70 +298,6 @@ export async function pushCollectionsApi(
     onProgress?.({ done: Math.min(total, offset + ids.length), total });
   }
   return merged;
-}
-
-// ─── Internal link graph as a cursor job ──────────────────────────────────
-//
-// Builds the link graph for the given (just-pushed) collection ids and
-// persists it server-side page by page, so the "Links" column in Tab 6 fills
-// in progressively while the user is still on the push animation / Tab 5.
-// The canonical collection list (with real storeHandles) is loaded from
-// storage server-side — only the target ids travel over the wire, so a
-// 10k-collection push never risks a giant request body.
-
-export type BuildInternalLinksPageResponse = {
-  offset: number;
-  nextOffset: number;
-  done: boolean;
-  processed: number;
-  total: number;
-  linksByCollectionId: Record<string, CollectionLink[]>;
-};
-
-export async function buildInternalLinksPageApi(
-  workspaceId: string,
-  projectId: string,
-  collectionIds: string[],
-  offset: number
-): Promise<BuildInternalLinksPageResponse> {
-  const response = await fetch("/api/market-research/agent/internal-links", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workspaceId, projectId, collectionIds, offset }),
-  });
-  return readJson(response);
-}
-
-/**
- * Fire-and-forget from the caller's perspective — a failure on any page just
- * means on-page generation falls back to building that page's links inline,
- * as it always used to. `onProgress` is called after every page so the
- * caller can merge the new links in and show a "Links x/y" badge.
- */
-export async function runBuildInternalLinksLoop(
-  workspaceId: string,
-  projectId: string,
-  collectionIds: string[],
-  onProgress?: (state: BuildInternalLinksPageResponse) => void,
-  isCancelled?: () => boolean
-): Promise<void> {
-  if (collectionIds.length === 0) return;
-  let offset = 0;
-  let guard = 0;
-  const MAX_CALLS = 500;
-  for (;;) {
-    if (isCancelled?.() || guard >= MAX_CALLS) break;
-    const res = await buildInternalLinksPageApi(
-      workspaceId,
-      projectId,
-      collectionIds,
-      offset
-    );
-    onProgress?.(res);
-    guard += 1;
-    if (res.done) break;
-    offset = res.nextOffset;
-  }
 }
 
 export type SyncSeoResponse = {
@@ -889,16 +792,13 @@ export async function generateSeedsApi(
 
 // ─── Stage 6 on-page copywriting as a cursor job ──────────────────────────
 //
-// "Generate" only has to run the Gemini copywriting pass now — the internal
-// link graph was already built (or is still being built) by
-// runBuildInternalLinksLoop right after push. The route resolves ids against
-// the canonical "collections" slice server-side, so only ids travel here.
+// The route resolves ids against the canonical "collections" slice
+// server-side, so only ids travel here.
 
 export type OnPageInstructionsContext = {
   seoTitle?: string;
   seoDescription?: string;
   collectionDescription?: string;
-  faq?: string;
 };
 
 export type OnPageGenerationPageResponse = {
@@ -958,184 +858,17 @@ export async function runOnPageGenerationLoop(
   );
 }
 
-// ─── Stage 7: content plan and articles ──────────────────────────────────────
-
-export type AgentStrategyResponse = {
-  articles: StrategyArticle[];
-  isAiGenerated: boolean;
-  droppedByCap: number;
-  mergedByIntent: number;
-  degradedCount: number;
-};
-
-export async function buildContentPlanApi(
-  workspaceId: string,
-  projectId: string | undefined,
-  keywords: Array<{
-    id: string;
-    keyword: string;
-    sheet?: string;
-    volume?: number;
-    difficulty?: number;
-    seedId?: string;
-    seed?: string;
-  }>,
-  context?: {
-    parentNiches?: string[];
-    collections?: Array<{
-      id: string;
-      name: string;
-      headKeyword?: string;
-      parentNiche?: string;
-      volume?: number;
-      productCount?: number;
-      storeHandle?: string;
-    }>;
-  }
-): Promise<AgentStrategyResponse> {
-  const response = await fetch("/api/market-research/agent/strategy", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      workspaceId,
-      projectId,
-      keywords,
-      parentNiches: context?.parentNiches,
-      collections: context?.collections,
-    }),
-  });
-  return readJson<AgentStrategyResponse>(response);
-}
-
-export type StoreBlogsResponse = {
-  blogs: StoreBlog[];
+export type StoreInfoResponse = {
   provider: string | null;
   /** Storefront origin, used to render clickable absolute collection links. */
   storeUrl: string;
-  /** False when the store's token cannot read or write blog content. */
-  contentAccess: boolean;
-  scopeWarning?: string | null;
 };
 
-export async function fetchStoreBlogsApi(
+export async function fetchStoreInfoApi(
   workspaceId: string
-): Promise<StoreBlogsResponse> {
+): Promise<StoreInfoResponse> {
   const response = await fetch(
-    `/api/market-research/blogs?workspaceId=${encodeURIComponent(workspaceId)}`
+    `/api/market-research/store-info?workspaceId=${encodeURIComponent(workspaceId)}`
   );
-  return readJson<StoreBlogsResponse>(response);
+  return readJson<StoreInfoResponse>(response);
 }
-
-export async function writeArticleApi(
-  workspaceId: string,
-  projectId: string | undefined,
-  article: {
-    id: string;
-    title: string;
-    keyword: string;
-    type: "guide" | "comparison" | "faq" | "roundup";
-    volume?: number;
-    difficulty?: number;
-    linksOut?: Array<{ anchor: string; url: string; collectionName: string }>;
-    skuLinks?: Array<{ anchor: string; url: string; productName: string }>;
-  },
-  blogs?: StoreBlog[],
-  storeUrl?: string
-): Promise<{ article: GeneratedArticle; cost: number }> {
-  if (!projectId) {
-    throw new Error("A project is required to write articles");
-  }
-
-  const payload = { workspaceId, projectId, article, blogs, storeUrl };
-
-  const post = async (mode: "start" | "poll") => {
-    const response = await fetch("/api/market-research/agent/article", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, mode }),
-    });
-    return readJson<{
-      article?: GeneratedArticle;
-      cost?: number;
-      pending?: boolean;
-      status?: string;
-    }>(response);
-  };
-
-  let startError: Error | null = null;
-  try {
-    const started = await post("start");
-    if (started.article) {
-      return { article: started.article, cost: started.cost ?? 0 };
-    }
-  } catch (err) {
-    startError = err instanceof Error ? err : new Error("Writing failed");
-  }
-
-  const deadline = Date.now() + 8 * 60 * 1000;
-  let missingStreak = 0;
-
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    try {
-      const polled = await post("poll");
-      if (polled.article) {
-        return { article: polled.article, cost: polled.cost ?? 0 };
-      }
-      if (polled.status === "missing") {
-        missingStreak += 1;
-        if (startError && missingStreak >= 3) throw startError;
-        continue;
-      }
-      missingStreak = 0;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      const retryable = /failed to fetch|network|timeout|502|503|504|missing/i.test(
-        message
-      );
-      if (startError && missingStreak >= 3) throw startError;
-      if (!retryable) throw err;
-    }
-  }
-
-  throw startError ?? new Error("Timed out waiting for the article");
-}
-
-export type ArticleSyncResponse = {
-  ok: boolean;
-  syncedCount: number;
-  timeZone: string;
-  results: Array<{
-    articleId: string;
-    ok: boolean;
-    scheduledAt?: string;
-    storeArticleId?: string;
-    storeHandle?: string;
-    coverApplied?: boolean;
-    /** The article was already on the store's calendar, so it was not re-created. */
-    alreadySynced?: boolean;
-    error?: string;
-  }>;
-};
-
-export async function syncArticlesApi(
-  workspaceId: string,
-  projectId: string,
-  articles: Array<{
-    articleId: string;
-    title: string;
-    seoTitle?: string;
-    seoDescription?: string;
-    blogTitle?: string;
-    bodyHtml: string;
-    featuredImage?: { url: string; alt: string };
-  }>
-): Promise<ArticleSyncResponse> {
-  const response = await fetch("/api/market-research/articles/sync", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workspaceId, projectId, articles }),
-  });
-  return readJson<ArticleSyncResponse>(response);
-}
-

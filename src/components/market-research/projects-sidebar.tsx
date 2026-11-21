@@ -327,7 +327,7 @@ export function ProjectsSidebar({
                         <div className="text-[11px] text-muted-foreground">
                           {project.status === "completed"
                             ? "Completed"
-                            : `Stage ${openedStageByProject[project.id] ?? 1} of 7`}
+                            : `Stage ${openedStageByProject[project.id] ?? 1} of 6`}
                         </div>
                       </div>
                     </button>
