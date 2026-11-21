@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../week-1/brand.css"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1350px;overflow:hidden}
+body{font-family:'Geist',system-ui,sans-serif;-webkit-font-smoothing:antialiased;position:relative;color:#0B0A10}
+.mono{font-family:'Geist Mono',ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase}
+h1{font-weight:800;letter-spacing:-.055em;line-height:.92}
+.o{color:#F76D01}
+.foot{position:absolute;left:64px;right:64px;bottom:44px;display:flex;align-items:center;justify-content:space-between;z-index:6}
+.prog{display:flex;gap:6px;width:460px}
+.prog i{flex:1;height:4px;border-radius:2px;background:rgba(11,10,16,.14);display:block}
+.ondark .prog i{background:rgba(255,255,255,.22)}
+.prog i.on{background:#F76D01!important}
+.swipe{font-family:'Geist Mono',monospace;font-size:14px;letter-spacing:.14em;text-transform:uppercase}
+
+.wrap{padding:40px 56px 0}
+.lock{display:flex;align-items:center;gap:14px;font-weight:800;font-size:24px}
+.count{position:absolute;right:56px;top:48px;font-size:15px}
+.count b{color:#F76D01;font-weight:500}
+h1{margin-top:18px;font-size:48px;width:900px}
+.stack{margin-top:18px;display:grid;gap:12px}
+.band{padding:28px 30px;display:grid;grid-template-columns:240px 1fr;gap:24px;align-items:center;min-height:260px}
+.band .word{font-size:100px;font-weight:800;letter-spacing:-.07em;line-height:.82}
+.band .meta small{display:block;font-size:13px;letter-spacing:.14em;margin-bottom:10px;opacity:.85}
+.band .meta b{display:block;font-size:28px;font-weight:750;letter-spacing:-.03em;line-height:1.2}
+.band .meta p{margin-top:10px;font-size:20px;font-weight:550;line-height:1.3;opacity:.9;max-width:560px}
+.b1{background:#F76D01;color:#0B0A10}
+.b2{background:#400095;color:#fff}
+.b3{background:#0B0A10;color:#fff}
+.b3 .word{color:#F76D01}
+.b3 .meta small{color:#F76D01;opacity:1}
+.fix{margin-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
+.fix div{background:#fff;border:1.5px solid rgba(11,10,16,.1);padding:16px 14px;min-height:110px}
+.fix b{display:block;font-size:12px;letter-spacing:.12em;color:#F76D01;margin-bottom:8px;font-weight:500}
+.fix span{font-size:18px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+body{background:#F8F6F3}</style></head><body><div class="wrap"><div class="lock"><img src="../../week-1/assets/autommerce-natural.png" alt="" style="width:42px;height:36px;object-fit:contain"> Autommerce</div><div class="count mono"><b>01</b> / 05</div>
+<h1>Three ways a product gets&nbsp;found.</h1>
+<div class="stack">
+<div class="band b1"><div class="word">SEO</div><div class="meta"><small class="mono">Search</small><b>People typing a query</b><p>Titles, headings and links decide who gets listed.</p></div></div>
+<div class="band b2"><div class="word">AEO</div><div class="meta"><small class="mono">Answers</small><b>People asking a question</b><p>Plain-text specs get picked. Pictures do not.</p></div></div>
+<div class="band b3"><div class="word">GEO</div><div class="meta"><small class="mono">Cite</small><b>Answers that cite a source</b><p>Facts written out are what generative engines quote.</p></div></div>
+</div>
+<div class="fix"><div><b class="mono">01</b><span>Exact titles</span></div><div><b class="mono">02</b><span>Specs as text</span></div><div><b class="mono">03</b><span>Real answers</span></div><div><b class="mono">04</b><span>One price</span></div></div>
+</div><div class="foot "><div class="prog"><i class="on"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></div><div class="swipe">Swipe</div></div></body></html>

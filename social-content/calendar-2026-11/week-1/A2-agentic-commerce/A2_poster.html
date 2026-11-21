@@ -1,0 +1,66 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../brand.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1350px;overflow:hidden}
+body{font-family:'Geist',system-ui,sans-serif;-webkit-font-smoothing:antialiased;position:relative}
+.mono{font-family:'Geist Mono',ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase}
+.o{color:#F76D01}
+.warm{background:linear-gradient(135deg,#F76D01,#C40000);-webkit-background-clip:text;background-clip:text;color:transparent}
+.grad{background:linear-gradient(100deg,#F76D01 0%,#E0322A 45%,#B24AE0 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.abs{position:absolute}
+.ink{background:#0B0A10;color:#fff}
+.paper{background:#F8F6F3;color:#0B0A10}
+.glow{position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none}
+.bar{position:absolute;left:72px;right:72px;top:64px;height:46px;display:flex;align-items:center;justify-content:space-between;z-index:5}
+.lock{display:flex;align-items:center;gap:14px}
+.lock img{width:44px;height:38px;object-fit:contain}
+.lock b{font-size:24px;font-weight:800;letter-spacing:-.02em}
+.lock small{display:block;font-size:11px;margin-top:3px;opacity:.6}
+.lock .by{font-size:11px;opacity:.6;margin-left:4px}
+.chip{display:inline-flex;align-items:center;gap:10px;padding:11px 18px;border-radius:999px;font-size:12.5px}
+.ink .chip{border:1px solid rgba(255,255,255,.22);color:rgba(255,255,255,.85)}
+.paper .chip{border:1px solid rgba(11,10,16,.14);background:#fff;color:#0B0A10}
+.chip i{width:7px;height:7px;border-radius:50%;background:#F76D01;display:block}
+.count{font-size:14px}
+.count b{color:#F76D01;font-weight:500}
+h1{font-weight:800;letter-spacing:-.052em;line-height:.98}
+.cta{display:inline-flex;align-items:center;gap:14px;padding:22px 36px;border-radius:999px;font-weight:700;font-size:27px;letter-spacing:-.01em;color:#fff;background:linear-gradient(135deg,#F76D01,#C40000);box-shadow:0 18px 44px -16px rgba(247,109,1,.65)}
+.foot{position:absolute;left:72px;right:72px;bottom:56px;height:50px;display:flex;align-items:center;justify-content:space-between;z-index:5}
+.prog{display:flex;gap:6px;width:520px}
+.prog i{flex:1;height:4px;border-radius:2px;display:block}
+.ink .prog i{background:rgba(255,255,255,.2)}
+.paper .prog i{background:rgba(11,10,16,.12)}
+.prog i.on{background:linear-gradient(90deg,#F76D01,#C40000)!important}
+.swipe{font-size:14px;display:flex;align-items:center;gap:12px}
+.swipe .arr{width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#F76D01,#C40000);color:#fff;display:flex;align-items:center;justify-content:center;font-size:23px;letter-spacing:0}
+.note{font-size:12px;opacity:.55}
+
+.card{position:absolute;left:72px;top:640px;width:590px;border-radius:26px;background:#15131D;border:1px solid rgba(255,255,255,.1);overflow:hidden}
+.card .hd{display:flex;align-items:center;gap:12px;padding:24px 30px;border-bottom:1px solid rgba(255,255,255,.08);font-size:13px;color:rgba(255,255,255,.7)}
+.card .hd i{width:8px;height:8px;border-radius:50%;background:#F76D01;display:block}
+.row{display:grid;grid-template-columns:170px 1fr 110px;align-items:center;padding:0 30px;height:64px;border-bottom:1px solid rgba(255,255,255,.06);font-family:'Geist Mono',monospace;font-size:20px}
+.row .k{color:rgba(255,255,255,.55)}
+.row .v{color:#fff}
+.row .s{font-size:12px;letter-spacing:.12em;text-transform:uppercase;text-align:right}
+.row .s.ok{color:rgba(255,255,255,.45)}
+.row .s.miss{color:#F76D01}
+.card .ft{padding:22px 30px;font-size:19px;color:rgba(255,255,255,.8);letter-spacing:-.01em}
+.card .ft b{color:#F76D01;font-weight:600}
+.stat{position:absolute;left:706px;right:60px;top:716px}
+.stat .n{font-size:136px;font-weight:800;letter-spacing:-.06em;line-height:.9}
+.stat p{margin-top:18px;font-size:26px;line-height:1.3;color:rgba(255,255,255,.85);letter-spacing:-.012em}
+.stat .src{margin-top:20px;font-size:12px;color:rgba(255,255,255,.5)}
+.who{position:absolute;left:72px;right:72px;bottom:60px;display:flex;justify-content:space-between;align-items:center;font-size:13px;color:rgba(255,255,255,.6)}
+.who b{color:#fff;font-weight:600}
+</style></head><body class="ink">
+<div class="glow" style="width:560px;height:560px;right:-260px;top:-200px;background:rgba(247,109,1,.13)"></div>
+<div class="glow" style="width:640px;height:640px;left:-300px;bottom:-260px;background:rgba(64,0,149,.35)"></div>
+<div class="bar"><div class="lock"><img src="../assets/autommerce-white.png"><div><b>Abbas Zein</b><small class="mono">Founder notes</small></div></div>
+<div class="chip mono"><i></i>Agentic commerce</div></div>
+<h1 class="abs" style="left:72px;top:176px;font-size:106px">The next shopper<br>won't see your<br><span class="o">homepage.</span></h1>
+<div class="abs" style="left:72px;top:520px;font-size:34px;line-height:1.3;color:rgba(255,255,255,.8);letter-spacing:-.015em">It reads your product data. Most catalogs aren't ready.</div>
+<div class="card"><div class="hd mono"><i></i>An AI agent reading one product</div><div class="row"><span class="k">title</span><span class="v">"Trail running shoe"</span><span class="s ok">Read</span></div><div class="row"><span class="k">brand</span><span class="v">&mdash;</span><span class="s miss">Missing</span></div><div class="row"><span class="k">size</span><span class="v">&mdash;</span><span class="s miss">Missing</span></div><div class="row"><span class="k">material</span><span class="v">&mdash;</span><span class="s miss">Missing</span></div><div class="row"><span class="k">price</span><span class="v">129.00 USD</span><span class="s ok">Read</span></div><div class="row"><span class="k">availability</span><span class="v">in_stock</span><span class="s ok">Read</span></div>
+<div class="ft"><b>3 of 6 fields missing.</b> The agent can't match it to a request.</div></div>
+<div class="stat"><div class="n warm">15%</div><p>of merchants say their product data is ready for&nbsp;AI&nbsp;agents.</p><div class="src mono">Source: PYMNTS, Oct 2026</div></div>
+<div class="who mono"><span><b>Abbas Zein</b> &nbsp;/&nbsp; Founder &amp; CEO, Autommerce</span><span>Illustrative product record</span></div>
+</body></html>

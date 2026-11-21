@@ -1,0 +1,173 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../brand.css">
+<style>
+body { background: var(--ink); color:#fff; }
+.glowA { position:absolute; width:1000px; height:1000px; right:-380px; top:-120px; background: radial-gradient(closest-side, rgba(107,53,141,.55), transparent 70%); }
+.glowB { position:absolute; width:900px; height:900px; left:-380px; bottom:-260px; background: radial-gradient(closest-side, rgba(247,109,1,.34), transparent 70%); }
+.grid { position:absolute; inset:0; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 54px 54px; -webkit-mask-image: radial-gradient(70% 60% at 60% 45%, #000, transparent); mask-image: radial-gradient(70% 60% at 60% 45%, #000, transparent); }
+.pill { display:inline-flex; align-items:center; gap:10px; padding:10px 18px; border:1px solid rgba(255,255,255,.22); border-radius:999px; background:rgba(255,255,255,.06); font-size:13px; }
+.pill i { width:8px; height:8px; border-radius:50%; background: var(--orange); display:block; }
+.brandbar .name { color:#fff; }
+#hl { position:absolute; left:72px; top:150px; font-weight:800; font-size:90px; line-height:.95; letter-spacing:-0.055em; }
+#hl .ln { display:block; overflow:hidden; padding-bottom:6px; }
+#hl .ln span { display:block; }
+.steps { position:absolute; left:72px; top:610px; width:390px; }
+.step { position:relative; padding:20px 0 20px 0; border-top:1px solid rgba(255,255,255,.12); display:flex; gap:18px; align-items:flex-start; }
+.step .n { font-family:'Geist Mono',monospace; font-size:14px; color:rgba(255,255,255,.4); padding-top:6px; min-width:28px; letter-spacing:.1em; }
+.step .t { font-size:27px; font-weight:700; letter-spacing:-0.02em; color:rgba(255,255,255,.45); }
+.step .d { font-size:16px; color:rgba(255,255,255,.0); line-height:1.4; margin-top:6px; max-height:0; overflow:hidden; }
+.step .bar { position:absolute; left:0; top:-1px; height:2px; width:0; background: var(--signature); }
+.phoneWrap { position:absolute; left:536px; top:232px; width:480px; height:936px; }
+.phoneGlow { position:absolute; inset:-60px; background: radial-gradient(closest-side, rgba(247,109,1,.38), rgba(64,0,149,.28) 55%, transparent 75%); filter: blur(10px); }
+.phone { isolation:isolate; z-index:1; position:absolute; inset:0; border-radius:65px; overflow:hidden; box-shadow: 0 60px 100px -30px rgba(0,0,0,.9), 0 0 0 1px rgba(255,255,255,.1); background:#0d0b12; }
+.phone img { position:absolute; inset:0; width:100%; height:100%; display:block; opacity:0; }
+.scan { position:absolute; left:0; right:0; height:70px; margin-top:-35px; background: linear-gradient(180deg, transparent, rgba(247,109,1,.0) 10%, rgba(255,160,60,.85) 50%, rgba(247,109,1,0) 90%, transparent); filter: blur(2px); opacity:0; mix-blend-mode:screen; }
+.scanline { position:absolute; left:0; right:0; height:3px; margin-top:-1px; background:#ffd9a8; box-shadow:0 0 18px 4px rgba(247,109,1,.9); opacity:0; }
+.ring { position:absolute; border:3px solid #ffb066; border-radius:22px; opacity:0; box-shadow:0 0 30px rgba(247,109,1,.9); }
+.chip { z-index:200; position:absolute; padding:12px 18px; border-radius:16px; background:rgba(20,18,28,.88); border:1px solid rgba(255,255,255,.18); backdrop-filter: blur(14px); font-size:16px; font-weight:600; letter-spacing:-0.01em; white-space:nowrap; opacity:0; box-shadow:0 20px 40px -14px rgba(0,0,0,.7); }
+.chip b { color: var(--orange); font-family:'Geist Mono',monospace; font-size:12px; letter-spacing:.12em; text-transform:uppercase; display:block; margin-bottom:4px; font-weight:500; }
+#end { position:absolute; left:72px; top:590px; width:470px; opacity:0; }
+#end .big { font-size:46px; font-weight:800; letter-spacing:-0.04em; line-height:1.02; }
+#end .sm { margin-top:16px; font-size:19px; line-height:1.45; color:rgba(255,255,255,.7); }
+#cta { position:absolute; left:72px; bottom:64px; opacity:0; }
+#url { position:absolute; right:72px; bottom:34px; font-size:15px; color:rgba(255,255,255,.65); opacity:0; }
+#cta .cta { font-size:30px; padding:24px 38px; }
+.foot-note { position:absolute; left:72px; bottom:26px; font-size:11px; color:rgba(255,255,255,.35); }
+</style></head>
+<body>
+<div class="frame" id="root">
+  <div class="glowA"></div><div class="glowB"></div><div class="grid"></div>
+  <div class="brandbar" id="bar">
+    <div class="lockup"><img src="assets/logo.png"><span class="name">Persona AI</span><span class="mono" style="font-size:12px;color:rgba(255,255,255,.55);margin-left:6px">by Autommerce</span></div>
+    <div class="pill mono"><i></i>Virtual fitting room</div>
+  </div>
+
+  <div id="hl">
+    <span class="ln"><span>One</span></span>
+    <span class="ln"><span>selfie.</span></span>
+    <span class="ln"><span class="warm-text">Endless</span></span>
+    <span class="ln"><span class="warm-text">outfits.</span></span>
+  </div>
+
+  <div class="steps" id="steps">
+    <div class="step"><div class="bar"></div><div class="n">01</div><div><div class="t">Build your avatar</div><div class="d">One selfie and your measurements. No download, in any browser.</div></div></div>
+    <div class="step"><div class="bar"></div><div class="n">02</div><div><div class="t">Ask the AI stylist</div><div class="d">Answers come from the store's real catalog, real stock and real prices.</div></div></div>
+    <div class="step"><div class="bar"></div><div class="n">03</div><div><div class="t">See it on you</div><div class="d">The garment is fitted and rendered on your own avatar in seconds.</div></div></div>
+    <div class="step"><div class="bar"></div><div class="n">04</div><div><div class="t">Straight to cart</div><div class="d">Size recommended, fit checked, added to the store's own cart.</div></div></div>
+  </div>
+
+  <div id="end">
+    <div class="big">Try it on<br>before you<br><span class="warm-text">buy it.</span></div>
+    <div class="sm">Give every shopper a personal stylist and fitting room, inside your store.</div>
+  </div>
+
+  <div class="phoneWrap" id="pw">
+    <div class="phoneGlow" id="pg"></div>
+    <div class="phone" id="phone">
+      <img data-n="who" src="assets/who.png">
+      <img data-n="fit0" src="assets/fit0.png">
+      <img data-n="fill0" src="assets/fill0.png"><img data-n="fill1" src="assets/fill1.png"><img data-n="fill2" src="assets/fill2.png"><img data-n="fill3" src="assets/fill3.png"><img data-n="fill4" src="assets/fill4.png">
+      <img data-n="face" src="assets/face.png">
+      <img data-n="c0" src="assets/create000.png"><img data-n="c1" src="assets/create030.png"><img data-n="c2" src="assets/create060.png"><img data-n="c3" src="assets/create090.png"><img data-n="c4" src="assets/create116.png">
+      <img data-n="choose" src="assets/choose.png">
+      <img data-n="chat0" src="assets/chat0.png">
+      <img data-n="t1" src="assets/type11.png"><img data-n="t2" src="assets/type15.png"><img data-n="t3" src="assets/type19.png"><img data-n="t4" src="assets/typed.png">
+      <img data-n="r0" src="assets/reply000.png"><img data-n="r1" src="assets/reply012.png"><img data-n="r2" src="assets/reply029.png">
+      <img data-n="cards" src="assets/cards.png">
+      <img data-n="render" src="assets/render000.png">
+      <img data-n="result" src="assets/result.png" id="resultImg">
+      <img data-n="ruler" src="assets/ruler.png">
+      <div class="scan" id="scan"></div><div class="scanline" id="scanline"></div>
+      <div class="ring" id="ringWear" style="left:14%;top:77.5%;width:40%;height:5.2%"></div>
+      <div class="ring" id="ringCart" style="left:64%;top:87%;width:31%;height:6.4%"></div>
+    </div>
+    <div class="chip" id="chip1" style="left:-96px; top:330px;"><b>Input</b>1 selfie + measurements</div>
+    <div class="chip" id="chip2" style="left:-96px; top:560px;"><b>Catalog-grounded</b>Real stock. Real prices.</div>
+    <div class="chip" id="chip3" style="left:-96px; top:720px;"><b>Garment fit scan</b>Rendered on your avatar</div>
+    <div class="chip" id="chip4" style="left:-96px; top:250px;"><b>Fit</b>100% · Size M</div>
+  </div>
+
+  <div id="cta" style="bottom:78px"><div class="cta">Book a demo <span class="arrow">&rarr;</span></div></div>
+  <div id="url" class="mono">persona.autommerce.com/contact</div>
+  <div class="foot-note mono">Product screen recording · demo store · sample avatar</div>
+</div>
+
+<script>
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const eo3=x=>1-Math.pow(1-clamp(x),3);
+const eo5=x=>1-Math.pow(1-clamp(x),5);
+const eio=x=>{x=clamp(x);return x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2};
+const seg=(t,a,b)=>clamp((t-a)/(b-a));
+
+// phone screen timeline [name, start]
+const SCREENS=[['who',0.9],['fit0',1.5],['fill0',1.9],['fill1',2.05],['fill2',2.2],['fill3',2.35],['fill4',2.5],['face',2.9],
+ ['c0',3.5],['c1',3.9],['c2',4.3],['c3',4.7],['c4',5.1],['choose',5.5],['chat0',6.2],['t1',6.6],['t2',6.9],['t3',7.2],['t4',7.5],
+ ['r0',8.0],['r1',8.5],['r2',9.0],['cards',9.5],['render',10.3],['result',11.6],['ruler',12.5]];
+const imgs={}; document.querySelectorAll('#phone img').forEach(i=>imgs[i.dataset.n]=i);
+const stepEls=[...document.querySelectorAll('.step')];
+const STEPS=[[0.9,6.0],[6.2,10.2],[10.3,12.4],[12.5,13.6]];
+const END=13.7;
+
+function render(t){
+  // brand bar + headline
+  const bar=document.getElementById('bar'); bar.style.opacity=eo3(seg(t,0,0.5));
+  document.querySelectorAll('#hl .ln span').forEach((s,i)=>{const p=eo5(seg(t,0.15+i*0.12,0.8+i*0.12)); s.style.transform=`translateY(${(1-p)*110}%)`;});
+  // phone entry
+  const pw=document.getElementById('pw');
+  const pe=eo5(seg(t,0.2,1.2));
+  let endp=eio(seg(t,END,END+0.9));
+  pw.style.opacity=pe;
+  pw.style.transform=`translateY(${(1-pe)*160 + endp*0}px) scale(${0.94+0.06*pe})`;
+  document.getElementById('pg').style.opacity=0.6+0.4*Math.sin(t*1.6)*0.5+0.2;
+  // screens
+  SCREENS.forEach(([n,s],i)=>{ imgs[n].style.opacity = t>=s ? eo3(seg(t,s,s+0.18)) : 0; imgs[n].style.zIndex=i+1; });
+  // wear tap ring
+  const rw=document.getElementById('ringWear');
+  const rt=seg(t,10.0,10.3); rw.style.opacity = t<10.3? Math.sin(rt*Math.PI)*1 : 0;
+  rw.style.transform=`scale(${1+0.12*(1-rt)})`;
+  // scan sweep: result revealed top to bottom
+  const sp=eio(seg(t,10.55,11.6));
+  const res=imgs['result'];
+  res.style.opacity=1; res.style.zIndex=SCREENS.length+2;
+  res.style.clipPath = `inset(0 0 ${100-sp*100}% 0)`;
+  if(t<10.55) res.style.opacity=0;
+  const sc=document.getElementById('scan'), sl=document.getElementById('scanline');
+  const on = (t>10.55 && t<11.7) ? 1:0;
+  const y=(8+sp*88);
+  sc.style.opacity=on*0.9; sc.style.top=y+'%'; sl.style.opacity=on; sl.style.top=y+'%';
+  sc.style.zIndex=99; sl.style.zIndex=100;
+  imgs['ruler'].style.zIndex=SCREENS.length+3; imgs['ruler'].style.opacity = t>=12.5 ? eo3(seg(t,12.5,12.8)) : 0;
+  // cart ring pulse
+  const rc=document.getElementById('ringCart');
+  const cp=seg(t,13.1,13.7); rc.style.zIndex=101;
+  rc.style.opacity = (t>13.1 && t<14.2)? 0.5+0.5*Math.sin((t-13.1)*9): 0;
+  // chips
+  const chipTimes={chip1:[2.0,4.6],chip2:[9.6,11.0],chip3:[10.4,11.7],chip4:[12.6,13.9]};
+  Object.entries(chipTimes).forEach(([id,[a,b]])=>{
+    const el=document.getElementById(id); const inn=eo5(seg(t,a,a+0.5)), out=eo3(seg(t,b,b+0.3));
+    el.style.opacity=inn*(1-out); el.style.transform=`translateX(${(1-inn)*-40}px)`;
+  });
+  // steps
+  const stEl=document.getElementById('steps');
+  const stepsOut = eo3(seg(t,END-0.1,END+0.4));
+  stEl.style.opacity=eo3(seg(t,0.9,1.4))*(1-stepsOut);
+  stepEls.forEach((el,i)=>{
+    const [a,b]=STEPS[i]; const act = t>=a && t<b ? 1:0; const done = t>=b?1:0;
+    const k = eo3(seg(t,a,a+0.35));
+    const tt=el.querySelector('.t'), d=el.querySelector('.d'), n=el.querySelector('.n'), bar=el.querySelector('.bar');
+    const lvl = act? k : (done?0.0:0);
+    tt.style.color = act? '#fff' : (done?'rgba(255,255,255,.6)':'rgba(255,255,255,.4)');
+    n.style.color = act? '#F76D01' : (done? '#F76D01':'rgba(255,255,255,.4)');
+    d.style.maxHeight = act? (60*k)+'px':'0px'; d.style.color=`rgba(255,255,255,${.7*(act?k:0)})`; d.style.marginTop=(6*(act?k:0))+'px';
+    bar.style.width = act? (100*seg(t,a,b))+'%' : (done?'100%':'0%'); bar.style.opacity=act?1:0.6;
+  });
+  // end card
+  const ep=eo5(seg(t,END+0.3,END+1.1));
+  const end=document.getElementById('end'); end.style.opacity=ep; end.style.transform=`translateY(${(1-ep)*40}px)`;
+  const cta=document.getElementById('cta'); const cp2=eo5(seg(t,END+0.8,END+1.5)); cta.style.opacity=cp2; cta.style.transform=`translateY(${(1-cp2)*40}px) scale(${.96+.04*cp2})`;
+  document.getElementById('url').style.opacity=cp2;
+}
+window.render=render; render(0);
+</script>
+</body></html>

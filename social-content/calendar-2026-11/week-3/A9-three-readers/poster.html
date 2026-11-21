@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../week-1/brand.css"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1350px;overflow:hidden}
+body{font-family:'Geist',system-ui,sans-serif;-webkit-font-smoothing:antialiased;position:relative;color:#0B0A10}
+.mono{font-family:'Geist Mono',ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase}
+h1{font-weight:800;letter-spacing:-.055em;line-height:.92}
+.o{color:#F76D01}
+.foot{position:absolute;left:64px;right:64px;bottom:44px;display:flex;align-items:center;justify-content:space-between;z-index:6}
+.prog{display:flex;gap:6px;width:460px}
+.prog i{flex:1;height:4px;border-radius:2px;background:rgba(11,10,16,.14);display:block}
+.ondark .prog i{background:rgba(255,255,255,.22)}
+.prog i.on{background:#F76D01!important}
+.swipe{font-family:'Geist Mono',monospace;font-size:14px;letter-spacing:.14em;text-transform:uppercase}
+
+.top{position:absolute;left:0;right:0;top:0;height:250px;background:#F8F6F3;display:flex;align-items:flex-end;padding:0 64px 32px;z-index:2}
+.lock{position:absolute;left:64px;top:40px;display:flex;align-items:center;gap:12px;font-weight:800;font-size:22px}
+.lock small{font-weight:500;font-size:12px;opacity:.55;margin-left:8px}
+h1{font-size:58px;width:950px}
+.cols{position:absolute;left:0;right:0;top:250px;bottom:0;display:grid;grid-template-columns:1fr 1fr 1fr}
+.col{padding:40px 36px}
+.c1{background:#F8F6F3}
+.c2{background:#F76D01;color:#0B0A10}
+.c3{background:#400095;color:#fff}
+.num{font-size:15px;font-weight:500}
+.c1 .num{color:#F76D01}
+.who{margin-top:28px;font-size:48px;font-weight:800;letter-spacing:-.045em;line-height:.95}
+.reads{margin-top:32px;font-size:15px;letter-spacing:.14em}
+.c1 .reads,.c2 .reads{color:rgba(11,10,16,.55)}
+.c3 .reads{color:rgba(255,255,255,.6)}
+ul{margin-top:16px;list-style:none}
+li{font-size:27px;font-weight:600;letter-spacing:-.02em;padding:14px 0;border-top:1px solid rgba(11,10,16,.14)}
+.c3 li{border-top-color:rgba(255,255,255,.2)}
+body{background:#F8F6F3}</style></head><body><div class="top"><div class="lock"><img src="../../week-1/assets/autommerce-natural.png" alt="" style="width:42px;height:36px;object-fit:contain"> Abbas Zein <small class="mono">Founder notes</small></div>
+<h1>Every product page has three readers&nbsp;now.</h1></div>
+<div class="cols">
+<div class="col c1"><div class="num mono">01</div><div class="who">The shopper</div><div class="reads mono">Reads</div><ul><li>The photo</li><li>The price</li><li>Delivery</li><li>Reviews</li></ul></div>
+<div class="col c2"><div class="num mono">02</div><div class="who">Search</div><div class="reads mono">Reads</div><ul><li>The title</li><li>Headings</li><li>Links</li></ul></div>
+<div class="col c3"><div class="num mono">03</div><div class="who">The agent</div><div class="reads mono">Reads</div><ul><li>Brand</li><li>Variant</li><li>Price</li><li>Stock</li></ul></div>
+</div></body></html>

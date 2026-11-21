@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="brand.css">
+<style>
+body { background: var(--ink); color:#fff; }
+.bg { position:absolute; inset:0; background:url(assets/backdrop-3.jpg) center/cover; opacity:.34; filter: saturate(.7) contrast(1.05); }
+.bgfade { position:absolute; inset:0; background: linear-gradient(180deg, rgba(11,10,16,.92) 0%, rgba(11,10,16,.55) 38%, rgba(11,10,16,.82) 78%, #0B0A10 100%); }
+.glow1 { position:absolute; width:900px; height:900px; right:-300px; top:-200px; background: radial-gradient(closest-side, rgba(107,53,141,.55), transparent 70%); }
+.glow2 { position:absolute; width:800px; height:800px; left:-300px; bottom:-100px; background: radial-gradient(closest-side, rgba(247,109,1,.30), transparent 70%); }
+.pill { display:inline-flex; align-items:center; gap:10px; padding:10px 18px; border:1px solid rgba(255,255,255,.22); border-radius:999px; background:rgba(255,255,255,.06); font-size:13px; }
+.pill i { width:8px; height:8px; border-radius:50%; background: var(--orange); display:block; }
+h1 { position:absolute; left:72px; top:150px; font-weight:800; font-size:100px; line-height:.96; letter-spacing:-0.055em; }
+.selfie { position:absolute; right:72px; top:140px; width:150px; text-align:center; }
+.selfie .ring { width:150px; height:150px; border-radius:50%; padding:5px; background: var(--signature); box-shadow:0 30px 60px -20px rgba(196,0,0,.6); }
+.selfie .ring div { width:100%; height:100%; border-radius:50%; background:url(assets/face.jpg) center/cover; border:5px solid var(--ink); }
+.selfie .lbl { margin-top:16px; font-size:12px; color: rgba(255,255,255,.75); }
+.cards { position:absolute; left:72px; right:72px; top:470px; height:520px; display:flex; gap:16px; }
+.look { position:relative; flex:1; border-radius:24px; overflow:hidden; border:1px solid rgba(255,255,255,.14); box-shadow: 0 40px 70px -30px rgba(0,0,0,.8); background:#1a1822; }
+.look img { width:100%; height:100%; object-fit:cover; object-position:center top; display:block; }
+.look .cap { position:absolute; left:0; right:0; bottom:0; padding:42px 14px 14px; background: linear-gradient(180deg, transparent, rgba(11,10,16,.92)); display:flex; justify-content:space-between; align-items:flex-end; font-size:11px; }
+.look .cap .n { color: var(--orange); }
+.look .cap .s { padding:5px 9px; border-radius:999px; background:rgba(255,255,255,.14); backdrop-filter: blur(6px); color:#fff; }
+.look:nth-child(odd) { transform: translateY(26px); }
+.look:nth-child(even) { transform: translateY(-14px); }
+.chat { position:absolute; left:72px; right:72px; top:1050px; display:flex; gap:14px; align-items:center; }
+.bubble { padding:18px 24px; border-radius:22px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.16); backdrop-filter: blur(10px); font-size:22px; letter-spacing:-0.01em; }
+.bubble.u { background: rgba(247,109,1,.18); border-color: rgba(247,109,1,.5); }
+.chat .arr { color:rgba(255,255,255,.4); font-size:26px; }
+.note { position:absolute; left:72px; top:1124px; font-size:12px; color: rgba(255,255,255,.4); }
+.footer .url { color: rgba(255,255,255,.6); }
+.brandbar .name { color:#fff; }
+</style></head>
+<body>
+<div class="frame">
+  <div class="bg"></div><div class="bgfade"></div><div class="glow1"></div><div class="glow2"></div>
+
+  <div class="brandbar">
+    <div class="lockup"><img src="assets/autommerce-white.png"><span class="name">Persona AI</span><span class="mono" style="font-size:12px;color:rgba(255,255,255,.55);margin-left:6px">by Autommerce</span></div>
+    <div class="pill mono"><i></i>Virtual fitting room</div>
+  </div>
+
+  <h1>One selfie.<br><span class="grad-text" style="background-image:linear-gradient(100deg,#F76D01 0%,#E8420A 40%,#B35BFF 100%)">Endless outfits.</span></h1>
+
+  <div class="selfie"><div class="ring"><div></div></div><div class="lbl mono">1 selfie<br>+ measurements</div></div>
+
+  <div class="cards">
+    <div class="look"><img src="assets/look-1.jpg"><div class="cap mono"><span class="n">Look 01</span><span class="s">Casual</span></div></div>
+    <div class="look"><img src="assets/look-2.jpg"><div class="cap mono"><span class="n">Look 02</span><span class="s">Business</span></div></div>
+    <div class="look"><img src="assets/look-3.jpg"><div class="cap mono"><span class="n">Look 03</span><span class="s">Winter</span></div></div>
+    <div class="look"><img src="assets/look-4.jpg"><div class="cap mono"><span class="n">Look 04</span><span class="s">Street</span></div></div>
+  </div>
+
+  <div class="chat">
+    <div class="bubble u">"Smart casual for a meeting, under $300"</div>
+    <div class="arr">&rarr;</div>
+    <div class="bubble">Styled, sized &amp; in your cart</div>
+  </div>
+  <div class="note mono">Illustrative demo · AI-generated model</div>
+
+  <div class="footer">
+    <div class="cta">Book a demo <span class="arrow">&rarr;</span></div>
+    <div class="url mono">persona.autommerce.com/contact</div>
+  </div>
+</div>
+</body></html>

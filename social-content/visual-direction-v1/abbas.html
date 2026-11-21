@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="brand.css">
+<style>
+body { background: var(--ink); color: #fff; }
+.glow1 { position:absolute; width:900px; height:900px; right:-320px; top:80px; background: radial-gradient(closest-side, rgba(107,53,141,.55), transparent 70%); }
+.glow2 { position:absolute; width:800px; height:800px; left:-360px; top:360px; background: radial-gradient(closest-side, rgba(247,109,1,.30), transparent 70%); }
+.bigA { position:absolute; width:1500px; right:-560px; top:-130px; opacity:.07; filter: saturate(0) brightness(2); }
+.hero { position:absolute; left:50%; transform:translateX(-50%); top:40px; width:1080px; height:1440px; object-fit:cover; object-position:center top; }
+.fade { position:absolute; left:0; right:0; bottom:0; height:760px; background: linear-gradient(180deg, rgba(11,10,16,0) 0%, rgba(11,10,16,.82) 42%, #0B0A10 74%); z-index:5; }
+.topfade { position:absolute; left:0; right:0; top:0; height:260px; background: linear-gradient(180deg, rgba(11,10,16,.85), rgba(11,10,16,0)); z-index:5; }
+.copy { position:absolute; left:72px; right:72px; bottom:176px; z-index:15; }
+.kicker { font-size:15px; color: var(--orange); margin-bottom:26px; display:flex; align-items:center; gap:14px; }
+.kicker:before { content:""; width:44px; height:2px; background: var(--warm); }
+h1 { font-weight:800; font-size:82px; line-height:.98; letter-spacing:-0.045em; }
+h1 .lite { color: rgba(255,255,255,.62); font-weight:700; }
+.sig { position:absolute; left:72px; bottom:60px; z-index:20; display:flex; align-items:center; gap:18px; }
+.sig .who { font-size:22px; font-weight:700; letter-spacing:-0.01em; }
+.sig .role { font-size:13px; color: rgba(255,255,255,.55); margin-top:6px; }
+.sig .bar { width:2px; height:46px; background: var(--signature); }
+.right-foot { position:absolute; right:72px; bottom:66px; z-index:20; font-size:14px; color: rgba(255,255,255,.55); text-align:right; line-height:1.7; }
+.right-foot b { color:#fff; font-weight:600; }
+</style></head>
+<body>
+<div class="frame">
+  <div class="glow1"></div><div class="glow2"></div>
+  <img class="hero" src="assets/abbas_hero.jpg">
+  <div class="topfade"></div>
+  <div class="fade"></div>
+
+  <div class="brandbar">
+    <div class="lockup"><img src="assets/autommerce-white.png"><span class="name">Autommerce</span></div>
+    <div class="tag mono" style="color:rgba(255,255,255,.7)">Founder notes &nbsp;/&nbsp; 01</div>
+  </div>
+
+  <div class="copy">
+    <div class="kicker mono">The future of AI-powered commerce</div>
+    <h1>Ecommerce doesn't<br>have a traffic problem.<br><span class="warm-text">It has a<br>back-office problem.</span></h1>
+  </div>
+
+  <div class="sig">
+    <div class="bar"></div>
+    <div><div class="who">Abbas Zein</div><div class="role mono">Founder &amp; CEO · Autommerce</div></div>
+  </div>
+  <div class="right-foot mono">Building the AI<br>operating system<br>for <b>ecommerce</b></div>
+</div>
+</body></html>

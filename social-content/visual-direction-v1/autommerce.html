@@ -1,0 +1,101 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="brand.css">
+<style>
+body { background: var(--paper); color: var(--text); }
+.bigA { position:absolute; width:1250px; right:-520px; top:-300px; opacity:.10; }
+.glow { position:absolute; width:1000px; height:1000px; left:-300px; top:-380px; background: radial-gradient(closest-side, rgba(247,109,1,.22), transparent 70%); }
+.glow2 { position:absolute; width:900px; height:900px; right:-300px; bottom:-300px; background: radial-gradient(closest-side, rgba(107,53,141,.22), transparent 70%); }
+.grid { position:absolute; inset:0; background-image: linear-gradient(rgba(23,23,23,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(23,23,23,.035) 1px, transparent 1px); background-size: 54px 54px; }
+.pill { display:inline-flex; align-items:center; gap:10px; padding:10px 18px; border:1px solid rgba(23,23,23,.14); border-radius:999px; background:rgba(255,255,255,.7); font-size:13px; }
+.pill i { width:8px; height:8px; border-radius:50%; background: var(--orange); display:block; }
+.brandbar .name { color: var(--text); }
+h1 { position:absolute; left:72px; right:72px; top:150px; font-weight:800; font-size:90px; line-height:.98; letter-spacing:-0.05em; }
+h1 .o { color: var(--orange); }
+h1 .g { color: #9a99a3; }
+.sub { position:absolute; left:72px; width:760px; top:430px; font-size:27px; line-height:1.4; color:#55545c; letter-spacing:-0.01em; }
+.sub b { color: var(--text); font-weight:600; }
+
+.stage { position:absolute; left:72px; right:72px; top:580px; height:500px; display:flex; align-items:center; gap:0; }
+.card { position:absolute; border-radius:26px; background:#fff; border:1px solid rgba(23,23,23,.1); box-shadow: 0 34px 70px -34px rgba(64,0,149,.35), 0 2px 0 rgba(255,255,255,.8) inset; overflow:hidden; }
+.card .hd { display:flex; align-items:center; gap:10px; padding:16px 20px; border-bottom:1px solid rgba(23,23,23,.08); font-size:12px; color:#6b6a72; }
+.card .hd .dots { display:flex; gap:6px; } .card .hd .dots i { width:9px; height:9px; border-radius:50%; background:#dcdbe0; display:block; }
+
+.raw { position:relative; flex:0 0 330px; height:390px; }
+.raw .row { display:grid; grid-template-columns: 1.7fr .7fr .5fr; gap:8px; padding:11px 20px; font-size:14px; border-bottom:1px solid rgba(23,23,23,.06); font-family:'Geist Mono',monospace; color:#4a4952; }
+.raw .row.h { color:#9a99a3; font-size:11px; letter-spacing:.12em; text-transform:uppercase; background:#faf9f7; }
+.bad { margin:14px 20px 0; display:inline-flex; gap:8px; align-items:center; padding:9px 14px; border-radius:10px; background:#fff1ec; color:#b42318; font-size:12px; font-weight:600; }
+
+.mid { position:relative; flex:0 0 120px; height:170px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; }
+.orb { width:92px; height:92px; border-radius:28px; background: var(--signature); display:flex; align-items:center; justify-content:center; box-shadow: 0 22px 44px -10px rgba(196,0,0,.55); }
+.orb img { width:54px; height:46px; object-fit:contain; }
+.mid .t { font-size:11px; color:#6b6a72; text-align:center; line-height:1.5; }
+.line { position:absolute; top:222px; height:2px; background: linear-gradient(90deg, #F76D01, #400095); }
+
+.out { position:relative; flex:0 0 486px; height:490px; border:1px solid rgba(64,0,149,.18); }
+.out .hd { background: linear-gradient(90deg, rgba(247,109,1,.08), rgba(64,0,149,.08)); color:#400095; }
+.fld { padding:14px 22px 0; }
+.fld .k { font-size:11px; color: var(--orange); margin-bottom:6px; font-weight:600; }
+.fld .v { font-size:16px; line-height:1.35; color:#1b1a20; letter-spacing:-0.01em; font-weight:500; }
+.fld .v.sm { font-size:14px; color:#4a4952; font-weight:400; }
+.chips { display:flex; flex-wrap:wrap; gap:8px; padding:16px 22px 0; }
+.chip { font-size:11px; padding:7px 11px; border-radius:999px; background:#f3effa; color:#400095; font-weight:600; }
+.chip.o { background:#fff0e5; color:#c44a00; }
+.ok { position:absolute; left:22px; right:22px; bottom:18px; display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#157347; font-weight:600; }
+.note { position:absolute; left:72px; top:1112px; font-size:12px; color:#9a99a3; }
+.footer .url { color:#6b6a72; }
+.chiprow { position:absolute; left:72px; top:1130px; display:flex; gap:10px; }
+</style></head>
+<body>
+<div class="frame">
+  <div class="glow"></div><div class="glow2"></div><div class="grid"></div>
+  <img class="bigA" src="assets/autommerce-natural.png">
+
+  <div class="brandbar">
+    <div class="lockup"><img src="assets/autommerce-natural.png"><span class="name">Autommerce</span></div>
+    <div class="pill mono"><i></i>Catalog Intelligence</div>
+  </div>
+
+  <h1>Your catalog<br>is growing.<br><span class="o">Your data-entry team<br>doesn't have to.</span></h1>
+
+  <div class="stage">
+    <div class="card raw">
+      <div class="hd mono"><div class="dots"><i></i><i></i><i></i></div>supplier_feed.xlsx</div>
+      <div class="row h"><span>title</span><span>price</span><span>stock</span></div>
+      <div class="row"><span>M-RACER-CBN-42-BLK</span><span>149.00</span><span>24</span></div>
+      <div class="row"><span>M-RACER-CBN-43-BLK</span><span>149.00</span><span>18</span></div>
+      <div class="row"><span>M-RACER-CBN-44-ORG</span><span>149.00</span><span>31</span></div>
+      <div class="row"><span>M-RACER-CBN-42-WHT</span><span>149.00</span><span>7</span></div>
+      <div class="row"><span>M-RACER-CBN-43-WHT</span><span>149.00</span><span>12</span></div>
+      <div class="bad">&#10005; 3 columns · no SEO · no description</div>
+    </div>
+
+        <div class="card mid" style="background:transparent; border:none; box-shadow:none; overflow:visible;">
+      <div class="orb"><img src="assets/autommerce-white.png"></div>
+      <div class="t mono">One<br>instruction</div>
+    </div>
+    
+    <div class="card out">
+      <div class="hd mono">enriched.json &nbsp;·&nbsp; PDP-ready</div>
+      <div class="fld"><div class="k mono">seo_title</div><div class="v">Marathon Racer Carbon 42 · Men's · Race-Day Edition</div></div>
+      <div class="fld"><div class="k mono">meta_description</div><div class="v sm">Sub-3 racer with full-length carbon plate. 6.4 oz. Free 2-day ship.</div></div>
+      <div class="fld"><div class="k mono">short_copy</div><div class="v sm">Built for race day. Full-length carbon plate, supercritical foam midsole…</div></div>
+      <div class="fld"><div class="k mono">specs_table</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;margin-top:2px;font-size:14px;color:#4a4952">
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding-bottom:6px"><span>Weight</span><b style="color:#171717">6.4 oz</b></div>
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding-bottom:6px"><span>Drop</span><b style="color:#171717">8 mm</b></div>
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding-bottom:6px"><span>Plate</span><b style="color:#171717">Full carbon</b></div>
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding-bottom:6px"><span>Colorway</span><b style="color:#171717">Black</b></div>
+        </div></div>
+      <div class="chips"><span class="chip">faq_json</span><span class="chip">meta_title</span><span class="chip">long_copy</span><span class="chip o">care_guide</span><span class="chip">alt_text</span></div>
+      <div class="ok"><span class="mono">&#10003; 10 columns</span><span class="mono" style="color:#6b6a72">any column · any rule</span></div>
+    </div>
+  </div>
+
+  <div class="note mono">Illustrative example · sample data</div>
+
+  <div class="footer">
+    <div class="cta">Book a meeting <span class="arrow">&rarr;</span></div>
+    <div class="url mono">autommerce.com/contact</div>
+  </div>
+</div>
+</body></html>

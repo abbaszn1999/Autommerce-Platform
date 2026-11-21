@@ -1,0 +1,184 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="brand.css">
+<style>
+body { background: var(--ink); color: #fff; }
+body.paper { background: var(--paper); color: var(--text); }
+.glowA { position:absolute; width:1100px; height:1100px; right:-420px; top:-260px; background: radial-gradient(closest-side, rgba(107,53,141,.50), transparent 70%); }
+.glowB { position:absolute; width:1000px; height:1000px; left:-460px; bottom:-380px; background: radial-gradient(closest-side, rgba(247,109,1,.30), transparent 70%); }
+.paper .glowA { background: radial-gradient(closest-side, rgba(247,109,1,.16), transparent 70%); }
+.paper .glowB { background: radial-gradient(closest-side, rgba(107,53,141,.10), transparent 70%); }
+.grid { position:absolute; inset:0; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 54px 54px; -webkit-mask-image: radial-gradient(70% 60% at 50% 60%, #000, transparent); }
+.paper .grid { background-image: linear-gradient(rgba(23,23,23,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(23,23,23,.045) 1px, transparent 1px); }
+.brandbar .name { color: inherit; }
+.pill { display:inline-flex; align-items:center; gap:10px; padding:10px 18px; border:1px solid rgba(255,255,255,.22); border-radius:999px; background:rgba(255,255,255,.06); font-size:13px; }
+.paper .pill { border-color: rgba(23,23,23,.14); background: #fff; }
+.pill i { width:8px; height:8px; border-radius:50%; background: var(--orange); display:block; }
+
+#caps { position:absolute; left:72px; right:72px; top:150px; height:190px; }
+.cap { position:absolute; left:0; right:0; top:0; opacity:0; }
+.cap .k { font-family:'Geist Mono',monospace; font-size:15px; letter-spacing:.16em; text-transform:uppercase; color: var(--orange); display:flex; align-items:center; gap:14px; }
+.cap .k em { font-style:normal; color: rgba(255,255,255,.45); }
+.paper .cap .k em { color: rgba(23,23,23,.4); }
+.cap .t { margin-top:18px; font-weight:800; font-size:58px; line-height:1.0; letter-spacing:-0.045em; }
+.cap .t .ln { display:block; overflow:hidden; padding-bottom:6px; }
+.cap .t .ln > span { display:block; }
+
+#stage { position:absolute; left:0; right:0; top:360px; bottom:0; overflow:hidden;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 46px, #000 100%); }
+#dev { position:absolute; left:0; top:0; transform-origin: 0 0; will-change: transform; }
+.phone #scrwrap { position:absolute; inset:0; border-radius: 11.5% / 5.9%; overflow:hidden; box-shadow: 0 70px 120px -30px rgba(0,0,0,.85), 0 0 0 1.5px rgba(255,255,255,.14); }
+.browser #scrwrap { position:absolute; inset:0; border-radius: 26px; overflow:hidden; background:#fff; box-shadow: 0 60px 110px -30px rgba(40,20,0,.35), 0 0 0 1px rgba(23,23,23,.10); }
+.browser .chrome { position:absolute; left:0; right:0; top:0; height:var(--ch); background:#F3F1EE; border-bottom:1px solid rgba(23,23,23,.08); display:flex; align-items:center; gap:16px; padding:0 28px; }
+.browser .dots { display:flex; gap:12px; } .browser .dots i { width:20px; height:20px; border-radius:50%; background:#DEDAD4; display:block; }
+.browser .url { flex:1; max-width:60%; margin:0 auto; height:46px; border-radius:23px; background:#fff; border:1px solid rgba(23,23,23,.08); display:flex; align-items:center; justify-content:center; font-size:22px; color:#555; letter-spacing:-0.01em; }
+.browser .url b { width:14px; height:14px; border-radius:50%; background:#3BB273; margin-right:12px; display:block; }
+#scr { position:absolute; left:0; width:100%; display:block; }
+.devGlow { position:absolute; inset:-90px; background: radial-gradient(closest-side, rgba(247,109,1,.34), rgba(64,0,149,.26) 55%, transparent 75%); filter: blur(12px); }
+.paper .devGlow { background: radial-gradient(closest-side, rgba(247,109,1,.20), rgba(247,109,1,0) 70%); }
+.tap { position:absolute; width:120px; height:120px; margin:-60px 0 0 -60px; border-radius:50%; opacity:0; pointer-events:none; }
+.tap .c { position:absolute; inset:30px; border-radius:50%; background: rgba(255,255,255,.55); box-shadow: 0 0 0 3px rgba(247,109,1,.85), 0 8px 30px rgba(0,0,0,.35); }
+.tap .r { position:absolute; inset:0; border-radius:50%; border: 4px solid rgba(247,109,1,.9); }
+.cursor { position:absolute; width:46px; height:46px; margin:-4px 0 0 -6px; opacity:0; pointer-events:none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.35)); }
+
+#end { position:absolute; left:72px; right:72px; top:0; bottom:0; opacity:0; }
+#end .col { position:absolute; left:0; top:var(--etop, 470px); width:var(--ew, 560px); }
+#end .big { font-weight:800; font-size:var(--ebig, 104px); line-height:.94; letter-spacing:-0.055em; }
+#end .sm { margin-top:40px; font-size:27px; line-height:1.4; color: rgba(255,255,255,.72); }
+.paper #end .sm { color: rgba(23,23,23,.66); }
+#end .ctarow { position:absolute; left:0; right:0; bottom:72px; display:flex; align-items:center; justify-content:space-between; }
+#end .url2 { font-size:20px; font-weight:500; opacity:.7; }
+#prog { position:absolute; left:72px; right:72px; top:118px; height:3px; border-radius:2px; background: rgba(255,255,255,.10); overflow:hidden; }
+.paper #prog { background: rgba(23,23,23,.08); }
+#prog i { display:block; height:100%; width:0; background: var(--warm); }
+</style></head>
+<body>
+<div class="frame" id="root">
+  <div class="glowA"></div><div class="glowB"></div><div class="grid"></div>
+  <div class="brandbar" id="bar">
+    <div class="lockup"><img id="logo"><span class="name" id="bname"></span><span class="mono" id="bsub" style="font-size:12px;opacity:.55;margin-left:6px"></span></div>
+    <div class="pill mono"><i></i><span id="ptxt"></span></div>
+  </div>
+  <div id="prog"><i></i></div>
+  <div id="caps"></div>
+  <div id="stage">
+    <div id="dev">
+      <div class="devGlow" id="glow"></div>
+      <div id="scrwrap"><div class="chrome" id="chrome"><div class="dots"><i></i><i></i><i></i></div><div class="url"><b></b><span id="urltxt"></span></div></div><img id="scr"></div>
+      <div id="taps"></div>
+      <svg class="cursor" id="cur" viewBox="0 0 24 24"><path d="M5 3l13 7.2-5.6 1.4 3.4 6.4-2.6 1.4-3.4-6.5L5 17z" fill="#111" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+  <div id="end"><div class="col"><div class="big" id="endBig"></div><div class="sm" id="endSm"></div></div>
+    <div class="ctarow"><span class="cta" id="endCta"></span><span class="url2" id="endUrl"></span></div></div>
+</div>
+<script>
+let C = null, curSrc = null;
+const $ = s => document.querySelector(s);
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const ease = x => x < .5 ? 4*x*x*x : 1 - Math.pow(-2*x+2, 3)/2;
+const easeOut = x => 1 - Math.pow(1-x, 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+function seg01(t, a, b) { return clamp((t - a) / (b - a), 0, 1); }
+
+function setup(cfg) {
+  C = cfg;
+  document.body.className = cfg.theme + ' ' + cfg.device;
+  $('#logo').src = cfg.logo; $('#bname').textContent = cfg.brand; $('#bsub').textContent = cfg.sub || ''; $('#ptxt').textContent = cfg.pill;
+  const dev = $('#dev'), sw = $('#scrwrap'), scr = $('#scr');
+  const [W, H] = cfg.size;
+  const ch = cfg.device === 'browser' ? Math.round(W * 0.034) : 0;
+  dev.style.width = W + 'px'; dev.style.height = (H + ch) + 'px';
+  sw.style.setProperty('--ch', ch + 'px'); scr.style.top = ch + 'px'; scr.style.height = H + 'px';
+  if (cfg.device !== 'browser') $('#chrome').style.display = 'none'; else $('#urltxt').textContent = cfg.url;
+  C.ch = ch;
+  $('#caps').innerHTML = cfg.caps.map(c => `<div class="cap"><div class="k">${c.k}</div><div class="t">${c.t.split('|').map(l => `<span class="ln"><span>${l}</span></span>`).join('')}</div></div>`).join('');
+  $('#taps').innerHTML = cfg.taps.map(() => '<div class="tap"><div class="r"></div><div class="c"></div></div>').join('');
+  $('#endBig').innerHTML = cfg.end.big; $('#endSm').innerHTML = cfg.end.sm; $('#endCta').innerHTML = cfg.end.cta + ' <span class="arrow">→</span>'; $('#endUrl').textContent = cfg.end.url;
+  for (const [k2, v] of Object.entries(cfg.end.vars || {})) $('#end').style.setProperty('--' + k2, v);
+}
+
+function srcTime(t) {
+  for (const s of C.segs) if (t >= s[0] && t < s[1]) return lerp(s[2], s[3], (t - s[0]) / (s[1] - s[0]));
+  const L = C.segs[C.segs.length - 1]; return t < C.segs[0][0] ? C.segs[0][2] : L[3];
+}
+function frameAt(st) {
+  const F = C.frames; let lo = 0, hi = F.length - 1;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (F[m][1] <= st) lo = m; else hi = m - 1; }
+  return F[lo][0];
+}
+function cam(t) {
+  const K = C.cam; if (t <= K[0][0]) return K[0]; if (t >= K[K.length-1][0]) return K[K.length-1];
+  for (let i = 0; i < K.length - 1; i++) if (t >= K[i][0] && t <= K[i+1][0]) {
+    const k = ease((t - K[i][0]) / (K[i+1][0] - K[i][0]));
+    return [t, lerp(K[i][1], K[i+1][1], k), lerp(K[i][2], K[i+1][2], k), lerp(K[i][3], K[i+1][3], k)];
+  }
+}
+
+async function render(t) {
+  const src = C.dir + '/' + frameAt(srcTime(t));
+  if (src !== curSrc) { const im = $('#scr'); im.src = src; try { await im.decode(); } catch (e) {} curSrc = src; }
+  const D = C.dur, endT = C.end.at;
+  // device camera
+  const [, fx, fy, z] = cam(t);
+  const st = $('#stage').getBoundingClientRect();
+  const fitH = C.fit;                           // device display height in stage px at z=1
+  const base = fitH / (C.size[1] + C.ch);
+  const s = base * z;
+  const cx = st.width / 2 + (C.offx || 0), cy = C.cy || (st.height / 2);
+  // entrance and exit
+  const ein = easeOut(seg01(t, 0, 0.9));
+  const eout = ease(seg01(t, endT - 0.2, endT + 0.9));
+  let tx = cx - fx * s, ty = cy - (fy + C.ch) * s;
+  const dW = C.size[0] * s, dH = (C.size[1] + C.ch) * s, kc = clamp((z - 1) / 0.15, 0, 1);
+  if (dH > st.height) ty = lerp(ty, clamp(ty, st.height - dH, 0), kc);
+  if (dW > st.width) tx = lerp(tx, clamp(tx, st.width - dW, 0), kc);
+  ty += (1 - ein) * 220; tx += eout * (C.exitX || 430);
+  const sc = s * (1 - eout * (C.exitShrink || 0.22));
+  $('#dev').style.transform = `translate(${tx}px, ${ty}px) scale(${sc})`;
+  $('#dev').style.opacity = clamp(ein * 1.4, 0, 1);
+  $('#glow').style.opacity = 1 - 0.5 * clamp((z - 1) / 0.6, 0, 1);
+  // taps (device coords)
+  document.querySelectorAll('.tap').forEach((el, i) => {
+    const [tt, x, y] = C.taps[i]; const k = (t - tt + 0.35) / 0.9;
+    if (k < 0 || k > 1) { el.style.opacity = 0; return; }
+    el.style.left = x + 'px'; el.style.top = (y + C.ch) + 'px';
+    const press = k < .39 ? easeOut(k / .39) : 1, rel = k < .39 ? 0 : (k - .39) / .61;
+    el.style.opacity = k < .39 ? press : 1 - rel;
+    const sz = 1 / Math.max(z, 1) * 1.15;
+    el.querySelector('.c').style.transform = `scale(${sz * (1.15 - 0.25 * press)})`;
+    el.querySelector('.r').style.transform = `scale(${sz * (0.5 + rel * 1.1)})`; el.querySelector('.r').style.opacity = rel > 0 ? 1 - rel : 0;
+  });
+  // cursor (browser)
+  const cur = $('#cur');
+  if (C.cursor && C.cursor.length) {
+    const P = C.cursor; let p = P[0];
+    if (t >= P[P.length-1][0]) p = P[P.length-1];
+    else for (let i = 0; i < P.length - 1; i++) if (t >= P[i][0] && t <= P[i+1][0]) { const k = ease((t - P[i][0]) / (P[i+1][0] - P[i][0])); p = [t, lerp(P[i][1], P[i+1][1], k), lerp(P[i][2], P[i+1][2], k)]; break; }
+    cur.style.left = p[1] + 'px'; cur.style.top = (p[2] + C.ch) + 'px';
+    const press = C.taps.some(tp => Math.abs(t - tp[0]) < 0.12) ? 0.85 : 1;
+    cur.style.transform = `scale(${((C.curScale || 1.6) / Math.max(z, 1)) * press})`; cur.style.transformOrigin = '6px 4px';
+    cur.style.opacity = clamp(seg01(t, C.cursor[0][0], C.cursor[0][0] + 0.3), 0, 1) * (1 - eout);
+  }
+  // captions
+  document.querySelectorAll('.cap').forEach((el, i) => {
+    const c = C.caps[i]; const a = c.a, b = c.b;
+    const kin = easeOut(seg01(t, a, a + 0.55)), kout = ease(seg01(t, b - 0.35, b));
+    el.style.opacity = kin * (1 - kout);
+    el.querySelectorAll('.ln > span').forEach((ln, j) => {
+      const kk = easeOut(seg01(t, a + j * 0.08, a + j * 0.08 + 0.6));
+      ln.style.transform = `translateY(${(1 - kk) * 105 - kout * 30}%)`;
+    });
+  });
+  // end card
+  const e1 = seg01(t, endT + 0.2, endT + 1.0);
+  const end = $('#end'); end.style.opacity = easeOut(e1);
+  $('#endBig').style.transform = `translateY(${(1 - easeOut(e1)) * 40}px)`;
+  $('#endSm').style.opacity = easeOut(seg01(t, endT + 0.5, endT + 1.2));
+  $('.ctarow').style.opacity = easeOut(seg01(t, endT + 0.7, endT + 1.4));
+  $('#prog i').style.width = (clamp(t / endT, 0, 1) * 100) + '%';
+  $('#prog').style.opacity = 1 - eout;
+  return src;
+}
+</script>
+</body></html>
